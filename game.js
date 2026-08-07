@@ -36,11 +36,11 @@
 
     attackDown1: "assets/player/combat/PLAYER ATTACK DOWN 1.webp",
     attackDown2: "assets/player/combat/PLAYER ATTACK DOWN 2.webp",
-    attackDown3: "assets/player/combat/PLAYER ATTACK DOWN 3.webp",
 
     attackFinish: "assets/player/combat/PLAYER ATTACK FINISH.webp",
     attackFinishLeft: "assets/player/combat/PLAYER ATTACK FINISH LEFT.webp",
-    block: "assets/player/combat/PLAYER BLOCK.webp",
+    blockRight: "assets/player/combat/PLAYER BLOCK.webp",
+    blockLeft: "assets/player/combat/PLAYER BLOCK LEFT.webp",
 
     width: 420,
     height: 630,
@@ -75,8 +75,6 @@
     { sprite: PLAYER.attackDown1, duration: 400 },
     { sprite: PLAYER.combatBase, duration: 100 },
     { sprite: PLAYER.attackDown2, duration: 400 },
-    { sprite: PLAYER.combatBase, duration: 100 },
-    { sprite: PLAYER.attackDown3, duration: 400 },
     { sprite: PLAYER.combatBase, duration: 100 },
     { sprite: PLAYER.attackFinish, duration: 400 },
     { sprite: PLAYER.combatBase, duration: 100 }
@@ -116,10 +114,10 @@
     PLAYER.attackLeft3,
     PLAYER.attackDown1,
     PLAYER.attackDown2,
-    PLAYER.attackDown3,
     PLAYER.attackFinish,
     PLAYER.attackFinishLeft,
-    PLAYER.block
+    PLAYER.blockRight,
+    PLAYER.blockLeft
   ];
 
   const preloaded = {};
@@ -155,11 +153,11 @@
   let currentAnimation = "idle";
 
   let attackHeld = false;
-  let blocking = false;
   let attacking = false;
   let attackSequence = null;
   let attackStep = 0;
   let attackTimer = 0;
+  let blocking = false;
 
   const keys = new Set();
   let lastFrame = performance.now();
@@ -348,12 +346,36 @@
     }
   }
 
+
+  function getBlockSprite() {
+    return facing === "left" ? PLAYER.blockLeft : PLAYER.blockRight;
+  }
+
+  function startBlocking() {
+    blocking = true;
+
+    // Blocking has absolute priority. Cancel any current attack immediately.
+    attackHeld = false;
+    attacking = false;
+    attackSequence = null;
+    attackStep = 0;
+    attackTimer = 0;
+
+    moving = false;
+    playerEl.classList.remove("player--moving");
+    playerEl.classList.add("player--idle");
+
+    setSprite(getBlockSprite());
+  }
+
+  function stopBlocking() {
+    blocking = false;
+    setIdleSprite();
+  }
+
   function updatePlayer(deltaSeconds) {
     if (blocking) {
-      moving = false;
-      playerEl.classList.remove("player--moving");
-      playerEl.classList.add("player--idle");
-      setSprite(PLAYER.block);
+      setSprite(getBlockSprite());
       return;
     }
 
@@ -482,10 +504,7 @@
     if (controlled.includes(event.code)) event.preventDefault();
 
     if (event.code === "ControlLeft" || event.code === "ControlRight") {
-      blocking = true;
-      attackHeld = false;
-      if (attacking) finishAttackState();
-      setSprite(PLAYER.block);
+      if (!blocking) startBlocking();
       return;
     }
 
@@ -515,9 +534,7 @@
 
   window.addEventListener("keyup", (event) => {
     if (event.code === "ControlLeft" || event.code === "ControlRight") {
-      event.preventDefault();
-      blocking = false;
-      setIdleSprite();
+      if (!blocking) startBlocking();
       return;
     }
 
