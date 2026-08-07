@@ -10,7 +10,8 @@
   });
 
   const PLAYER = Object.freeze({
-    stand: "assets/player/PLAYER STAND.png",
+    standRight: "assets/player/PLAYER STAND.png",
+    standLeft: "assets/player/PLAYER STAND LEFT.png",
     walkRight: "assets/player/PLAYER WALK RIGHT.png",
     walkLeft: "assets/player/PLAYER WALK LEFT.png",
     width: 420,
@@ -35,8 +36,14 @@
     throw new Error("Game DOM incomplete: map/player elements missing.");
   }
 
+  // Preload all fixed sprite assets.
   const preloaded = {};
-  [PLAYER.stand, PLAYER.walkRight, PLAYER.walkLeft].forEach((src) => {
+  [
+    PLAYER.standRight,
+    PLAYER.standLeft,
+    PLAYER.walkRight,
+    PLAYER.walkLeft
+  ].forEach((src) => {
     const img = new Image();
     img.src = src;
     preloaded[src] = img;
@@ -59,7 +66,7 @@
   let zoomAnimating = false;
 
   let facing = "right";
-  let activeSprite = PLAYER.stand;
+  let activeSprite = "";
   let moving = false;
 
   const keys = new Set();
@@ -116,14 +123,23 @@
   }
 
   function setSprite(src) {
-    if (activeSprite === src && playerSprite.getAttribute("src")) return;
+    if (activeSprite === src) return;
     activeSprite = src;
     playerSprite.src = encodeURI(src);
+  }
+
+  function setIdleSprite() {
+    setSprite(
+      facing === "left"
+        ? PLAYER.standLeft
+        : PLAYER.standRight
+    );
   }
 
   function updatePlayerSprite(dx, dy) {
     const isMoving = dx !== 0 || dy !== 0;
 
+    // Last horizontal direction is remembered permanently.
     if (dx > 0) facing = "right";
     if (dx < 0) facing = "left";
 
@@ -133,8 +149,10 @@
       playerEl.classList.toggle("player--idle", !moving);
     }
 
+    // IMPORTANT:
+    // When movement stops, use the stand sprite matching the LAST facing direction.
     if (!moving) {
-      setSprite(PLAYER.stand);
+      setIdleSprite();
       return;
     }
 
@@ -143,7 +161,13 @@
     } else if (dx < 0) {
       setSprite(PLAYER.walkLeft);
     } else {
-      setSprite(facing === "left" ? PLAYER.walkLeft : PLAYER.walkRight);
+      // No dedicated north/south art yet:
+      // retain the last horizontal facing while moving vertically.
+      setSprite(
+        facing === "left"
+          ? PLAYER.walkLeft
+          : PLAYER.walkRight
+      );
     }
   }
 
@@ -266,6 +290,7 @@
 
   game.addEventListener("wheel", (event) => {
     event.preventDefault();
+
     if (event.deltaY < 0) {
       setZoomLevel(zoomLevel + 1);
     } else if (event.deltaY > 0) {
@@ -284,7 +309,10 @@
     }
 
     targetScale = scaleForLevel(zoomLevel);
-    if (!zoomAnimating) displayScale = targetScale;
+
+    if (!zoomAnimating) {
+      displayScale = targetScale;
+    }
 
     renderWorld();
   });
@@ -294,9 +322,10 @@
     displayScale = scaleForLevel(0);
     targetScale = displayScale;
 
-    /* Force the stand sprite once at startup. */
+    // Always spawn standing and facing right.
+    facing = "right";
     activeSprite = "";
-    setSprite(PLAYER.stand);
+    setIdleSprite();
 
     clampPlayer();
     renderPlayer();
