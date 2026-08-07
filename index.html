@@ -8,7 +8,7 @@
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <main id="game" aria-label="Oberkirch Zentrum Kartenansicht">
+  <main id="game" aria-label="Oberkirch Zentrum">
     <div id="loading">OBERKIRCH ZENTRUM wird geladen …</div>
 
     <div id="world" aria-hidden="true">
@@ -18,12 +18,22 @@
         alt=""
         draggable="false"
       >
+
+      <div id="player" class="player player--idle">
+        <img
+          id="playerSprite"
+          src="assets/player/PLAYER%20STAND.png"
+          alt=""
+          draggable="false"
+        >
+      </div>
     </div>
 
     <aside id="debug" aria-live="polite">
       <strong>OBERKIRCH ZENTRUM</strong>
       <span id="zoomLabel">ZOOM 0</span>
       <span id="coordLabel">X: 5000 · Y: 3333</span>
+      <span id="playerLabel">SPIELER X: 5000 · Y: 3333</span>
     </aside>
   </main>
 

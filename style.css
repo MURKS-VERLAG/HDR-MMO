@@ -21,12 +21,7 @@ body {
   inset: 0;
   overflow: hidden;
   background: #050505;
-  cursor: grab;
   touch-action: none;
-}
-
-#game.dragging {
-  cursor: grabbing;
 }
 
 #world {
@@ -48,9 +43,43 @@ body {
   image-rendering: auto;
 }
 
+#player {
+  position: absolute;
+  left: 5000px;
+  top: 3333px;
+  width: 250px;
+  height: 375px;
+  transform: translate(-50%, -100%);
+  transform-origin: 50% 100%;
+  z-index: 20;
+  pointer-events: none;
+  will-change: left, top, transform;
+}
+
+#playerSprite {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  object-position: center bottom;
+  image-rendering: auto;
+  filter: none;
+  transform-origin: 50% 100%;
+  will-change: transform;
+}
+
+#player.player--moving #playerSprite {
+  animation: walkBob 300ms ease-in-out infinite alternate;
+}
+
+@keyframes walkBob {
+  from { transform: translateY(0); }
+  to   { transform: translateY(-7px); }
+}
+
 #loading {
   position: absolute;
-  z-index: 20;
+  z-index: 100;
   inset: 0;
   display: grid;
   place-items: center;
@@ -68,10 +97,10 @@ body {
 
 #debug {
   position: absolute;
-  z-index: 10;
+  z-index: 50;
   top: 14px;
   right: 14px;
-  min-width: 190px;
+  min-width: 220px;
   padding: 10px 12px;
   border: 1px solid rgba(255,255,255,.18);
   border-radius: 5px;

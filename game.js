@@ -9,25 +9,45 @@
     height: 6667
   });
 
+  const PLAYER = Object.freeze({
+    stand: "assets/player/PLAYER STAND.png",
+    walkRight: "assets/player/PLAYER WALK RIGHT.png",
+    walkLeft: "assets/player/PLAYER WALK LEFT.png",
+    width: 250,
+    height: 375,
+    speed: 520
+  });
+
   const ZOOM_MULTIPLIERS = [1, 1.75, 3, 4.5];
-  const CAMERA_SPEED = 700;
   const ZOOM_DURATION = 300;
 
   const game = document.getElementById("game");
   const world = document.getElementById("world");
   const mapImage = document.getElementById("map");
+  const playerEl = document.getElementById("player");
+  const playerSprite = document.getElementById("playerSprite");
   const loading = document.getElementById("loading");
   const zoomLabel = document.getElementById("zoomLabel");
   const coordLabel = document.getElementById("coordLabel");
+  const playerLabel = document.getElementById("playerLabel");
+
+  // Preload the three exact supplied/derived sprite assets.
+  [PLAYER.stand, PLAYER.walkRight, PLAYER.walkLeft].forEach(src => {
+    const img = new Image();
+    img.src = src;
+  });
 
   let viewportWidth = window.innerWidth;
   let viewportHeight = window.innerHeight;
   let fitScale = 1;
   let zoomLevel = 0;
 
-  // Camera coordinates are always stored in original 10K map pixels.
-  let cameraX = MAP.width / 2;
-  let cameraY = MAP.height / 2;
+  let playerX = MAP.width / 2;
+  let playerY = MAP.height / 2;
+
+  // The camera follows the player. At ZOOM 0 the full map remains centered.
+  let cameraX = playerX;
+  let cameraY = playerY;
 
   let displayScale = 1;
   let targetScale = 1;
@@ -35,10 +55,11 @@
   let zoomStartTime = 0;
   let zoomAnimating = false;
 
+  let facing = "right";
+  let activeSprite = PLAYER.stand;
+  let moving = false;
+
   const keys = new Set();
-  let dragging = false;
-  let dragLastX = 0;
-  let dragLastY = 0;
   let lastFrame = performance.now();
 
   function calculateFitScale() {
@@ -54,9 +75,27 @@
     return fitScale * ZOOM_MULTIPLIERS[level];
   }
 
+  function clampPlayer() {
+    const halfW = PLAYER.width * 0.22;
+    const topClearance = PLAYER.height;
+    const bottomClearance = 8;
+
+    playerX = Math.max(halfW, Math.min(MAP.width - halfW, playerX));
+    playerY = Math.max(topClearance, Math.min(MAP.height - bottomClearance, playerY));
+  }
+
   function clampCamera(scale = displayScale) {
+    if (zoomLevel === 0 && !zoomAnimating) {
+      cameraX = MAP.width / 2;
+      cameraY = MAP.height / 2;
+      return;
+    }
+
     const visibleMapWidth = viewportWidth / scale;
     const visibleMapHeight = viewportHeight / scale;
+
+    cameraX = playerX;
+    cameraY = playerY;
 
     if (visibleMapWidth >= MAP.width) {
       cameraX = MAP.width / 2;
@@ -73,7 +112,71 @@
     }
   }
 
-  function render() {
+  function setSprite(src) {
+    if (activeSprite === src) return;
+    activeSprite = src;
+    playerSprite.src = encodeURI(src);
+  }
+
+  function updatePlayerSprite(dx, dy) {
+    const isMoving = dx !== 0 || dy !== 0;
+
+    if (dx > 0) facing = "right";
+    if (dx < 0) facing = "left";
+
+    if (isMoving !== moving) {
+      moving = isMoving;
+      playerEl.classList.toggle("player--moving", moving);
+      playerEl.classList.toggle("player--idle", !moving);
+    }
+
+    if (!moving) {
+      setSprite(PLAYER.stand);
+      return;
+    }
+
+    // Horizontal movement uses the supplied right-walk image.
+    // Left movement is the exact same supplied image, mirrored once into a separate PNG.
+    if (dx > 0) {
+      setSprite(PLAYER.walkRight);
+    } else if (dx < 0) {
+      setSprite(PLAYER.walkLeft);
+    } else {
+      // Until dedicated north/south sprites exist, vertical movement retains
+      // the last horizontal walking direction instead of inventing a new pose.
+      setSprite(facing === "left" ? PLAYER.walkLeft : PLAYER.walkRight);
+    }
+  }
+
+  function updatePlayer(deltaSeconds) {
+    let dx = 0;
+    let dy = 0;
+
+    if (keys.has("KeyW") || keys.has("ArrowUp")) dy -= 1;
+    if (keys.has("KeyS") || keys.has("ArrowDown")) dy += 1;
+    if (keys.has("KeyA") || keys.has("ArrowLeft")) dx -= 1;
+    if (keys.has("KeyD") || keys.has("ArrowRight")) dx += 1;
+
+    updatePlayerSprite(dx, dy);
+
+    if (!dx && !dy) return;
+
+    const length = Math.hypot(dx, dy) || 1;
+    dx /= length;
+    dy /= length;
+
+    playerX += dx * PLAYER.speed * deltaSeconds;
+    playerY += dy * PLAYER.speed * deltaSeconds;
+
+    clampPlayer();
+  }
+
+  function renderPlayer() {
+    playerEl.style.left = `${playerX}px`;
+    playerEl.style.top = `${playerY}px`;
+  }
+
+  function renderWorld() {
     clampCamera(displayScale);
 
     const mapScreenWidth = MAP.width * displayScale;
@@ -82,7 +185,6 @@
     let tx = viewportWidth / 2 - cameraX * displayScale;
     let ty = viewportHeight / 2 - cameraY * displayScale;
 
-    // At the fit-to-screen level, center the complete map with no panning.
     if (zoomLevel === 0 && !zoomAnimating) {
       tx = (viewportWidth - mapScreenWidth) / 2;
       ty = (viewportHeight - mapScreenHeight) / 2;
@@ -93,7 +195,9 @@
 
     zoomLabel.textContent = `ZOOM ${zoomLevel}`;
     coordLabel.textContent =
-      `X: ${Math.round(cameraX)} · Y: ${Math.round(cameraY)}`;
+      `KAMERA X: ${Math.round(cameraX)} · Y: ${Math.round(cameraY)}`;
+    playerLabel.textContent =
+      `SPIELER X: ${Math.round(playerX)} · Y: ${Math.round(playerY)}`;
   }
 
   function setZoomLevel(nextLevel) {
@@ -105,11 +209,6 @@
     targetScale = scaleForLevel(zoomLevel);
     zoomStartTime = performance.now();
     zoomAnimating = true;
-
-    if (zoomLevel === 0) {
-      cameraX = MAP.width / 2;
-      cameraY = MAP.height / 2;
-    }
   }
 
   function easeOutCubic(t) {
@@ -126,34 +225,7 @@
     if (t >= 1) {
       displayScale = targetScale;
       zoomAnimating = false;
-      clampCamera(displayScale);
     }
-  }
-
-  function updateKeyboard(deltaSeconds) {
-    if (zoomLevel === 0) return;
-
-    let dx = 0;
-    let dy = 0;
-
-    if (keys.has("KeyW") || keys.has("ArrowUp")) dy -= 1;
-    if (keys.has("KeyS") || keys.has("ArrowDown")) dy += 1;
-    if (keys.has("KeyA") || keys.has("ArrowLeft")) dx -= 1;
-    if (keys.has("KeyD") || keys.has("ArrowRight")) dx += 1;
-
-    if (!dx && !dy) return;
-
-    const length = Math.hypot(dx, dy) || 1;
-    dx /= length;
-    dy /= length;
-
-    // Keep camera travel visually useful at all zoom levels.
-    const zoomRatio = targetScale / fitScale;
-    const speed = CAMERA_SPEED * Math.max(1, 2.15 / zoomRatio);
-
-    cameraX += dx * speed * deltaSeconds;
-    cameraY += dy * speed * deltaSeconds;
-    clampCamera(displayScale);
   }
 
   function frame(now) {
@@ -161,8 +233,9 @@
     lastFrame = now;
 
     updateZoom(now);
-    updateKeyboard(deltaSeconds);
-    render();
+    updatePlayer(deltaSeconds);
+    renderPlayer();
+    renderWorld();
 
     requestAnimationFrame(frame);
   }
@@ -202,45 +275,10 @@
     }
   }, { passive: false });
 
-  game.addEventListener("pointerdown", (event) => {
-    if (zoomLevel === 0) return;
-    dragging = true;
-    dragLastX = event.clientX;
-    dragLastY = event.clientY;
-    game.classList.add("dragging");
-    game.setPointerCapture(event.pointerId);
-  });
-
-  game.addEventListener("pointermove", (event) => {
-    if (!dragging || zoomLevel === 0) return;
-
-    const dx = event.clientX - dragLastX;
-    const dy = event.clientY - dragLastY;
-    dragLastX = event.clientX;
-    dragLastY = event.clientY;
-
-    cameraX -= dx / displayScale;
-    cameraY -= dy / displayScale;
-    clampCamera(displayScale);
-  });
-
-  function endDrag(event) {
-    if (!dragging) return;
-    dragging = false;
-    game.classList.remove("dragging");
-    if (event.pointerId !== undefined && game.hasPointerCapture(event.pointerId)) {
-      game.releasePointerCapture(event.pointerId);
-    }
-  }
-
-  game.addEventListener("pointerup", endDrag);
-  game.addEventListener("pointercancel", endDrag);
-
   window.addEventListener("resize", () => {
     const oldFitScale = fitScale;
     calculateFitScale();
 
-    // Preserve the selected logical zoom level across window resizing.
     if (!oldFitScale) {
       displayScale = scaleForLevel(zoomLevel);
     } else {
@@ -250,23 +288,16 @@
     targetScale = scaleForLevel(zoomLevel);
     if (!zoomAnimating) displayScale = targetScale;
 
-    if (zoomLevel === 0) {
-      cameraX = MAP.width / 2;
-      cameraY = MAP.height / 2;
-    }
-
-    clampCamera(displayScale);
-    render();
+    renderWorld();
   });
 
   function initialize() {
     calculateFitScale();
-    zoomLevel = 0;
     displayScale = scaleForLevel(0);
     targetScale = displayScale;
-    cameraX = MAP.width / 2;
-    cameraY = MAP.height / 2;
-    render();
+    clampPlayer();
+    renderPlayer();
+    renderWorld();
     requestAnimationFrame(frame);
   }
 
