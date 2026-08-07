@@ -13,31 +13,22 @@
     standRight: "assets/player/PLAYER STAND.png",
     standLeft: "assets/player/PLAYER STAND LEFT.png",
 
-    walkRight: [
-      "assets/player/PLAYER WALK RIGHT.png",
-      "assets/player/PLAYER WALK RIGHT 2.png"
-    ],
+    // A / D: ONE fixed side image only.
+    walkRight: "assets/player/PLAYER WALK RIGHT.png",
+    walkLeft: "assets/player/PLAYER WALK LEFT.png",
 
-    walkLeft: [
-      "assets/player/PLAYER WALK LEFT.png",
-      "assets/player/PLAYER WALK LEFT 2.png"
-    ],
-
+    // S remains untouched: exact two-frame alternating animation.
     walkDown: [
       "assets/player/PLAYER WALK DOWN 1.png",
       "assets/player/PLAYER WALK DOWN 2.png"
     ],
 
-    walkUp: [
-      "assets/player/PLAYER WALK UP 1.png",
-      "assets/player/PLAYER WALK UP 2.png"
-    ],
+    // W: ONE fixed image only.
+    walkUp: "assets/player/PLAYER WALK UP 1.png",
 
     width: 420,
     height: 630,
     speed: 520,
-
-    // Short interval for a quick two-frame walk cycle.
     frameDuration: 120
   });
 
@@ -58,14 +49,13 @@
     throw new Error("Game DOM incomplete: map/player elements missing.");
   }
 
-  // Preload every animation frame so swaps happen instantly.
   const allSprites = [
     PLAYER.standRight,
     PLAYER.standLeft,
-    ...PLAYER.walkRight,
-    ...PLAYER.walkLeft,
+    PLAYER.walkRight,
+    PLAYER.walkLeft,
     ...PLAYER.walkDown,
-    ...PLAYER.walkUp
+    PLAYER.walkUp
   ];
 
   const preloaded = {};
@@ -174,9 +164,16 @@
   }
 
   function getMovementAnimation(dx, dy) {
-    // IMPORTANT:
-    // If horizontal and vertical are pressed together, the SIDE animation wins.
-    // This gives W+A, W+D, S+A and S+D the exact same side-running cycle.
+    // NEW RULE:
+    // Any movement containing S/down always uses the S two-frame animation,
+    // including S+A and S+D.
+    if (dy > 0) {
+      if (dx > 0) facing = "right";
+      if (dx < 0) facing = "left";
+      return "down";
+    }
+
+    // Existing W diagonals remain side-facing.
     if (dx > 0) {
       facing = "right";
       return "right";
@@ -187,10 +184,6 @@
       return "left";
     }
 
-    if (dy > 0) {
-      return "down";
-    }
-
     if (dy < 0) {
       return "up";
     }
@@ -198,23 +191,29 @@
     return "idle";
   }
 
-  function renderWalkFrame(animationName) {
-    let frames;
+  function renderMovementFrame(animationName, deltaSeconds) {
+    if (animationName === "down") {
+      walkFrameTimer += deltaSeconds * 1000;
 
-    if (animationName === "right") {
-      frames = PLAYER.walkRight;
-    } else if (animationName === "left") {
-      frames = PLAYER.walkLeft;
-    } else if (animationName === "down") {
-      frames = PLAYER.walkDown;
-    } else if (animationName === "up") {
-      frames = PLAYER.walkUp;
-    } else {
-      setIdleSprite();
+      while (walkFrameTimer >= PLAYER.frameDuration) {
+        walkFrameTimer -= PLAYER.frameDuration;
+        walkFrame = (walkFrame + 1) % 2;
+      }
+
+      setSprite(PLAYER.walkDown[walkFrame]);
       return;
     }
 
-    setSprite(frames[walkFrame]);
+    // A, D and W deliberately have no second frame anymore.
+    if (animationName === "right") {
+      setSprite(PLAYER.walkRight);
+    } else if (animationName === "left") {
+      setSprite(PLAYER.walkLeft);
+    } else if (animationName === "up") {
+      setSprite(PLAYER.walkUp);
+    } else {
+      setIdleSprite();
+    }
   }
 
   function updatePlayerSprite(dx, dy, deltaSeconds) {
@@ -234,15 +233,7 @@
 
     const nextAnimation = getMovementAnimation(dx, dy);
     setAnimation(nextAnimation);
-
-    walkFrameTimer += deltaSeconds * 1000;
-
-    while (walkFrameTimer >= PLAYER.frameDuration) {
-      walkFrameTimer -= PLAYER.frameDuration;
-      walkFrame = (walkFrame + 1) % 2;
-    }
-
-    renderWalkFrame(currentAnimation);
+    renderMovementFrame(currentAnimation, deltaSeconds);
   }
 
   function updatePlayer(deltaSeconds) {
