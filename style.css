@@ -35,6 +35,9 @@ body {
 }
 
 #map {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
   display: block;
   width: 10000px;
   height: 6667px;
@@ -43,43 +46,53 @@ body {
   image-rendering: auto;
 }
 
+/* CHARACTER MUST RENDER ABOVE MAP */
 #player {
   position: absolute;
+  z-index: 100;
   left: 5000px;
   top: 3333px;
-  width: 250px;
-  height: 375px;
+
+  /* Deliberately larger than before so the character is clearly visible
+     even when the entire 10K map is shown. */
+  width: 420px;
+  height: 630px;
+
   transform: translate(-50%, -100%);
   transform-origin: 50% 100%;
-  z-index: 20;
   pointer-events: none;
-  will-change: left, top, transform;
+  will-change: left, top;
 }
 
 #playerSprite {
+  position: absolute;
+  inset: 0;
+  z-index: 101;
   display: block;
   width: 100%;
   height: 100%;
+  max-width: none;
   object-fit: contain;
   object-position: center bottom;
+  opacity: 1;
+  visibility: visible;
   image-rendering: auto;
-  filter: none;
-  transform-origin: 50% 100%;
+  pointer-events: none;
   will-change: transform;
 }
 
 #player.player--moving #playerSprite {
-  animation: walkBob 300ms ease-in-out infinite alternate;
+  animation: walkBob 280ms ease-in-out infinite alternate;
 }
 
 @keyframes walkBob {
   from { transform: translateY(0); }
-  to   { transform: translateY(-7px); }
+  to   { transform: translateY(-8px); }
 }
 
 #loading {
   position: absolute;
-  z-index: 100;
+  z-index: 1000;
   inset: 0;
   display: grid;
   place-items: center;
@@ -97,7 +110,7 @@ body {
 
 #debug {
   position: absolute;
-  z-index: 50;
+  z-index: 2000;
   top: 14px;
   right: 14px;
   min-width: 220px;

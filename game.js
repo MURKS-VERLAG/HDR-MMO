@@ -13,8 +13,8 @@
     stand: "assets/player/PLAYER STAND.png",
     walkRight: "assets/player/PLAYER WALK RIGHT.png",
     walkLeft: "assets/player/PLAYER WALK LEFT.png",
-    width: 250,
-    height: 375,
+    width: 420,
+    height: 630,
     speed: 520
   });
 
@@ -31,10 +31,15 @@
   const coordLabel = document.getElementById("coordLabel");
   const playerLabel = document.getElementById("playerLabel");
 
-  // Preload the three exact supplied/derived sprite assets.
-  [PLAYER.stand, PLAYER.walkRight, PLAYER.walkLeft].forEach(src => {
+  if (!game || !world || !mapImage || !playerEl || !playerSprite) {
+    throw new Error("Game DOM incomplete: map/player elements missing.");
+  }
+
+  const preloaded = {};
+  [PLAYER.stand, PLAYER.walkRight, PLAYER.walkLeft].forEach((src) => {
     const img = new Image();
     img.src = src;
+    preloaded[src] = img;
   });
 
   let viewportWidth = window.innerWidth;
@@ -44,8 +49,6 @@
 
   let playerX = MAP.width / 2;
   let playerY = MAP.height / 2;
-
-  // The camera follows the player. At ZOOM 0 the full map remains centered.
   let cameraX = playerX;
   let cameraY = playerY;
 
@@ -76,9 +79,9 @@
   }
 
   function clampPlayer() {
-    const halfW = PLAYER.width * 0.22;
+    const halfW = PLAYER.width / 2;
     const topClearance = PLAYER.height;
-    const bottomClearance = 8;
+    const bottomClearance = 10;
 
     playerX = Math.max(halfW, Math.min(MAP.width - halfW, playerX));
     playerY = Math.max(topClearance, Math.min(MAP.height - bottomClearance, playerY));
@@ -113,7 +116,7 @@
   }
 
   function setSprite(src) {
-    if (activeSprite === src) return;
+    if (activeSprite === src && playerSprite.getAttribute("src")) return;
     activeSprite = src;
     playerSprite.src = encodeURI(src);
   }
@@ -124,7 +127,7 @@
     if (dx > 0) facing = "right";
     if (dx < 0) facing = "left";
 
-    if (isMoving !== moving) {
+    if (moving !== isMoving) {
       moving = isMoving;
       playerEl.classList.toggle("player--moving", moving);
       playerEl.classList.toggle("player--idle", !moving);
@@ -135,15 +138,11 @@
       return;
     }
 
-    // Horizontal movement uses the supplied right-walk image.
-    // Left movement is the exact same supplied image, mirrored once into a separate PNG.
     if (dx > 0) {
       setSprite(PLAYER.walkRight);
     } else if (dx < 0) {
       setSprite(PLAYER.walkLeft);
     } else {
-      // Until dedicated north/south sprites exist, vertical movement retains
-      // the last horizontal walking direction instead of inventing a new pose.
       setSprite(facing === "left" ? PLAYER.walkLeft : PLAYER.walkRight);
     }
   }
@@ -167,7 +166,6 @@
 
     playerX += dx * PLAYER.speed * deltaSeconds;
     playerY += dy * PLAYER.speed * deltaSeconds;
-
     clampPlayer();
   }
 
@@ -295,6 +293,11 @@
     calculateFitScale();
     displayScale = scaleForLevel(0);
     targetScale = displayScale;
+
+    /* Force the stand sprite once at startup. */
+    activeSprite = "";
+    setSprite(PLAYER.stand);
+
     clampPlayer();
     renderPlayer();
     renderWorld();
@@ -308,6 +311,10 @@
 
   mapImage.addEventListener("error", () => {
     loading.textContent = "Karte konnte nicht geladen werden.";
+  });
+
+  playerSprite.addEventListener("error", () => {
+    console.error("PLAYER SPRITE konnte nicht geladen werden:", playerSprite.src);
   });
 
   initialize();
