@@ -1,22 +1,32 @@
-# Die Herren der Rench
+# Die Herren der Rench – Build 05
 
-Build 03 – Richtungslogik Spieler.
+## Laufanimationen
 
-## Änderung
+Alle Bewegungsrichtungen wechseln jetzt schnell zwischen zwei vollständigen PNG-Frames.
 
-- Rechts laufen → beim Stoppen `PLAYER STAND.png`
-- Links laufen → beim Stoppen `PLAYER STAND LEFT.png`
-- `PLAYER STAND LEFT.png` ist technisch exakt horizontal aus dem gelieferten Standbild gespiegelt.
-- Keine KI-Neugenerierung.
-- Bestehende Map-, Zoom-, Kamera- und Bewegungslogik bleibt erhalten.
+- **D / Rechts:** `PLAYER WALK RIGHT.png` ↔ `PLAYER WALK RIGHT 2.png`
+- **A / Links:** exakt gespiegelte Versionen der beiden rechten Frames
+- **S / Runter:** `PLAYER WALK DOWN 1.png` ↔ `PLAYER WALK DOWN 2.png`
+- **W / Hoch:** `PLAYER WALK UP 1.png` ↔ `PLAYER WALK UP 2.png`
 
-## Assets
+### Diagonalen
 
-- `assets/maps/OBERKIRCH ZENTRUM.webp`
-- `assets/player/PLAYER STAND.png`
-- `assets/player/PLAYER STAND LEFT.png`
-- `assets/player/PLAYER WALK RIGHT.png`
-- `assets/player/PLAYER WALK LEFT.png`
+Wenn gleichzeitig **W oder S + A oder D** gedrückt wird, hat die horizontale Richtung Priorität:
+
+- W+A / S+A → linke Seitenanimation
+- W+D / S+D → rechte Seitenanimation
+
+Die Bewegungsrichtung selbst bleibt diagonal.
+
+## Timing
+
+Framewechsel: **120 ms**  
+Zusätzlich bleibt nur ein sehr kleines vertikales Bobbing von 4 px für einen weicheren Eindruck.
+
+## Stand
+
+- zuletzt rechts → Stand rechts
+- zuletzt links → Stand links
 
 ## Steuerung
 

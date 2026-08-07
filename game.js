@@ -12,11 +12,33 @@
   const PLAYER = Object.freeze({
     standRight: "assets/player/PLAYER STAND.png",
     standLeft: "assets/player/PLAYER STAND LEFT.png",
-    walkRight: "assets/player/PLAYER WALK RIGHT.png",
-    walkLeft: "assets/player/PLAYER WALK LEFT.png",
+
+    walkRight: [
+      "assets/player/PLAYER WALK RIGHT.png",
+      "assets/player/PLAYER WALK RIGHT 2.png"
+    ],
+
+    walkLeft: [
+      "assets/player/PLAYER WALK LEFT.png",
+      "assets/player/PLAYER WALK LEFT 2.png"
+    ],
+
+    walkDown: [
+      "assets/player/PLAYER WALK DOWN 1.png",
+      "assets/player/PLAYER WALK DOWN 2.png"
+    ],
+
+    walkUp: [
+      "assets/player/PLAYER WALK UP 1.png",
+      "assets/player/PLAYER WALK UP 2.png"
+    ],
+
     width: 420,
     height: 630,
-    speed: 520
+    speed: 520,
+
+    // Short interval for a quick two-frame walk cycle.
+    frameDuration: 120
   });
 
   const ZOOM_MULTIPLIERS = [1, 1.75, 3, 4.5];
@@ -36,14 +58,18 @@
     throw new Error("Game DOM incomplete: map/player elements missing.");
   }
 
-  // Preload all fixed sprite assets.
-  const preloaded = {};
-  [
+  // Preload every animation frame so swaps happen instantly.
+  const allSprites = [
     PLAYER.standRight,
     PLAYER.standLeft,
-    PLAYER.walkRight,
-    PLAYER.walkLeft
-  ].forEach((src) => {
+    ...PLAYER.walkRight,
+    ...PLAYER.walkLeft,
+    ...PLAYER.walkDown,
+    ...PLAYER.walkUp
+  ];
+
+  const preloaded = {};
+  allSprites.forEach((src) => {
     const img = new Image();
     img.src = src;
     preloaded[src] = img;
@@ -68,6 +94,10 @@
   let facing = "right";
   let activeSprite = "";
   let moving = false;
+
+  let walkFrame = 0;
+  let walkFrameTimer = 0;
+  let currentAnimation = "idle";
 
   const keys = new Set();
   let lastFrame = performance.now();
@@ -136,12 +166,59 @@
     );
   }
 
-  function updatePlayerSprite(dx, dy) {
-    const isMoving = dx !== 0 || dy !== 0;
+  function setAnimation(name) {
+    if (currentAnimation === name) return;
+    currentAnimation = name;
+    walkFrame = 0;
+    walkFrameTimer = 0;
+  }
 
-    // Last horizontal direction is remembered permanently.
-    if (dx > 0) facing = "right";
-    if (dx < 0) facing = "left";
+  function getMovementAnimation(dx, dy) {
+    // IMPORTANT:
+    // If horizontal and vertical are pressed together, the SIDE animation wins.
+    // This gives W+A, W+D, S+A and S+D the exact same side-running cycle.
+    if (dx > 0) {
+      facing = "right";
+      return "right";
+    }
+
+    if (dx < 0) {
+      facing = "left";
+      return "left";
+    }
+
+    if (dy > 0) {
+      return "down";
+    }
+
+    if (dy < 0) {
+      return "up";
+    }
+
+    return "idle";
+  }
+
+  function renderWalkFrame(animationName) {
+    let frames;
+
+    if (animationName === "right") {
+      frames = PLAYER.walkRight;
+    } else if (animationName === "left") {
+      frames = PLAYER.walkLeft;
+    } else if (animationName === "down") {
+      frames = PLAYER.walkDown;
+    } else if (animationName === "up") {
+      frames = PLAYER.walkUp;
+    } else {
+      setIdleSprite();
+      return;
+    }
+
+    setSprite(frames[walkFrame]);
+  }
+
+  function updatePlayerSprite(dx, dy, deltaSeconds) {
+    const isMoving = dx !== 0 || dy !== 0;
 
     if (moving !== isMoving) {
       moving = isMoving;
@@ -149,26 +226,23 @@
       playerEl.classList.toggle("player--idle", !moving);
     }
 
-    // IMPORTANT:
-    // When movement stops, use the stand sprite matching the LAST facing direction.
     if (!moving) {
+      setAnimation("idle");
       setIdleSprite();
       return;
     }
 
-    if (dx > 0) {
-      setSprite(PLAYER.walkRight);
-    } else if (dx < 0) {
-      setSprite(PLAYER.walkLeft);
-    } else {
-      // No dedicated north/south art yet:
-      // retain the last horizontal facing while moving vertically.
-      setSprite(
-        facing === "left"
-          ? PLAYER.walkLeft
-          : PLAYER.walkRight
-      );
+    const nextAnimation = getMovementAnimation(dx, dy);
+    setAnimation(nextAnimation);
+
+    walkFrameTimer += deltaSeconds * 1000;
+
+    while (walkFrameTimer >= PLAYER.frameDuration) {
+      walkFrameTimer -= PLAYER.frameDuration;
+      walkFrame = (walkFrame + 1) % 2;
     }
+
+    renderWalkFrame(currentAnimation);
   }
 
   function updatePlayer(deltaSeconds) {
@@ -180,7 +254,7 @@
     if (keys.has("KeyA") || keys.has("ArrowLeft")) dx -= 1;
     if (keys.has("KeyD") || keys.has("ArrowRight")) dx += 1;
 
-    updatePlayerSprite(dx, dy);
+    updatePlayerSprite(dx, dy, deltaSeconds);
 
     if (!dx && !dy) return;
 
@@ -322,9 +396,9 @@
     displayScale = scaleForLevel(0);
     targetScale = displayScale;
 
-    // Always spawn standing and facing right.
     facing = "right";
     activeSprite = "";
+    currentAnimation = "idle";
     setIdleSprite();
 
     clampPlayer();

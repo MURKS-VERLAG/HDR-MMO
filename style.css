@@ -82,12 +82,12 @@ body {
 }
 
 #player.player--moving #playerSprite {
-  animation: walkBob 280ms ease-in-out infinite alternate;
+  animation: walkBob 240ms ease-in-out infinite;
 }
 
 @keyframes walkBob {
-  from { transform: translateY(0); }
-  to   { transform: translateY(-8px); }
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-4px); }
 }
 
 #loading {
