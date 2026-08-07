@@ -354,14 +354,21 @@
   function startBlocking() {
     blocking = true;
 
-    // Blocking has absolute priority. Cancel any current attack immediately.
+    // CTRL = absolute freeze.
+    // Cancel attack and forget movement keys so nothing resumes automatically.
     attackHeld = false;
     attacking = false;
     attackSequence = null;
     attackStep = 0;
     attackTimer = 0;
 
+    keys.clear();
+
     moving = false;
+    currentAnimation = "idle";
+    walkFrame = 0;
+    walkFrameTimer = 0;
+
     playerEl.classList.remove("player--moving");
     playerEl.classList.add("player--idle");
 
@@ -370,6 +377,8 @@
 
   function stopBlocking() {
     blocking = false;
+
+    // On CTRL release return immediately to the correct resting pose.
     setIdleSprite();
   }
 
@@ -508,6 +517,12 @@
       return;
     }
 
+    // While CTRL is held the block image is frozen.
+    // Ignore every gameplay key until CTRL is released.
+    if (blocking) {
+      return;
+    }
+
     if (event.code === "Space") {
       if (blocking) return;
       attackHeld = true;
@@ -534,7 +549,8 @@
 
   window.addEventListener("keyup", (event) => {
     if (event.code === "ControlLeft" || event.code === "ControlRight") {
-      if (!blocking) startBlocking();
+      event.preventDefault();
+      if (blocking) stopBlocking();
       return;
     }
 
