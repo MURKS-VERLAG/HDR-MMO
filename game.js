@@ -12,8 +12,6 @@
   const PLAYER = Object.freeze({
     standRight: "assets/player/PLAYER STAND.png",
     standLeft: "assets/player/PLAYER STAND LEFT.png",
-    walkRight: "assets/player/PLAYER WALK RIGHT.png",
-    walkLeft: "assets/player/PLAYER WALK LEFT.png",
     width: 420,
     height: 630,
     speed: 520
@@ -26,28 +24,12 @@
   const world = document.getElementById("world");
   const mapImage = document.getElementById("map");
   const playerEl = document.getElementById("player");
-  const playerSprite = document.getElementById("playerSprite");
+  const playerIdleSprite = document.getElementById("playerIdleSprite");
   const loading = document.getElementById("loading");
   const zoomLabel = document.getElementById("zoomLabel");
   const coordLabel = document.getElementById("coordLabel");
   const playerLabel = document.getElementById("playerLabel");
-
-  if (!game || !world || !mapImage || !playerEl || !playerSprite) {
-    throw new Error("Game DOM incomplete: map/player elements missing.");
-  }
-
-  // Preload all fixed sprite assets.
-  const preloaded = {};
-  [
-    PLAYER.standRight,
-    PLAYER.standLeft,
-    PLAYER.walkRight,
-    PLAYER.walkLeft
-  ].forEach((src) => {
-    const img = new Image();
-    img.src = src;
-    preloaded[src] = img;
-  });
+  const animLabel = document.getElementById("animLabel");
 
   let viewportWidth = window.innerWidth;
   let viewportHeight = window.innerHeight;
@@ -66,7 +48,6 @@
   let zoomAnimating = false;
 
   let facing = "right";
-  let activeSprite = "";
   let moving = false;
 
   const keys = new Set();
@@ -75,10 +56,7 @@
   function calculateFitScale() {
     viewportWidth = window.innerWidth;
     viewportHeight = window.innerHeight;
-    fitScale = Math.min(
-      viewportWidth / MAP.width,
-      viewportHeight / MAP.height
-    );
+    fitScale = Math.min(viewportWidth / MAP.width, viewportHeight / MAP.height);
   }
 
   function scaleForLevel(level) {
@@ -87,11 +65,8 @@
 
   function clampPlayer() {
     const halfW = PLAYER.width / 2;
-    const topClearance = PLAYER.height;
-    const bottomClearance = 10;
-
     playerX = Math.max(halfW, Math.min(MAP.width - halfW, playerX));
-    playerY = Math.max(topClearance, Math.min(MAP.height - bottomClearance, playerY));
+    playerY = Math.max(PLAYER.height, Math.min(MAP.height - 10, playerY));
   }
 
   function clampCamera(scale = displayScale) {
@@ -103,7 +78,6 @@
 
     const visibleMapWidth = viewportWidth / scale;
     const visibleMapHeight = viewportHeight / scale;
-
     cameraX = playerX;
     cameraY = playerY;
 
@@ -122,26 +96,18 @@
     }
   }
 
-  function setSprite(src) {
-    if (activeSprite === src) return;
-    activeSprite = src;
-    playerSprite.src = encodeURI(src);
+  function setFacing(nextFacing) {
+    if (nextFacing !== "left" && nextFacing !== "right") return;
+    facing = nextFacing;
+    playerEl.classList.toggle("player--left", facing === "left");
+    playerEl.classList.toggle("player--right", facing === "right");
   }
 
-  function setIdleSprite() {
-    setSprite(
-      facing === "left"
-        ? PLAYER.standLeft
-        : PLAYER.standRight
-    );
-  }
-
-  function updatePlayerSprite(dx, dy) {
+  function updateVisualState(dx, dy) {
     const isMoving = dx !== 0 || dy !== 0;
 
-    // Last horizontal direction is remembered permanently.
-    if (dx > 0) facing = "right";
-    if (dx < 0) facing = "left";
+    if (dx > 0) setFacing("right");
+    if (dx < 0) setFacing("left");
 
     if (moving !== isMoving) {
       moving = isMoving;
@@ -149,25 +115,15 @@
       playerEl.classList.toggle("player--idle", !moving);
     }
 
-    // IMPORTANT:
-    // When movement stops, use the stand sprite matching the LAST facing direction.
     if (!moving) {
-      setIdleSprite();
-      return;
-    }
-
-    if (dx > 0) {
-      setSprite(PLAYER.walkRight);
-    } else if (dx < 0) {
-      setSprite(PLAYER.walkLeft);
-    } else {
-      // No dedicated north/south art yet:
-      // retain the last horizontal facing while moving vertically.
-      setSprite(
-        facing === "left"
-          ? PLAYER.walkLeft
-          : PLAYER.walkRight
+      playerIdleSprite.src = encodeURI(
+        facing === "left" ? PLAYER.standLeft : PLAYER.standRight
       );
+      animLabel.textContent =
+        facing === "left" ? "ANIMATION: STAND LINKS" : "ANIMATION: STAND RECHTS";
+    } else {
+      animLabel.textContent =
+        facing === "left" ? "ANIMATION: WALK LINKS" : "ANIMATION: WALK RECHTS";
     }
   }
 
@@ -180,7 +136,7 @@
     if (keys.has("KeyA") || keys.has("ArrowLeft")) dx -= 1;
     if (keys.has("KeyD") || keys.has("ArrowRight")) dx += 1;
 
-    updatePlayerSprite(dx, dy);
+    updateVisualState(dx, dy);
 
     if (!dx && !dy) return;
 
@@ -212,14 +168,11 @@
       ty = (viewportHeight - mapScreenHeight) / 2;
     }
 
-    world.style.transform =
-      `translate3d(${tx}px, ${ty}px, 0) scale(${displayScale})`;
+    world.style.transform = `translate3d(${tx}px, ${ty}px, 0) scale(${displayScale})`;
 
     zoomLabel.textContent = `ZOOM ${zoomLevel}`;
-    coordLabel.textContent =
-      `KAMERA X: ${Math.round(cameraX)} · Y: ${Math.round(cameraY)}`;
-    playerLabel.textContent =
-      `SPIELER X: ${Math.round(playerX)} · Y: ${Math.round(playerY)}`;
+    coordLabel.textContent = `KAMERA X: ${Math.round(cameraX)} · Y: ${Math.round(cameraY)}`;
+    playerLabel.textContent = `SPIELER X: ${Math.round(playerX)} · Y: ${Math.round(playerY)}`;
   }
 
   function setZoomLevel(nextLevel) {
@@ -239,10 +192,8 @@
 
   function updateZoom(now) {
     if (!zoomAnimating) return;
-
     const t = Math.min(1, (now - zoomStartTime) / ZOOM_DURATION);
-    const eased = easeOutCubic(t);
-    displayScale = zoomStartScale + (targetScale - zoomStartScale) * eased;
+    displayScale = zoomStartScale + (targetScale - zoomStartScale) * easeOutCubic(t);
 
     if (t >= 1) {
       displayScale = targetScale;
@@ -268,52 +219,36 @@
       "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight",
       "Equal", "NumpadAdd", "Minus", "NumpadSubtract"
     ];
-
     if (controlled.includes(event.code)) event.preventDefault();
 
     if (event.code === "Equal" || event.code === "NumpadAdd") {
       setZoomLevel(zoomLevel + 1);
       return;
     }
-
     if (event.code === "Minus" || event.code === "NumpadSubtract") {
       setZoomLevel(zoomLevel - 1);
       return;
     }
-
     keys.add(event.code);
   }, { passive: false });
 
-  window.addEventListener("keyup", (event) => {
-    keys.delete(event.code);
-  });
+  window.addEventListener("keyup", (event) => keys.delete(event.code));
 
   game.addEventListener("wheel", (event) => {
     event.preventDefault();
-
-    if (event.deltaY < 0) {
-      setZoomLevel(zoomLevel + 1);
-    } else if (event.deltaY > 0) {
-      setZoomLevel(zoomLevel - 1);
-    }
+    if (event.deltaY < 0) setZoomLevel(zoomLevel + 1);
+    else if (event.deltaY > 0) setZoomLevel(zoomLevel - 1);
   }, { passive: false });
 
   window.addEventListener("resize", () => {
     const oldFitScale = fitScale;
     calculateFitScale();
 
-    if (!oldFitScale) {
-      displayScale = scaleForLevel(zoomLevel);
-    } else {
-      displayScale *= fitScale / oldFitScale;
-    }
+    if (!oldFitScale) displayScale = scaleForLevel(zoomLevel);
+    else displayScale *= fitScale / oldFitScale;
 
     targetScale = scaleForLevel(zoomLevel);
-
-    if (!zoomAnimating) {
-      displayScale = targetScale;
-    }
-
+    if (!zoomAnimating) displayScale = targetScale;
     renderWorld();
   });
 
@@ -321,12 +256,8 @@
     calculateFitScale();
     displayScale = scaleForLevel(0);
     targetScale = displayScale;
-
-    // Always spawn standing and facing right.
-    facing = "right";
-    activeSprite = "";
-    setIdleSprite();
-
+    setFacing("right");
+    playerIdleSprite.src = encodeURI(PLAYER.standRight);
     clampPlayer();
     renderPlayer();
     renderWorld();
@@ -340,10 +271,6 @@
 
   mapImage.addEventListener("error", () => {
     loading.textContent = "Karte konnte nicht geladen werden.";
-  });
-
-  playerSprite.addEventListener("error", () => {
-    console.error("PLAYER SPRITE konnte nicht geladen werden:", playerSprite.src);
   });
 
   initialize();

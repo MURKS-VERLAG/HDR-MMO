@@ -1,9 +1,6 @@
-* {
-  box-sizing: border-box;
-}
+* { box-sizing: border-box; }
 
-html,
-body {
+html, body {
   width: 100%;
   height: 100%;
   margin: 0;
@@ -46,48 +43,96 @@ body {
   image-rendering: auto;
 }
 
-/* CHARACTER MUST RENDER ABOVE MAP */
 #player {
   position: absolute;
   z-index: 100;
   left: 5000px;
   top: 3333px;
-
-  /* Deliberately larger than before so the character is clearly visible
-     even when the entire 10K map is shown. */
   width: 420px;
   height: 630px;
-
   transform: translate(-50%, -100%);
   transform-origin: 50% 100%;
   pointer-events: none;
   will-change: left, top;
 }
 
-#playerSprite {
+.player-idle-sprite,
+.player-walk-rig,
+.player-walk-rig img {
   position: absolute;
   inset: 0;
-  z-index: 101;
   display: block;
   width: 100%;
   height: 100%;
-  max-width: none;
+}
+
+.player-idle-sprite,
+.player-walk-rig img {
   object-fit: contain;
   object-position: center bottom;
-  opacity: 1;
-  visibility: visible;
   image-rendering: auto;
   pointer-events: none;
+}
+
+.player-walk-rig {
+  display: none;
+  transform-origin: 50% 100%;
+}
+
+/* The LEFT direction is the exact same layered animation, mirrored as one unit. */
+#player.player--left .player-walk-rig {
+  transform: scaleX(-1);
+}
+
+#player.player--moving .player-idle-sprite {
+  display: none;
+}
+
+#player.player--moving .player-walk-rig {
+  display: block;
+  animation: torsoBob 280ms ease-in-out infinite;
+}
+
+/* Full-canvas transparent PNG layers. Pivot coordinates are based on the source art.
+   Front hip ≈ 56%/59%; back hip ≈ 45%/59%. */
+.walk-leg {
+  z-index: 1;
   will-change: transform;
 }
 
-#player.player--moving #playerSprite {
-  animation: walkBob 280ms ease-in-out infinite alternate;
+.walk-leg--back {
+  transform-origin: 45% 59%;
+  animation: legBack 560ms ease-in-out infinite;
 }
 
-@keyframes walkBob {
-  from { transform: translateY(0); }
-  to   { transform: translateY(-8px); }
+.walk-leg--front {
+  transform-origin: 56% 59%;
+  animation: legFront 560ms ease-in-out infinite;
+}
+
+.walk-body {
+  z-index: 3;
+}
+
+@keyframes legFront {
+  0%   { transform: rotate(0deg) translateY(0); }
+  25%  { transform: rotate(-7deg) translateY(-1px); }
+  50%  { transform: rotate(-14deg) translateY(-2px); }
+  75%  { transform: rotate(-7deg) translateY(-1px); }
+  100% { transform: rotate(0deg) translateY(0); }
+}
+
+@keyframes legBack {
+  0%   { transform: rotate(0deg) translateY(0); }
+  25%  { transform: rotate(8deg) translateY(-1px); }
+  50%  { transform: rotate(15deg) translateY(-2px); }
+  75%  { transform: rotate(8deg) translateY(-1px); }
+  100% { transform: rotate(0deg) translateY(0); }
+}
+
+@keyframes torsoBob {
+  0%, 100% { translate: 0 0; }
+  50%      { translate: 0 -5px; }
 }
 
 #loading {
@@ -113,7 +158,7 @@ body {
   z-index: 2000;
   top: 14px;
   right: 14px;
-  min-width: 220px;
+  min-width: 240px;
   padding: 10px 12px;
   border: 1px solid rgba(255,255,255,.18);
   border-radius: 5px;
@@ -126,11 +171,7 @@ body {
   line-height: 1.45;
 }
 
-#debug strong,
-#debug span {
-  display: block;
-}
-
+#debug strong, #debug span { display: block; }
 #debug strong {
   margin-bottom: 4px;
   font-size: 12px;
