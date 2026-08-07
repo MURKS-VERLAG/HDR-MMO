@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#050505">
+  <title>Die Herren der Rench – Oberkirch Zentrum</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main id="game" aria-label="Oberkirch Zentrum Kartenansicht">
+    <div id="loading">OBERKIRCH ZENTRUM wird geladen …</div>
+
+    <div id="world" aria-hidden="true">
+      <img
+        id="map"
+        src="assets/maps/OBERKIRCH%20ZENTRUM.webp"
+        alt=""
+        draggable="false"
+      >
+    </div>
+
+    <aside id="debug" aria-live="polite">
+      <strong>OBERKIRCH ZENTRUM</strong>
+      <span id="zoomLabel">ZOOM 0</span>
+      <span id="coordLabel">X: 5000 · Y: 3333</span>
+    </aside>
+  </main>
+
+  <script src="game.js"></script>
+</body>
+</html>
