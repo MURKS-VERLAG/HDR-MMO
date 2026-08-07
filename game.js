@@ -13,24 +13,74 @@
     standRight: "assets/player/PLAYER STAND.png",
     standLeft: "assets/player/PLAYER STAND LEFT.png",
 
-    // A / D: ONE fixed side image only.
     walkRight: "assets/player/PLAYER WALK RIGHT.png",
     walkLeft: "assets/player/PLAYER WALK LEFT.png",
 
-    // S remains untouched: exact two-frame alternating animation.
     walkDown: [
       "assets/player/PLAYER WALK DOWN 1.png",
       "assets/player/PLAYER WALK DOWN 2.png"
     ],
 
-    // W: ONE fixed image only.
     walkUp: "assets/player/PLAYER WALK UP 1.png",
+
+    combatBase: "assets/player/combat/PLAYER COMBAT BASE.webp",
+    combatBaseLeft: "assets/player/combat/PLAYER COMBAT BASE LEFT.webp",
+
+    attackRight1: "assets/player/combat/PLAYER ATTACK RIGHT 1.webp",
+    attackRight2: "assets/player/combat/PLAYER ATTACK RIGHT 2.webp",
+    attackRight3: "assets/player/combat/PLAYER ATTACK RIGHT 3.webp",
+
+    attackLeft1: "assets/player/combat/PLAYER ATTACK LEFT 1.webp",
+    attackLeft2: "assets/player/combat/PLAYER ATTACK LEFT 2.webp",
+    attackLeft3: "assets/player/combat/PLAYER ATTACK LEFT 3.webp",
+
+    attackDown1: "assets/player/combat/PLAYER ATTACK DOWN 1.webp",
+    attackDown2: "assets/player/combat/PLAYER ATTACK DOWN 2.webp",
+    attackDown3: "assets/player/combat/PLAYER ATTACK DOWN 3.webp",
+
+    attackFinish: "assets/player/combat/PLAYER ATTACK FINISH.webp",
+    attackFinishLeft: "assets/player/combat/PLAYER ATTACK FINISH LEFT.webp",
+    block: "assets/player/combat/PLAYER BLOCK.webp",
 
     width: 420,
     height: 630,
     speed: 520,
-    frameDuration: 120
+    walkFrameDuration: 120
   });
+
+  const ATTACK_RIGHT = Object.freeze([
+    { sprite: PLAYER.attackRight1, duration: 400 },
+    { sprite: PLAYER.combatBase, duration: 100 },
+    { sprite: PLAYER.attackRight2, duration: 400 },
+    { sprite: PLAYER.combatBase, duration: 100 },
+    { sprite: PLAYER.attackRight3, duration: 400 },
+    { sprite: PLAYER.combatBase, duration: 100 },
+    { sprite: PLAYER.attackFinish, duration: 400 },
+    { sprite: PLAYER.combatBase, duration: 100 }
+  ]);
+
+  const ATTACK_LEFT = Object.freeze([
+    { sprite: PLAYER.attackLeft1, duration: 400 },
+    { sprite: PLAYER.combatBaseLeft, duration: 100 },
+    { sprite: PLAYER.attackLeft2, duration: 400 },
+    { sprite: PLAYER.combatBaseLeft, duration: 100 },
+    { sprite: PLAYER.attackLeft3, duration: 400 },
+    { sprite: PLAYER.combatBaseLeft, duration: 100 },
+    { sprite: PLAYER.attackFinishLeft, duration: 400 },
+    { sprite: PLAYER.combatBaseLeft, duration: 100 }
+  ]);
+
+  const ATTACK_DOWN = Object.freeze([
+    { sprite: PLAYER.combatBase, duration: 100 },
+    { sprite: PLAYER.attackDown1, duration: 400 },
+    { sprite: PLAYER.combatBase, duration: 100 },
+    { sprite: PLAYER.attackDown2, duration: 400 },
+    { sprite: PLAYER.combatBase, duration: 100 },
+    { sprite: PLAYER.attackDown3, duration: 400 },
+    { sprite: PLAYER.combatBase, duration: 100 },
+    { sprite: PLAYER.attackFinish, duration: 400 },
+    { sprite: PLAYER.combatBase, duration: 100 }
+  ]);
 
   const ZOOM_MULTIPLIERS = [1, 1.75, 3, 4.5];
   const ZOOM_DURATION = 300;
@@ -55,7 +105,21 @@
     PLAYER.walkRight,
     PLAYER.walkLeft,
     ...PLAYER.walkDown,
-    PLAYER.walkUp
+    PLAYER.walkUp,
+    PLAYER.combatBase,
+    PLAYER.combatBaseLeft,
+    PLAYER.attackRight1,
+    PLAYER.attackRight2,
+    PLAYER.attackRight3,
+    PLAYER.attackLeft1,
+    PLAYER.attackLeft2,
+    PLAYER.attackLeft3,
+    PLAYER.attackDown1,
+    PLAYER.attackDown2,
+    PLAYER.attackDown3,
+    PLAYER.attackFinish,
+    PLAYER.attackFinishLeft,
+    PLAYER.block
   ];
 
   const preloaded = {};
@@ -82,12 +146,20 @@
   let zoomAnimating = false;
 
   let facing = "right";
+  let lastHorizontalFacing = "right";
   let activeSprite = "";
   let moving = false;
 
   let walkFrame = 0;
   let walkFrameTimer = 0;
   let currentAnimation = "idle";
+
+  let attackHeld = false;
+  let blocking = false;
+  let attacking = false;
+  let attackSequence = null;
+  let attackStep = 0;
+  let attackTimer = 0;
 
   const keys = new Set();
   let lastFrame = performance.now();
@@ -149,11 +221,13 @@
   }
 
   function setIdleSprite() {
-    setSprite(
-      facing === "left"
-        ? PLAYER.standLeft
-        : PLAYER.standRight
-    );
+    if (facing === "down") {
+      setSprite(PLAYER.combatBase);
+    } else if (facing === "left") {
+      setSprite(PLAYER.standLeft);
+    } else {
+      setSprite(PLAYER.standRight);
+    }
   }
 
   function setAnimation(name) {
@@ -164,27 +238,27 @@
   }
 
   function getMovementAnimation(dx, dy) {
-    // NEW RULE:
-    // Any movement containing S/down always uses the S two-frame animation,
-    // including S+A and S+D.
+    // S / down has priority, including S+A and S+D.
     if (dy > 0) {
-      if (dx > 0) facing = "right";
-      if (dx < 0) facing = "left";
+      facing = "down";
       return "down";
     }
 
-    // Existing W diagonals remain side-facing.
+    // W+A / W+D continue to use side-facing artwork.
     if (dx > 0) {
       facing = "right";
+      lastHorizontalFacing = "right";
       return "right";
     }
 
     if (dx < 0) {
       facing = "left";
+      lastHorizontalFacing = "left";
       return "left";
     }
 
     if (dy < 0) {
+      facing = "up";
       return "up";
     }
 
@@ -195,8 +269,8 @@
     if (animationName === "down") {
       walkFrameTimer += deltaSeconds * 1000;
 
-      while (walkFrameTimer >= PLAYER.frameDuration) {
-        walkFrameTimer -= PLAYER.frameDuration;
+      while (walkFrameTimer >= PLAYER.walkFrameDuration) {
+        walkFrameTimer -= PLAYER.walkFrameDuration;
         walkFrame = (walkFrame + 1) % 2;
       }
 
@@ -204,7 +278,6 @@
       return;
     }
 
-    // A, D and W deliberately have no second frame anymore.
     if (animationName === "right") {
       setSprite(PLAYER.walkRight);
     } else if (animationName === "left") {
@@ -216,27 +289,79 @@
     }
   }
 
-  function updatePlayerSprite(dx, dy, deltaSeconds) {
-    const isMoving = dx !== 0 || dy !== 0;
+  function chooseAttackSequence() {
+    if (facing === "down") return ATTACK_DOWN;
+    if (facing === "left") return ATTACK_LEFT;
+    if (facing === "right") return ATTACK_RIGHT;
 
-    if (moving !== isMoving) {
-      moving = isMoving;
-      playerEl.classList.toggle("player--moving", moving);
-      playerEl.classList.toggle("player--idle", !moving);
+    // No dedicated UP attack exists. Use the last horizontal orientation.
+    return lastHorizontalFacing === "left" ? ATTACK_LEFT : ATTACK_RIGHT;
+  }
+
+  function startAttackCombo() {
+    if (attacking) return;
+
+    attacking = true;
+    moving = false;
+    playerEl.classList.remove("player--moving");
+    playerEl.classList.add("player--idle");
+
+    attackSequence = chooseAttackSequence();
+    attackStep = 0;
+    attackTimer = 0;
+
+    setSprite(attackSequence[0].sprite);
+  }
+
+  function finishAttackState() {
+    attacking = false;
+    attackSequence = null;
+    attackStep = 0;
+    attackTimer = 0;
+    setIdleSprite();
+  }
+
+  function updateAttack(deltaSeconds) {
+    if (!attacking || !attackSequence) return;
+
+    attackTimer += deltaSeconds * 1000;
+
+    while (attacking && attackTimer >= attackSequence[attackStep].duration) {
+      attackTimer -= attackSequence[attackStep].duration;
+      attackStep += 1;
+
+      if (attackStep >= attackSequence.length) {
+        // Full combo completed.
+        if (attackHeld) {
+          // Same orientation starts again immediately.
+          attackSequence = chooseAttackSequence();
+          attackStep = 0;
+          attackTimer = 0;
+          setSprite(attackSequence[0].sprite);
+        } else {
+          finishAttackState();
+        }
+        return;
+      }
+
+      setSprite(attackSequence[attackStep].sprite);
     }
-
-    if (!moving) {
-      setAnimation("idle");
-      setIdleSprite();
-      return;
-    }
-
-    const nextAnimation = getMovementAnimation(dx, dy);
-    setAnimation(nextAnimation);
-    renderMovementFrame(currentAnimation, deltaSeconds);
   }
 
   function updatePlayer(deltaSeconds) {
+    if (blocking) {
+      moving = false;
+      playerEl.classList.remove("player--moving");
+      playerEl.classList.add("player--idle");
+      setSprite(PLAYER.block);
+      return;
+    }
+
+    if (attacking) {
+      updateAttack(deltaSeconds);
+      return;
+    }
+
     let dx = 0;
     let dy = 0;
 
@@ -245,9 +370,28 @@
     if (keys.has("KeyA") || keys.has("ArrowLeft")) dx -= 1;
     if (keys.has("KeyD") || keys.has("ArrowRight")) dx += 1;
 
-    updatePlayerSprite(dx, dy, deltaSeconds);
+    const isMoving = dx !== 0 || dy !== 0;
 
-    if (!dx && !dy) return;
+    if (!isMoving) {
+      if (moving) {
+        moving = false;
+        playerEl.classList.remove("player--moving");
+        playerEl.classList.add("player--idle");
+      }
+      setAnimation("idle");
+      setIdleSprite();
+      return;
+    }
+
+    if (!moving) {
+      moving = true;
+      playerEl.classList.add("player--moving");
+      playerEl.classList.remove("player--idle");
+    }
+
+    const nextAnimation = getMovementAnimation(dx, dy);
+    setAnimation(nextAnimation);
+    renderMovementFrame(currentAnimation, deltaSeconds);
 
     const length = Math.hypot(dx, dy) || 1;
     dx /= length;
@@ -331,10 +475,30 @@
     const controlled = [
       "KeyW", "KeyA", "KeyS", "KeyD",
       "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight",
-      "Equal", "NumpadAdd", "Minus", "NumpadSubtract"
+      "Equal", "NumpadAdd", "Minus", "NumpadSubtract",
+      "Space", "ControlLeft", "ControlRight"
     ];
 
     if (controlled.includes(event.code)) event.preventDefault();
+
+    if (event.code === "ControlLeft" || event.code === "ControlRight") {
+      blocking = true;
+      attackHeld = false;
+      if (attacking) finishAttackState();
+      setSprite(PLAYER.block);
+      return;
+    }
+
+    if (event.code === "Space") {
+      if (blocking) return;
+      attackHeld = true;
+
+      if (!attacking) {
+        startAttackCombo();
+      }
+
+      return;
+    }
 
     if (event.code === "Equal" || event.code === "NumpadAdd") {
       setZoomLevel(zoomLevel + 1);
@@ -350,8 +514,21 @@
   }, { passive: false });
 
   window.addEventListener("keyup", (event) => {
+    if (event.code === "ControlLeft" || event.code === "ControlRight") {
+      event.preventDefault();
+      blocking = false;
+      setIdleSprite();
+      return;
+    }
+
+    if (event.code === "Space") {
+      event.preventDefault();
+      attackHeld = false;
+      return;
+    }
+
     keys.delete(event.code);
-  });
+  }, { passive: false });
 
   game.addEventListener("wheel", (event) => {
     event.preventDefault();
@@ -388,6 +565,7 @@
     targetScale = displayScale;
 
     facing = "right";
+    lastHorizontalFacing = "right";
     activeSprite = "";
     currentAnimation = "idle";
     setIdleSprite();
