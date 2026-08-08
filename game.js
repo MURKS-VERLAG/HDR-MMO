@@ -241,18 +241,19 @@
 
       .area-sign__label {
         position: absolute;
+        z-index: 1;
         left: 50%;
         top: 50%;
         transform: translate(-50%, -50%);
         white-space: nowrap;
-        color: #080808;
+        color: #000000;
         font-family: "Old English Text MT", "Lucida Blackletter", "UnifrakturCook", Georgia, serif;
         font-size: 168px;
         font-weight: 900;
         line-height: .95;
         letter-spacing: 5px;
         text-align: center;
-        -webkit-text-stroke: 3px rgba(255,255,255,.23);
+        -webkit-text-stroke: 1px rgba(0,0,0,.95);
         text-shadow:
           0 0 3px var(--area-glow),
           0 0 7px var(--area-glow),
@@ -263,7 +264,8 @@
       }
 
       .area-sign--dark .area-sign__label {
-        -webkit-text-stroke: 3px rgba(255,255,255,.68);
+        color: #000000;
+        -webkit-text-stroke: 1px rgba(0,0,0,.95);
         text-shadow:
           0 0 2px #ffffff,
           0 0 5px rgba(255,255,255,.72),
@@ -274,6 +276,7 @@
 
       .area-sign__arrow {
         position: absolute;
+        z-index: 3;
         width: 250px;
         height: 250px;
         display: grid;
@@ -298,24 +301,24 @@
 
       .area-sign--up .area-sign__arrow {
         left: 50%;
-        top: -185px;
+        top: -265px;
         transform: translateX(-50%) rotate(0deg);
       }
 
       .area-sign--down .area-sign__arrow {
         left: 50%;
-        bottom: -185px;
+        bottom: -265px;
         transform: translateX(-50%) rotate(180deg);
       }
 
       .area-sign--left .area-sign__arrow {
-        left: -205px;
+        left: -285px;
         top: 50%;
         transform: translateY(-50%) rotate(-90deg);
       }
 
       .area-sign--right .area-sign__arrow {
-        right: -205px;
+        right: -285px;
         top: 50%;
         transform: translateY(-50%) rotate(90deg);
       }
