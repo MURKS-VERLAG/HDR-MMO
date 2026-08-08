@@ -35,7 +35,8 @@
       leavePadding: 18
     }),
     winterbachSpawn: Object.freeze({
-      x: 4300,
+      // Same exact R10 lower path/arrow used to return from Map 2 to Map 1.
+      x: 5485,
       y: 5925
     }),
     oberkirchReturnSpawn: Object.freeze({
@@ -2683,8 +2684,11 @@
   }
 
   function setOberkirchWorldVisibility(visible) {
+    // IMPORTANT:
+    // Do NOT hide .area-sign globally here.
+    // updateAreaSigns() already filters each sign by its mapId, including
+    // the Map-2 "OBERKIRCH" return sign.
     const selectors = [
-      ".area-sign",
       ".map-rabbit",
       ".map-mole",
       ".black-penny-drop",
@@ -2694,6 +2698,9 @@
     for (const element of world.querySelectorAll(selectors.join(","))) {
       element.style.display = visible ? "" : "none";
     }
+
+    // Force a fresh sign-state evaluation immediately after every map switch.
+    updateAreaSigns();
   }
 
   function resizeWorldForCurrentMap() {
