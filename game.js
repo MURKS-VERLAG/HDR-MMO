@@ -865,6 +865,382 @@
   }
 
 
+
+  // ------------------------------------------------------------------
+  // R16 MAP 2 — WOLVES
+  // Maximum five wolves inside the black marked winter habitat.
+  // ------------------------------------------------------------------
+  const WOLF_CONFIG = Object.freeze({
+    mapId: "winterbach-ranglehen",
+    frames: Object.freeze([
+      "assets/animals/wolves/WOLF WALK 1.png",
+      "assets/animals/wolves/WOLF WALK 2.png"
+    ]),
+    howlFrame: "assets/animals/wolves/WOLF HOWL.png",
+    howlSound: "assets/audio/wolves/WOLF HOWL.mp3",
+    count: 5,
+    width: 620,
+    height: 500,
+    speedMin: 150,
+    speedMax: 250,
+    frameDuration: 430,
+    howlInterval: 30000,
+    howlDuration: 5500,
+    habitat: Object.freeze({
+      // R16 black oval: clipped/open only at the TOP map edge.
+      cx: 2950,
+      cy: 420,
+      rx: 1750,
+      ry: 880
+    })
+  });
+
+  let wolfActors = [];
+  let nextWolfHowlAt = 0;
+  const wolfHowlAudio = new Audio(WOLF_CONFIG.howlSound);
+  wolfHowlAudio.preload = "auto";
+  wolfHowlAudio.loop = false;
+  wolfHowlAudio.volume = 1.0;
+
+  function installWolfStyles() {
+    if (document.getElementById("wolfStyles")) return;
+
+    const style = document.createElement("style");
+    style.id = "wolfStyles";
+    style.textContent = `
+      .map-wolf {
+        position: absolute;
+        z-index: 5;
+        width: ${WOLF_CONFIG.width}px;
+        height: ${WOLF_CONFIG.height}px;
+        transform: translate(-50%, -82%);
+        pointer-events: none;
+        user-select: none;
+        opacity: 1;
+        transition: opacity 420ms ease;
+        will-change: left, top, opacity;
+      }
+
+      .map-wolf--away {
+        opacity: 0;
+      }
+
+      .map-wolf__sprite {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+        object-position: 50% 100%;
+        transform: scaleX(var(--wolf-facing, 1));
+        transform-origin: 50% 100%;
+        opacity: 0;
+        transition: opacity 260ms ease;
+        filter: drop-shadow(0 9px 5px rgba(0,0,0,.24));
+      }
+
+      .map-wolf__sprite--visible {
+        opacity: 1;
+      }
+    `;
+    document.head.appendChild(style);
+  }
+
+  function wolfPointInsideHabitat(x, y) {
+    const h = WOLF_CONFIG.habitat;
+    const dx = (x - h.cx) / h.rx;
+    const dy = (y - h.cy) / h.ry;
+    return dx * dx + dy * dy <= 1;
+  }
+
+  function wolfRandomPoint(inset = 90) {
+    const h = WOLF_CONFIG.habitat;
+
+    for (let i = 0; i < 120; i += 1) {
+      const angle = Math.random() * Math.PI * 2;
+      const r = Math.sqrt(Math.random());
+      const x = h.cx + Math.cos(angle) * Math.max(100, h.rx - inset) * r;
+      const y = h.cy + Math.sin(angle) * Math.max(100, h.ry - inset) * r;
+
+      if (y >= 90 && wolfPointInsideHabitat(x, y)) {
+        return { x, y };
+      }
+    }
+
+    return { x: h.cx, y: Math.max(100, h.cy) };
+  }
+
+  function wolfPickWalkFrame(actor) {
+    if (actor.howling || actor.away) return;
+
+    actor.frameIndex = 1 - actor.frameIndex;
+    const incoming = 1 - actor.visibleLayer;
+    const outgoing = actor.visibleLayer;
+
+    actor.images[incoming].src = encodeURI(WOLF_CONFIG.frames[actor.frameIndex]);
+    actor.images[incoming].classList.add("map-wolf__sprite--visible");
+    actor.images[outgoing].classList.remove("map-wolf__sprite--visible");
+    actor.visibleLayer = incoming;
+    actor.nextFrameAt = performance.now() + WOLF_CONFIG.frameDuration;
+  }
+
+  function wolfChooseTarget(actor, now) {
+    const target = wolfRandomPoint(120);
+    actor.targetX = target.x;
+    actor.targetY = target.y;
+    actor.speed =
+      WOLF_CONFIG.speedMin +
+      Math.random() * (WOLF_CONFIG.speedMax - WOLF_CONFIG.speedMin);
+    actor.moving = true;
+    actor.pauseUntil = 0;
+    actor.nextDecision = now + 2200 + Math.random() * 4200;
+
+    const dx = actor.targetX - actor.x;
+    if (Math.abs(dx) > 20) {
+      actor.facing = dx < 0 ? -1 : 1;
+      actor.element.style.setProperty("--wolf-facing", actor.facing);
+    }
+  }
+
+  function wolfStartTopExit(actor, now) {
+    actor.targetX =
+      Math.max(
+        WOLF_CONFIG.habitat.cx - WOLF_CONFIG.habitat.rx * 0.72,
+        Math.min(
+          WOLF_CONFIG.habitat.cx + WOLF_CONFIG.habitat.rx * 0.72,
+          actor.x + (Math.random() - 0.5) * 650
+        )
+      );
+    actor.targetY = -300;
+    actor.speed = 210 + Math.random() * 120;
+    actor.moving = true;
+    actor.exiting = true;
+    actor.pauseUntil = 0;
+
+    const dx = actor.targetX - actor.x;
+    if (Math.abs(dx) > 20) {
+      actor.facing = dx < 0 ? -1 : 1;
+      actor.element.style.setProperty("--wolf-facing", actor.facing);
+    }
+  }
+
+  function wolfGoAway(actor, now) {
+    actor.away = true;
+    actor.exiting = false;
+    actor.moving = false;
+    actor.element.classList.add("map-wolf--away");
+    actor.returnAt = now + 3500 + Math.random() * 8000;
+  }
+
+  function wolfReturn(actor, now) {
+    const h = WOLF_CONFIG.habitat;
+    actor.x =
+      h.cx - h.rx * 0.62 +
+      Math.random() * h.rx * 1.24;
+    actor.y = -260;
+    actor.away = false;
+    actor.entering = true;
+    actor.moving = true;
+    actor.element.classList.remove("map-wolf--away");
+
+    const target = wolfRandomPoint(180);
+    actor.targetX = target.x;
+    actor.targetY = target.y;
+    actor.speed = 210 + Math.random() * 110;
+
+    const dx = actor.targetX - actor.x;
+    actor.facing = dx < 0 ? -1 : 1;
+    actor.element.style.setProperty("--wolf-facing", actor.facing);
+    actor.element.style.left = `${actor.x}px`;
+    actor.element.style.top = `${actor.y}px`;
+    actor.nextDecision = now + 2500 + Math.random() * 3000;
+  }
+
+  function wolfSetHowl(actor, now, delay) {
+    window.setTimeout(() => {
+      if (!actor || actor.away || MAP.id !== WOLF_CONFIG.mapId) return;
+
+      actor.howling = true;
+      actor.moving = false;
+      actor.exiting = false;
+      actor.entering = false;
+
+      const incoming = 1 - actor.visibleLayer;
+      const outgoing = actor.visibleLayer;
+      actor.images[incoming].src = encodeURI(WOLF_CONFIG.howlFrame);
+      actor.images[incoming].classList.add("map-wolf__sprite--visible");
+      actor.images[outgoing].classList.remove("map-wolf__sprite--visible");
+      actor.visibleLayer = incoming;
+
+      actor.howlEndAt = performance.now() + WOLF_CONFIG.howlDuration;
+    }, delay);
+  }
+
+  function startWolfHowlEvent(now) {
+    nextWolfHowlAt = now + WOLF_CONFIG.howlInterval;
+
+    wolfHowlAudio.pause();
+    try {
+      wolfHowlAudio.currentTime = 0;
+    } catch (_) {}
+    wolfHowlAudio.play().catch(() => {});
+
+    let accumulatedDelay = 0;
+    for (const actor of wolfActors) {
+      accumulatedDelay += 100 + Math.random() * 100;
+      wolfSetHowl(actor, now, accumulatedDelay);
+    }
+  }
+
+  function createWolfActor(index) {
+    const start = wolfRandomPoint(180);
+
+    const element = document.createElement("div");
+    element.className = "map-wolf";
+    element.dataset.wolfIndex = String(index);
+
+    const imageA = document.createElement("img");
+    imageA.className = "map-wolf__sprite map-wolf__sprite--visible";
+    imageA.src = encodeURI(WOLF_CONFIG.frames[0]);
+    imageA.alt = "";
+    imageA.draggable = false;
+
+    const imageB = document.createElement("img");
+    imageB.className = "map-wolf__sprite";
+    imageB.alt = "";
+    imageB.draggable = false;
+
+    element.append(imageA, imageB);
+    world.appendChild(element);
+
+    const actor = {
+      element,
+      images: [imageA, imageB],
+      visibleLayer: 0,
+      frameIndex: 0,
+      x: start.x,
+      y: start.y,
+      targetX: start.x,
+      targetY: start.y,
+      speed: 190,
+      facing: Math.random() < 0.5 ? -1 : 1,
+      moving: false,
+      exiting: false,
+      entering: false,
+      away: false,
+      returnAt: 0,
+      pauseUntil: performance.now() + Math.random() * 1800,
+      nextDecision: performance.now() + 900 + Math.random() * 2500,
+      nextFrameAt: performance.now() + WOLF_CONFIG.frameDuration,
+      howling: false,
+      howlEndAt: 0
+    };
+
+    element.style.left = `${actor.x}px`;
+    element.style.top = `${actor.y}px`;
+    element.style.setProperty("--wolf-facing", actor.facing);
+    element.style.display = MAP.id === WOLF_CONFIG.mapId ? "" : "none";
+
+    return actor;
+  }
+
+  function createWolves() {
+    installWolfStyles();
+
+    for (const src of [...WOLF_CONFIG.frames, WOLF_CONFIG.howlFrame]) {
+      const image = new Image();
+      image.src = encodeURI(src);
+    }
+
+    wolfActors = [];
+    for (let i = 0; i < WOLF_CONFIG.count; i += 1) {
+      wolfActors.push(createWolfActor(i));
+    }
+
+    nextWolfHowlAt = performance.now() + WOLF_CONFIG.howlInterval;
+  }
+
+  function updateWolves(deltaSeconds, now) {
+    const active = MAP.id === WOLF_CONFIG.mapId;
+
+    for (const actor of wolfActors) {
+      actor.element.style.display = active ? "" : "none";
+    }
+
+    if (!active) return;
+
+    if (now >= nextWolfHowlAt) {
+      startWolfHowlEvent(now);
+    }
+
+    for (const actor of wolfActors) {
+      if (actor.away) {
+        if (now >= actor.returnAt) wolfReturn(actor, now);
+        continue;
+      }
+
+      if (actor.howling) {
+        if (now >= actor.howlEndAt) {
+          actor.howling = false;
+          actor.frameIndex = 0;
+          const incoming = 1 - actor.visibleLayer;
+          const outgoing = actor.visibleLayer;
+          actor.images[incoming].src = encodeURI(WOLF_CONFIG.frames[0]);
+          actor.images[incoming].classList.add("map-wolf__sprite--visible");
+          actor.images[outgoing].classList.remove("map-wolf__sprite--visible");
+          actor.visibleLayer = incoming;
+          actor.nextFrameAt = now + WOLF_CONFIG.frameDuration;
+          actor.pauseUntil = now + 250 + Math.random() * 550;
+          actor.nextDecision = actor.pauseUntil;
+        }
+        continue;
+      }
+
+      if (now >= actor.nextFrameAt) {
+        wolfPickWalkFrame(actor);
+      }
+
+      if (actor.moving) {
+        const dx = actor.targetX - actor.x;
+        const dy = actor.targetY - actor.y;
+        const distance = Math.hypot(dx, dy);
+
+        if (distance <= 12) {
+          actor.x = actor.targetX;
+          actor.y = actor.targetY;
+          actor.moving = false;
+
+          if (actor.exiting) {
+            wolfGoAway(actor, now);
+            continue;
+          }
+
+          actor.entering = false;
+          actor.pauseUntil = now + 350 + Math.random() * 1500;
+          actor.nextDecision = actor.pauseUntil;
+        } else {
+          const step = Math.min(distance, actor.speed * deltaSeconds);
+          actor.x += (dx / distance) * step;
+          actor.y += (dy / distance) * step;
+        }
+
+        actor.element.style.left = `${actor.x}px`;
+        actor.element.style.top = `${actor.y}px`;
+        continue;
+      }
+
+      if (now < actor.pauseUntil || now < actor.nextDecision) continue;
+
+      // Black circle touches/open at top: wolves may leave only there.
+      if (Math.random() < 0.13) {
+        wolfStartTopExit(actor, now);
+      } else {
+        wolfChooseTarget(actor, now);
+      }
+    }
+  }
+
+
   // ------------------------------------------------------------------
   // AMBIENT RABBITS
   // Four habitat polygons follow the WHITE outlined regions in the
@@ -911,6 +1287,7 @@
   const RABBIT_ZONES = Object.freeze([
     {
       id: "rabbit-northwest",
+      mapId: "oberkirch-zentrum",
       polygon: [
         [0, 0],
         [1775, 0],
@@ -922,6 +1299,7 @@
     },
     {
       id: "rabbit-west",
+      mapId: "oberkirch-zentrum",
       polygon: [
         [0, 2797],
         [1031, 3140],
@@ -932,6 +1310,7 @@
     },
     {
       id: "rabbit-northeast",
+      mapId: "oberkirch-zentrum",
       polygon: [
         [9313, 0],
         [10000, 0],
@@ -944,6 +1323,7 @@
     },
     {
       id: "rabbit-southeast",
+      mapId: "oberkirch-zentrum",
       polygon: [
         [8913, 4257],
         [10000, 4257],
@@ -952,6 +1332,46 @@
       ],
       exits: ["right"],
       count: 2
+    },
+
+    // R16 MAP 2 — upper pink circle: four rabbits, fully enclosed.
+    {
+      id: "winterbach-rabbit-upper",
+      mapId: "winterbach-ranglehen",
+      polygon: [
+        [1820, 2860],
+        [2240, 2580],
+        [3050, 2470],
+        [3900, 2580],
+        [4450, 2860],
+        [4560, 3140],
+        [4230, 3380],
+        [3420, 3490],
+        [2600, 3430],
+        [2020, 3230]
+      ],
+      exits: [],
+      count: 4
+    },
+
+    // R16 MAP 2 — lower-left pink circle: four rabbits.
+    // Circle reaches left/bottom map edge, so they may leave and later return there.
+    {
+      id: "winterbach-rabbit-lower-left",
+      mapId: "winterbach-ranglehen",
+      polygon: [
+        [0, 4630],
+        [430, 4510],
+        [980, 4530],
+        [1540, 4720],
+        [1910, 5080],
+        [2010, 5480],
+        [1860, 5850],
+        [1660, 6006],
+        [0, 6006]
+      ],
+      exits: ["left", "bottom"],
+      count: 4
     }
   ]);
 
@@ -1487,13 +1907,15 @@
   }
 
   function resolveRabbitAttackFrame(frame) {
-    if (MAP.id !== "oberkirch-zentrum") return;
     if (!frame || !frame.hit) return;
 
     const direction = rabbitAttackDirection();
     const now = performance.now();
 
     for (const actor of rabbitActors) {
+      const actorMapId = actor.zone.mapId || "oberkirch-zentrum";
+      if (actorMapId !== MAP.id) continue;
+
       if (rabbitInsideAttackHitbox(actor, direction)) {
         damageRabbit(
           actor,
@@ -1566,6 +1988,7 @@
     element.style.left = `${actor.x}px`;
     element.style.top = `${actor.y}px`;
     element.style.setProperty("--rabbit-facing", actor.facing);
+    element.style.display = (zone.mapId || "oberkirch-zentrum") === MAP.id ? "" : "none";
 
     return actor;
   }
@@ -1588,9 +2011,12 @@
   }
 
   function updateRabbits(deltaSeconds, now) {
-    if (MAP.id !== "oberkirch-zentrum") return;
-
     for (const actor of rabbitActors) {
+      const actorMapId = actor.zone.mapId || "oberkirch-zentrum";
+      const activeOnMap = actorMapId === MAP.id;
+      actor.element.style.display = activeOnMap ? "" : "none";
+      if (!activeOnMap) continue;
+
       if (actor.dead) {
         if (actor.respawnAt && now >= actor.respawnAt) {
           respawnRabbit(actor, now);
@@ -1896,9 +2322,28 @@
   }
 
   function moleSpawnPoint() {
-    // Use the existing agricultural edge regions as the valid field areas.
+    if (MAP.id === "winterbach-ranglehen") {
+      // R16 BLUE CIRCLE, MAP 2 only.
+      // Uniform random point inside the marked ellipse.
+      const cx = 8420;
+      const cy = 4020;
+      const rx = 430;
+      const ry = 360;
+      const angle = Math.random() * Math.PI * 2;
+      const radius = Math.sqrt(Math.random());
+
+      return {
+        x: cx + Math.cos(angle) * rx * radius,
+        y: cy + Math.sin(angle) * ry * radius
+      };
+    }
+
+    // Preserve the original OBERKIRCH agricultural spawn behavior exactly.
+    const oberkirchZones = RABBIT_ZONES.filter(
+      (zone) => (zone.mapId || "oberkirch-zentrum") === "oberkirch-zentrum"
+    );
     const zone =
-      RABBIT_ZONES[Math.floor(Math.random() * RABBIT_ZONES.length)];
+      oberkirchZones[Math.floor(Math.random() * oberkirchZones.length)];
 
     return rabbitRandomPoint(zone, 210);
   }
@@ -1951,6 +2396,7 @@
       visibleLayer: 0,
       x: point.x,
       y: point.y,
+      mapId: MAP.id,
       hp: MOLE_CONFIG.maxHp,
       phase: "digging",
       phaseEndAt: now + MOLE_CONFIG.digDuration,
@@ -1984,9 +2430,10 @@
     setMoleImage(MOLE_IMAGES.dead);
   }
 
-  function spawnBlackPenny(x, y) {
+  function spawnBlackPenny(x, y, mapId = MAP.id) {
     const element = document.createElement("div");
     element.className = "black-penny-drop";
+    element.dataset.mapId = mapId;
     element.dataset.itemId = BLACK_PENNY_ITEM.id;
     element.title =
       `${BLACK_PENNY_ITEM.name} — ${BLACK_PENNY_ITEM.description}`;
@@ -1999,8 +2446,11 @@
       element,
       x,
       y,
+      mapId,
       collected: false
     });
+
+    element.style.display = mapId === MAP.id ? "" : "none";
   }
 
   function removeMole(now, dropItem) {
@@ -2010,7 +2460,7 @@
     finished.element.classList.add("map-mole--fading");
 
     if (dropItem) {
-      spawnBlackPenny(finished.x, finished.y);
+      spawnBlackPenny(finished.x, finished.y, finished.mapId || MAP.id);
     }
 
     window.setTimeout(() => {
@@ -2022,7 +2472,16 @@
   }
 
   function updateMole(now) {
-    if (MAP.id !== "oberkirch-zentrum") return;
+    for (const drop of blackPennyDrops) {
+      drop.element.style.display =
+        (drop.mapId || "oberkirch-zentrum") === MAP.id ? "" : "none";
+    }
+
+    if (moleEvent) {
+      const eventMapId = moleEvent.mapId || "oberkirch-zentrum";
+      moleEvent.element.style.display = eventMapId === MAP.id ? "" : "none";
+      if (eventMapId !== MAP.id) return;
+    }
 
     if (!moleEvent) {
       if (now < nextMoleCheckAt) return;
@@ -2091,8 +2550,8 @@
   }
 
   function resolveMoleAttackFrame(frame) {
-    if (MAP.id !== "oberkirch-zentrum") return;
     if (!frame || !frame.hit || !moleEvent) return;
+    if ((moleEvent.mapId || "oberkirch-zentrum") !== MAP.id) return;
     if (moleEvent.phase !== "exposed" || moleEvent.dead) return;
 
     const direction = rabbitAttackDirection();
@@ -2136,6 +2595,7 @@
 
     for (const drop of blackPennyDrops) {
       if (drop.collected) continue;
+      if ((drop.mapId || "oberkirch-zentrum") !== MAP.id) continue;
 
       const distance = Math.hypot(
         drop.x - playerX,
@@ -3371,9 +3831,6 @@
     // updateAreaSigns() already filters each sign by its mapId, including
     // the Map-2 "OBERKIRCH" return sign.
     const selectors = [
-      ".map-rabbit",
-      ".map-mole",
-      ".black-penny-drop",
       ".map-building",
       ".trunkenbold"
     ];
@@ -3441,6 +3898,12 @@
     activeBridge = null;
 
     setOberkirchWorldVisibility(MAP.id === "oberkirch-zentrum");
+
+    // Sync map-specific animals while the transition overlay is still covering the map.
+    updateRabbits(0, performance.now());
+    updateWolves(0, performance.now());
+    updateMole(performance.now());
+
     if (debugTitle) debugTitle.textContent = MAP.name;
 
     calculateFitScale();
@@ -4033,6 +4496,7 @@
       updateAreaSigns();
       updateTrunkenbold(deltaSeconds, now);
       updateRabbits(deltaSeconds, now);
+      updateWolves(deltaSeconds, now);
       updateMole(now);
     }
 
@@ -4176,6 +4640,7 @@
 
     createAreaSigns();
     createRabbits();
+    createWolves();
     createMoleSystem();
     createOberkirchBuildings();
     createR11Buildings();
