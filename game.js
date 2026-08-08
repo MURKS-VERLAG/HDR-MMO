@@ -78,12 +78,19 @@
     { sprite: PLAYER.combatBase, duration: 100 },
     { sprite: PLAYER.attackDown2, duration: 400 },
     { sprite: PLAYER.combatBase, duration: 100 },
+    { sprite: PLAYER.attackDown1, duration: 400 },
+    { sprite: PLAYER.combatBase, duration: 100 },
     { sprite: PLAYER.attackFinish, duration: 400 },
     { sprite: PLAYER.combatBase, duration: 100 }
   ]);
 
   const ZOOM_MULTIPLIERS = [1, 1.75, 3, 4.5];
   const ZOOM_DURATION = 300;
+
+  const attackAudio = new Audio("assets/audio/PLAYER ATTACK.mp3");
+  attackAudio.preload = "auto";
+  attackAudio.loop = true;
+  attackAudio.volume = 1.0;
 
   const game = document.getElementById("game");
   const world = document.getElementById("world");
@@ -299,6 +306,33 @@
     return lastHorizontalFacing === "left" ? ATTACK_LEFT : ATTACK_RIGHT;
   }
 
+
+  function startAttackSound() {
+    attackAudio.pause();
+    attackAudio.currentTime = 0;
+    attackAudio.play().catch(() => {});
+  }
+
+  function stopAttackSound() {
+    attackAudio.pause();
+    try {
+      attackAudio.currentTime = 0;
+    } catch (_) {
+      // Ignore if browser has not loaded enough metadata yet.
+    }
+  }
+
+  function cancelAttackImmediately() {
+    attackHeld = false;
+    attacking = false;
+    attackSequence = null;
+    attackStep = 0;
+    attackTimer = 0;
+
+    stopAttackSound();
+    setIdleSprite();
+  }
+
   function startAttackCombo() {
     if (attacking) return;
 
@@ -372,6 +406,7 @@
     attackSequence = null;
     attackStep = 0;
     attackTimer = 0;
+    stopAttackSound();
 
     moving = false;
     currentAnimation = "idle";
@@ -561,6 +596,7 @@
       attackHeld = true;
 
       if (!attacking) {
+        startAttackSound();
         startAttackCombo();
       }
 
@@ -589,7 +625,7 @@
 
     if (event.code === "Space") {
       event.preventDefault();
-      attackHeld = false;
+      cancelAttackImmediately();
       return;
     }
 
@@ -599,7 +635,7 @@
   // Extra safety for lost modifier-key events (Alt-Tab, browser focus changes, etc.).
   window.addEventListener("blur", () => {
     if (blocking) stopBlocking();
-    attackHeld = false;
+    cancelAttackImmediately();
     keys.clear();
   });
 
