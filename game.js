@@ -432,22 +432,25 @@
     outsideSprite: "assets/npcs/TRUNKENBOLD OUTSIDE.png",
     enterSprite: "assets/npcs/TRUNKENBOLD ENTER.png",
 
-    // Exact black R14 movement rectangle.
+    // R15 FINAL outdoor rectangle:
+    // His FOOT anchor may NEVER rise above the red tavern line.
     bounds: Object.freeze({
       x1: 5130,
-      y1: 2690,
+      y1: 2720,
       x2: 6295,
       y2: 3220
     }),
 
-    // Two yellow R14 tavern doors.
+    // Door approach points sit ON the red line.
+    // The sprite visually reaches the doors, but his FEET never walk onto the tavern.
     doors: Object.freeze([
-      Object.freeze({ id: "left",  x: 5505, y: 2535 }),
-      Object.freeze({ id: "right", x: 5985, y: 2535 })
+      Object.freeze({ id: "left",  x: 5505, y: 2720 }),
+      Object.freeze({ id: "right", x: 5985, y: 2720 })
     ]),
 
-    width: 365,
-    height: 550,
+    // Match the player's configured world size exactly.
+    width: 420,
+    height: 630,
     speedMin: 82,
     speedMax: 138,
 
@@ -469,6 +472,77 @@
   });
 
   let trunkenbold = null;
+  let trunkenboldAlphaMask = null;
+
+  function prepareTrunkenboldAlphaMask(image) {
+    if (!image || !image.naturalWidth || !image.naturalHeight) return;
+
+    try {
+      const canvas = document.createElement("canvas");
+      canvas.width = image.naturalWidth;
+      canvas.height = image.naturalHeight;
+
+      const ctx = canvas.getContext("2d", { willReadFrequently: true });
+      if (!ctx) return;
+
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(image, 0, 0);
+
+      const pixels = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+      const alpha = new Uint8Array(canvas.width * canvas.height);
+
+      for (let src = 3, dst = 0; src < pixels.length; src += 4, dst += 1) {
+        alpha[dst] = pixels[src];
+      }
+
+      trunkenboldAlphaMask = {
+        width: canvas.width,
+        height: canvas.height,
+        alpha
+      };
+    } catch (error) {
+      trunkenboldAlphaMask = null;
+      console.warn("Trunkenbold alpha collision mask unavailable:", error);
+    }
+  }
+
+  function isTrunkenboldBlockedFootPoint(x, y) {
+    if (MAP.id !== "oberkirch-zentrum") return false;
+    if (!trunkenbold || !trunkenboldAlphaMask) return false;
+    if (trunkenbold.phase === "inside") return false;
+    if (trunkenbold.element.classList.contains("trunkenbold--hidden")) return false;
+
+    const left = trunkenbold.x - TRUNKENBOLD_CONFIG.width / 2;
+    const top = trunkenbold.y - TRUNKENBOLD_CONFIG.height;
+
+    let localX01 = (x - left) / TRUNKENBOLD_CONFIG.width;
+    const localY01 = (y - top) / TRUNKENBOLD_CONFIG.height;
+
+    if (
+      localX01 < 0 || localX01 > 1 ||
+      localY01 < 0 || localY01 > 1
+    ) {
+      return false;
+    }
+
+    // Outside image alternates mirrored every second.
+    if (trunkenbold.phase !== "door-entry" && trunkenbold.flip < 0) {
+      localX01 = 1 - localX01;
+    }
+
+    const mask = trunkenboldAlphaMask;
+    const px = Math.max(
+      0,
+      Math.min(mask.width - 1, Math.round(localX01 * (mask.width - 1)))
+    );
+    const py = Math.max(
+      0,
+      Math.min(mask.height - 1, Math.round(localY01 * (mask.height - 1)))
+    );
+
+    // Actual opaque silhouette only — transparent PNG space remains walkable.
+    return mask.alpha[py * mask.width + px] >= 28;
+  }
 
   function installTrunkenboldStyles() {
     if (document.getElementById("trunkenboldStyles")) return;
@@ -548,7 +622,7 @@
     const b = TRUNKENBOLD_CONFIG.bounds;
     return {
       x: trunkenboldRandom(b.x1 + 95, b.x2 - 95),
-      y: trunkenboldRandom(b.y1 + 80, b.y2 - 70)
+      y: trunkenboldRandom(b.y1 + 65, b.y2 - 70)
     };
   }
 
@@ -677,6 +751,13 @@
     image.alt = "";
     image.draggable = false;
 
+    image.addEventListener("load", () => {
+      // Build once from the normal standing/walking silhouette.
+      if (!trunkenboldAlphaMask) {
+        prepareTrunkenboldAlphaMask(image);
+      }
+    });
+
     sway.appendChild(image);
     element.appendChild(sway);
     world.appendChild(element);
@@ -704,6 +785,10 @@
 
     element.style.left = `${trunkenbold.x}px`;
     element.style.top = `${trunkenbold.y}px`;
+
+    if (image.complete && image.naturalWidth > 0 && !trunkenboldAlphaMask) {
+      prepareTrunkenboldAlphaMask(image);
+    }
   }
 
   function updateTrunkenbold(deltaSeconds, now) {
@@ -2342,6 +2427,9 @@
     // Only the player's foot anchor participates.
     if (isBuildingBlockedFootPoint(x, y)) return false;
 
+    // R15: TRUNKENBOLD has a precise PNG-alpha silhouette collision.
+    if (isTrunkenboldBlockedFootPoint(x, y)) return false;
+
     return true;
   }
 
@@ -2608,10 +2696,17 @@
       // exact upper roof crossing area is walkable and drawn in front of player.
       // The lower hut / wall / foundation keeps its existing collision.
       walkBehind: Object.freeze([
+        // Existing R13 roof passage retained...
         [0.03, 0.16],
         [0.97, 0.16],
         [0.93, 0.46],
-        [0.08, 0.46]
+
+        // ...plus ONLY the additional R15 blue-marked lower-left roof wedge.
+        // The player may walk here and is rendered BEHIND the roof.
+        [0.70, 0.46],
+        [0.08, 0.62],
+        [0.00, 0.40],
+        [0.03, 0.16]
       ])
     })
   ]);
