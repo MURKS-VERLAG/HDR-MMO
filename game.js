@@ -49,46 +49,46 @@
   });
 
   const ATTACK_RIGHT = Object.freeze([
-    { sprite: PLAYER.attackRight1, duration: 400 },
+    { sprite: PLAYER.attackRight1, duration: 400, hit: true, damage: 20, strike: 1 },
     { sprite: PLAYER.combatBase, duration: 100 },
 
-    { sprite: PLAYER.attackRight3, duration: 500 },
+    { sprite: PLAYER.attackRight3, duration: 500, hit: true, damage: 20, strike: 2 },
     { sprite: PLAYER.combatBase, duration: 100 },
 
-    { sprite: PLAYER.attackFinish, duration: 400 },
+    { sprite: PLAYER.attackFinish, duration: 400, hit: true, damage: 20, strike: 4 },
     { sprite: PLAYER.combatBase, duration: 100 },
 
-    { sprite: PLAYER.attackRight1, duration: 500 },
+    { sprite: PLAYER.attackRight1, duration: 500, hit: true, damage: 40, strike: 3, critical: true },
     { sprite: PLAYER.combatBase, duration: 400 }
   ]);
 
   const ATTACK_LEFT = Object.freeze([
-    { sprite: PLAYER.attackLeft1, duration: 400 },
+    { sprite: PLAYER.attackLeft1, duration: 400, hit: true, damage: 20, strike: 1 },
     { sprite: PLAYER.combatBaseLeft, duration: 100 },
 
-    { sprite: PLAYER.attackLeft3, duration: 500 },
+    { sprite: PLAYER.attackLeft3, duration: 500, hit: true, damage: 20, strike: 2 },
     { sprite: PLAYER.combatBaseLeft, duration: 100 },
 
-    { sprite: PLAYER.attackFinishLeft, duration: 400 },
+    { sprite: PLAYER.attackFinishLeft, duration: 400, hit: true, damage: 20, strike: 4 },
     { sprite: PLAYER.combatBaseLeft, duration: 100 },
 
-    { sprite: PLAYER.attackLeft1, duration: 500 },
+    { sprite: PLAYER.attackLeft1, duration: 500, hit: true, damage: 40, strike: 3, critical: true },
     { sprite: PLAYER.combatBaseLeft, duration: 400 }
   ]);
 
   const ATTACK_DOWN = Object.freeze([
     { sprite: PLAYER.combatBase, duration: 100 },
 
-    { sprite: PLAYER.attackDown1, duration: 400 },
+    { sprite: PLAYER.attackDown1, duration: 400, hit: true, damage: 20, strike: 1 },
     { sprite: PLAYER.combatBase, duration: 100 },
 
-    { sprite: PLAYER.attackDown2, duration: 500 },
+    { sprite: PLAYER.attackDown2, duration: 500, hit: true, damage: 20, strike: 2 },
     { sprite: PLAYER.combatBase, duration: 100 },
 
-    { sprite: PLAYER.attackFinish, duration: 400 },
+    { sprite: PLAYER.attackFinish, duration: 400, hit: true, damage: 20, strike: 4 },
     { sprite: PLAYER.combatBase, duration: 100 },
 
-    { sprite: PLAYER.attackDown1, duration: 500 },
+    { sprite: PLAYER.attackDown1, duration: 500, hit: true, damage: 40, strike: 3, critical: true },
     { sprite: PLAYER.combatBase, duration: 400 }
   ]);
 
@@ -386,6 +386,37 @@
     "assets/animals/rabbits/RABBIT 4.webp"
   ]);
 
+  const RABBIT_DEAD_FRAME = "assets/animals/rabbits/RABBIT DEAD.webp";
+
+  const RABBIT_HIT_SOUNDS = Object.freeze([
+    "assets/audio/rabbits/RABBIT HIT 1.mp3",
+    "assets/audio/rabbits/RABBIT HIT 2.mp3",
+    "assets/audio/rabbits/RABBIT HIT 3.mp3"
+  ]);
+
+  const rabbitHitAudios = RABBIT_HIT_SOUNDS.map((src) => {
+    const audio = new Audio(src);
+    audio.preload = "auto";
+    audio.volume = 1.0;
+    return audio;
+  });
+
+  const RABBIT_MAX_HP = 100;
+
+  // Hitbox is directional in MAP coordinates:
+  // RIGHT attack only hits right, LEFT only left, DOWN only below.
+  // When facing UP, the game already uses the last A/D attack sequence,
+  // therefore the hitbox also follows that left/right sequence.
+  const RABBIT_ATTACK_HITBOX = Object.freeze({
+    sideForward: 820,
+    sideBack: 40,
+    sideHalfHeight: 390,
+    downForward: 850,
+    downBack: 40,
+    downHalfWidth: 460
+  });
+
+
   const RABBIT_ZONES = Object.freeze([
     {
       id: "rabbit-northwest",
@@ -492,6 +523,100 @@
         0%, 100% { transform: translateY(0); }
         45%      { transform: translateY(-22px); }
         70%      { transform: translateY(-6px); }
+      }
+
+
+      .rabbit-damage {
+        position: absolute;
+        z-index: 18;
+        transform: translate(-50%, -50%);
+        pointer-events: none;
+        user-select: none;
+        color: #ff2020;
+        font-family: Georgia, "Times New Roman", serif;
+        font-size: 190px;
+        font-weight: 900;
+        line-height: .9;
+        white-space: nowrap;
+        text-shadow:
+          0 0 4px #ff0000,
+          0 0 10px #ff0000,
+          0 0 22px rgba(255,0,0,.95),
+          0 5px 3px rgba(0,0,0,.8);
+        animation: rabbitDamageFloat 760ms ease-out forwards;
+      }
+
+      .rabbit-damage--crit {
+        font-size: 205px;
+      }
+
+      .rabbit-damage__crit {
+        display: block;
+        margin-bottom: 12px;
+        color: #ff3030;
+        font-size: 120px;
+        letter-spacing: 8px;
+        text-align: center;
+      }
+
+      @keyframes rabbitDamageFloat {
+        0%   { opacity: 0; transform: translate(-50%, -25%) scale(.72); }
+        16%  { opacity: 1; transform: translate(-50%, -75%) scale(1.10); }
+        72%  { opacity: 1; transform: translate(-50%, -130%) scale(1); }
+        100% { opacity: 0; transform: translate(-50%, -175%) scale(.92); }
+      }
+
+      .rabbit-dust {
+        position: absolute;
+        z-index: 3;
+        width: 330px;
+        height: 105px;
+        transform: translate(-50%, -50%);
+        pointer-events: none;
+        opacity: 0;
+        animation: rabbitDustBurst 620ms ease-out forwards;
+      }
+
+      .rabbit-dust::before,
+      .rabbit-dust::after {
+        content: "";
+        position: absolute;
+        left: 50%;
+        bottom: 0;
+        width: 125px;
+        height: 58px;
+        border-radius: 50%;
+        background:
+          radial-gradient(ellipse at center,
+            rgba(204,184,148,.78) 0%,
+            rgba(168,145,111,.54) 40%,
+            rgba(133,109,78,0) 76%);
+        filter: blur(4px);
+      }
+
+      .rabbit-dust::before {
+        transform: translateX(-105px) scale(1.35);
+      }
+
+      .rabbit-dust::after {
+        transform: translateX(-15px) scale(1.65);
+      }
+
+      @keyframes rabbitDustBurst {
+        0%   { opacity: 0; transform: translate(-50%, -15%) scale(.5); }
+        18%  { opacity: 1; transform: translate(-50%, -35%) scale(1); }
+        100% { opacity: 0; transform: translate(-50%, -80%) scale(1.8); }
+      }
+
+      .map-rabbit--critical-hit {
+        transition:
+          left 210ms ease-out,
+          top 210ms cubic-bezier(.1,.75,.25,1),
+          opacity 420ms ease !important;
+      }
+
+      .map-rabbit--dead .map-rabbit__bob {
+        animation: none !important;
       }
 
       @media (prefers-reduced-motion: reduce) {
@@ -675,6 +800,220 @@
     actor.nextDecision = now + 2000 + Math.random() * 3000;
   }
 
+
+  function playRabbitHitSound() {
+    const source =
+      rabbitHitAudios[Math.floor(Math.random() * rabbitHitAudios.length)];
+
+    // Clone so rapid consecutive hits can overlap instead of cutting each other off.
+    const audio = source.cloneNode();
+    audio.volume = 1.0;
+    audio.play().catch(() => {});
+  }
+
+  function rabbitAttackDirection() {
+    if (attackSequence === ATTACK_DOWN) return "down";
+    if (attackSequence === ATTACK_LEFT) return "left";
+    return "right";
+  }
+
+  function rabbitInsideAttackHitbox(actor, direction) {
+    if (actor.dead || actor.away) return false;
+
+    const dx = actor.x - playerX;
+    const dy = actor.y - playerY;
+
+    if (direction === "right") {
+      return (
+        dx >= -RABBIT_ATTACK_HITBOX.sideBack &&
+        dx <= RABBIT_ATTACK_HITBOX.sideForward &&
+        Math.abs(dy) <= RABBIT_ATTACK_HITBOX.sideHalfHeight
+      );
+    }
+
+    if (direction === "left") {
+      return (
+        dx <= RABBIT_ATTACK_HITBOX.sideBack &&
+        dx >= -RABBIT_ATTACK_HITBOX.sideForward &&
+        Math.abs(dy) <= RABBIT_ATTACK_HITBOX.sideHalfHeight
+      );
+    }
+
+    return (
+      dy >= -RABBIT_ATTACK_HITBOX.downBack &&
+      dy <= RABBIT_ATTACK_HITBOX.downForward &&
+      Math.abs(dx) <= RABBIT_ATTACK_HITBOX.downHalfWidth
+    );
+  }
+
+  function createRabbitDamageText(actor, amount, critical) {
+    const popup = document.createElement("div");
+    popup.className =
+      "rabbit-damage" + (critical ? " rabbit-damage--crit" : "");
+    popup.style.left = `${actor.x}px`;
+    popup.style.top = `${actor.y - 215}px`;
+
+    if (critical) {
+      const crit = document.createElement("span");
+      crit.className = "rabbit-damage__crit";
+      crit.textContent = "KRIT";
+
+      const value = document.createElement("span");
+      value.textContent = `-${amount}`;
+
+      popup.append(crit, value);
+    } else {
+      popup.textContent = `-${amount}`;
+    }
+
+    world.appendChild(popup);
+    window.setTimeout(() => popup.remove(), 820);
+  }
+
+  function createRabbitDust(actor) {
+    const dust = document.createElement("div");
+    dust.className = "rabbit-dust";
+    dust.style.left = `${actor.x}px`;
+    dust.style.top = `${actor.y + 20}px`;
+    world.appendChild(dust);
+    window.setTimeout(() => dust.remove(), 680);
+  }
+
+  function rabbitCriticalKnockback(actor, direction) {
+    actor.element.classList.add("map-rabbit--critical-hit");
+
+    let knockX = 0;
+    let knockY = -45;
+
+    if (direction === "right") {
+      knockX = 190;
+    } else if (direction === "left") {
+      knockX = -190;
+    } else {
+      knockY = 185;
+    }
+
+    actor.x += knockX;
+    actor.y += knockY;
+    actor.element.style.left = `${actor.x}px`;
+    actor.element.style.top = `${actor.y}px`;
+
+    window.setTimeout(() => {
+      actor.element.classList.remove("map-rabbit--critical-hit");
+    }, 240);
+  }
+
+  function rabbitForceEscape(actor, now) {
+    if (actor.dead || actor.away) return;
+
+    // Hit rabbits immediately try to flee toward a valid map-edge exit.
+    if (actor.zone.exits.length) {
+      actor.pauseUntil = 0;
+      actor.nextDecision = 0;
+      rabbitStartExit(actor, now);
+      actor.speed = 330 + Math.random() * 110;
+      return;
+    }
+
+    rabbitChooseInteriorTarget(actor, now);
+    actor.speed = 300 + Math.random() * 90;
+  }
+
+  function killRabbit(actor, now) {
+    if (actor.dead) return;
+
+    actor.dead = true;
+    actor.hp = 0;
+    actor.moving = false;
+    actor.exiting = false;
+    actor.entering = false;
+    actor.pauseUntil = Infinity;
+    actor.nextDecision = Infinity;
+    actor.nextFrameChange = Infinity;
+
+    actor.element.classList.remove("map-rabbit--moving");
+    actor.element.classList.add("map-rabbit--dead");
+
+    const active = actor.visibleLayer;
+    const hidden = 1 - active;
+
+    actor.images[active].src = encodeURI(RABBIT_DEAD_FRAME);
+    actor.images[active].classList.add("map-rabbit__sprite--visible");
+    actor.images[hidden].classList.remove("map-rabbit__sprite--visible");
+
+    // Keep the dead rabbit visible briefly, then remove it and allow a later respawn.
+    actor.respawnAt = now + 6500 + Math.random() * 5000;
+  }
+
+  function respawnRabbit(actor, now) {
+    const start = rabbitRandomPoint(actor.zone, 160);
+
+    actor.hp = RABBIT_MAX_HP;
+    actor.dead = false;
+    actor.away = false;
+    actor.exiting = false;
+    actor.entering = false;
+    actor.moving = false;
+    actor.x = start.x;
+    actor.y = start.y;
+    actor.targetX = start.x;
+    actor.targetY = start.y;
+    actor.pauseUntil = now + 700 + Math.random() * 1800;
+    actor.nextDecision = now + 1500 + Math.random() * 2500;
+    actor.nextFrameChange = now + 350 + Math.random() * 900;
+    actor.respawnAt = 0;
+
+    actor.element.classList.remove(
+      "map-rabbit--dead",
+      "map-rabbit--away",
+      "map-rabbit--critical-hit"
+    );
+
+    actor.element.style.left = `${actor.x}px`;
+    actor.element.style.top = `${actor.y}px`;
+    rabbitPickFrame(actor, false);
+  }
+
+  function damageRabbit(actor, amount, critical, direction, now) {
+    if (actor.dead || actor.away) return;
+
+    actor.hp = Math.max(0, actor.hp - amount);
+
+    createRabbitDamageText(actor, amount, critical);
+    playRabbitHitSound();
+
+    if (critical) {
+      createRabbitDust(actor);
+      rabbitCriticalKnockback(actor, direction);
+    }
+
+    if (actor.hp <= 0) {
+      killRabbit(actor, now);
+      return;
+    }
+
+    rabbitForceEscape(actor, now);
+  }
+
+  function resolveRabbitAttackFrame(frame) {
+    if (!frame || !frame.hit) return;
+
+    const direction = rabbitAttackDirection();
+    const now = performance.now();
+
+    for (const actor of rabbitActors) {
+      if (rabbitInsideAttackHitbox(actor, direction)) {
+        damageRabbit(
+          actor,
+          frame.damage || 20,
+          Boolean(frame.critical),
+          direction,
+          now
+        );
+      }
+    }
+  }
+
   function createRabbitActor(zone, index) {
     const start = rabbitRandomPoint(zone, 150);
 
@@ -722,6 +1061,10 @@
       exiting: false,
       entering: false,
 
+      hp: RABBIT_MAX_HP,
+      dead: false,
+      respawnAt: 0,
+
       pauseUntil: performance.now() + 500 + Math.random() * 2000,
       nextDecision: performance.now() + 1000 + Math.random() * 3000,
       nextFrameChange: performance.now() + 350 + Math.random() * 1000,
@@ -738,7 +1081,7 @@
   function createRabbits() {
     installRabbitStyles();
 
-    for (const src of RABBIT_FRAMES) {
+    for (const src of [...RABBIT_FRAMES, RABBIT_DEAD_FRAME]) {
       const preload = new Image();
       preload.src = src;
     }
@@ -754,6 +1097,13 @@
 
   function updateRabbits(deltaSeconds, now) {
     for (const actor of rabbitActors) {
+      if (actor.dead) {
+        if (actor.respawnAt && now >= actor.respawnAt) {
+          respawnRabbit(actor, now);
+        }
+        continue;
+      }
+
       if (actor.away) {
         if (now >= actor.returnAt) {
           rabbitReturn(actor, now);
@@ -1068,6 +1418,7 @@
     attackTimer = 0;
 
     setSprite(attackSequence[0].sprite);
+    resolveRabbitAttackFrame(attackSequence[0]);
   }
 
   function finishAttackState() {
@@ -1098,6 +1449,7 @@
           attackTimer = 0;
           startAttackSound();
           setSprite(attackSequence[0].sprite);
+          resolveRabbitAttackFrame(attackSequence[0]);
         } else {
           finishAttackState();
         }
@@ -1105,6 +1457,7 @@
       }
 
       setSprite(attackSequence[attackStep].sprite);
+      resolveRabbitAttackFrame(attackSequence[attackStep]);
     }
   }
 
