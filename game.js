@@ -3420,6 +3420,64 @@
     return inside;
   }
 
+  // ------------------------------------------------------------------
+  // R21 MAP 2 — WORLD COLLISION + ICE
+  // ------------------------------------------------------------------
+  const WINTERBACH_TERRAIN = Object.freeze({
+    boundaryPadding: 16,
+    blocked: Object.freeze([
+      Object.freeze([[0,0],[915,0],[940,350],[1255,585],[1725,910],[1725,1125],[1495,1575],[1825,2160],[1825,2320],[1570,2825],[1220,3150],[1075,3585],[485,3865],[0,3970]]),
+      Object.freeze([[6070,1840],[6480,1960],[6795,1860],[7020,2300],[7070,3020],[6875,3650],[6895,4410],[7040,5000],[7000,6006],[6180,6006],[6035,5480],[6100,4650],[5980,4020],[6025,3260],[5860,2670]])
+    ]),
+    ice: Object.freeze([
+      Object.freeze([[5725,0],[6570,0],[6635,380],[6815,645],[6720,950],[6810,1240],[6725,1710],[6500,1910],[6070,1840],[5970,1450],[5850,1080],[5740,780],[5710,430]])
+    ])
+  });
+
+  const ICE_PHYSICS = Object.freeze({ acceleration:620,maxSpeed:760,dragMoving:0.86,dragNoInput:0.975,minSpeed:14,swayAngle:4.6,swayX:8 });
+  let iceVelocityX=0, iceVelocityY=0, iceVisualActive=false;
+
+  function pointToSegmentDistanceR21(px,py,ax,ay,bx,by){
+    const abx=bx-ax, aby=by-ay, apx=px-ax, apy=py-ay, denom=abx*abx+aby*aby;
+    if(denom<=0.000001) return Math.hypot(px-ax,py-ay);
+    const t=Math.max(0,Math.min(1,(apx*abx+apy*aby)/denom));
+    return Math.hypot(px-(ax+abx*t),py-(ay+aby*t));
+  }
+  function pointNearPolygonBoundaryR21(x,y,polygon,padding){
+    for(let i=0;i<polygon.length;i++){ const a=polygon[i],b=polygon[(i+1)%polygon.length]; if(pointToSegmentDistanceR21(x,y,a[0],a[1],b[0],b[1])<=padding) return true; }
+    return false;
+  }
+  function isWinterbachBlockedFootPoint(x,y){
+    if(MAP.id!=="winterbach-ranglehen") return false;
+    return WINTERBACH_TERRAIN.blocked.some(p=>worldPointInPolygon(x,y,p)||pointNearPolygonBoundaryR21(x,y,p,WINTERBACH_TERRAIN.boundaryPadding));
+  }
+  function isWinterbachIceFootPoint(x,y){
+    if(MAP.id!=="winterbach-ranglehen") return false;
+    return WINTERBACH_TERRAIN.ice.some(p=>worldPointInPolygon(x,y,p));
+  }
+  function clearIceVelocity(){ iceVelocityX=0; iceVelocityY=0; }
+  function installIcePlayerStyles(){
+    if(document.getElementById("r21IcePlayerStyles")) return;
+    const style=document.createElement("style"); style.id="r21IcePlayerStyles";
+    style.textContent=`#player.player--ice-sliding #playerSprite{animation:r21IceSway 820ms ease-in-out infinite alternate!important;transform-origin:50% 100%}@keyframes r21IceSway{0%{transform:translateX(-${ICE_PHYSICS.swayX}px) rotate(-${ICE_PHYSICS.swayAngle}deg)}50%{transform:translateX(2px) rotate(1deg)}100%{transform:translateX(${ICE_PHYSICS.swayX}px) rotate(${ICE_PHYSICS.swayAngle}deg)}}`;
+    document.head.appendChild(style);
+  }
+  function updateIceVisual(){
+    if(!playerEl) return;
+    const sliding=MAP.id==="winterbach-ranglehen"&&isWinterbachIceFootPoint(playerX,playerY)&&Math.hypot(iceVelocityX,iceVelocityY)>ICE_PHYSICS.minSpeed;
+    if(sliding===iceVisualActive) return; iceVisualActive=sliding; playerEl.classList.toggle("player--ice-sliding",sliding);
+  }
+  function movePlayerOnIce(inputX,inputY,deltaSeconds){
+    const inputLength=Math.hypot(inputX,inputY),hasInput=inputLength>0;
+    if(hasInput){ iceVelocityX+=(inputX/inputLength)*ICE_PHYSICS.acceleration*deltaSeconds; iceVelocityY+=(inputY/inputLength)*ICE_PHYSICS.acceleration*deltaSeconds; }
+    const speed=Math.hypot(iceVelocityX,iceVelocityY); if(speed>ICE_PHYSICS.maxSpeed){ const s=ICE_PHYSICS.maxSpeed/speed; iceVelocityX*=s; iceVelocityY*=s; }
+    const drag=Math.pow(hasInput?ICE_PHYSICS.dragMoving:ICE_PHYSICS.dragNoInput,deltaSeconds*60); iceVelocityX*=drag; iceVelocityY*=drag;
+    if(Math.hypot(iceVelocityX,iceVelocityY)<ICE_PHYSICS.minSpeed&&!hasInput){ clearIceVelocity(); updateIceVisual(); return; }
+    const cx=playerX+iceVelocityX*deltaSeconds; if(canMoveFootTo(cx,playerY)) playerX=cx; else iceVelocityX=0;
+    const cy=playerY+iceVelocityY*deltaSeconds; if(canMoveFootTo(playerX,cy)) playerY=cy; else iceVelocityY=0;
+    clampPlayer(); updateIceVisual();
+  }
+
   function getPathMetrics(path) {
     if (bridgePathCache.has(path)) return bridgePathCache.get(path);
 
@@ -3579,6 +3637,9 @@
 
     // Existing river/bridge collision remains unchanged.
     if (isRiverBlockedFootPoint(x, y)) return false;
+
+    // R21 MAP 2: red terrain is hard-blocked for the player's FOOT anchor.
+    if (isWinterbachBlockedFootPoint(x, y)) return false;
 
     // New hard collision for church body + tavern.
     // Only the player's foot anchor participates.
@@ -4801,6 +4862,8 @@
     await waitMs(200);
 
     MAP = nextMap;
+    clearIceVelocity();
+    updateIceVisual();
     resizeWorldForCurrentMap();
 
     mapImage.src = encodeURI(MAP.image);
@@ -5333,47 +5396,38 @@
   }
 
   function updatePlayer(deltaSeconds) {
-    if (blocking) {
-      setSprite(getBlockSprite());
-      return;
-    }
+    if (blocking) { clearIceVelocity(); updateIceVisual(); setSprite(getBlockSprite()); return; }
+    if (attacking) { clearIceVelocity(); updateIceVisual(); updateAttack(deltaSeconds); return; }
 
-    if (attacking) {
-      updateAttack(deltaSeconds);
-      return;
-    }
-
-    let dx = 0;
-    let dy = 0;
-
+    let dx = 0, dy = 0;
     if (keys.has("KeyW") || keys.has("ArrowUp")) dy -= 1;
     if (keys.has("KeyS") || keys.has("ArrowDown")) dy += 1;
     if (keys.has("KeyA") || keys.has("ArrowLeft")) dx -= 1;
     if (keys.has("KeyD") || keys.has("ArrowRight")) dx += 1;
 
-    const isMoving = dx !== 0 || dy !== 0;
+    const hasInput = dx !== 0 || dy !== 0;
+    const onIce = isWinterbachIceFootPoint(playerX, playerY);
+    const hasIceMomentum = Math.hypot(iceVelocityX, iceVelocityY) > ICE_PHYSICS.minSpeed;
 
-    if (!isMoving) {
-      if (moving) {
-        moving = false;
-        playerEl.classList.remove("player--moving");
-        playerEl.classList.add("player--idle");
+    if (onIce || hasIceMomentum) {
+      if (hasInput) {
+        if (!moving) { moving = true; playerEl.classList.add("player--moving"); playerEl.classList.remove("player--idle"); }
+        const nextAnimation = getMovementAnimation(dx, dy); setAnimation(nextAnimation); renderMovementFrame(currentAnimation, deltaSeconds);
+      } else {
+        if (moving) { moving = false; playerEl.classList.remove("player--moving"); playerEl.classList.add("player--idle"); }
+        setAnimation("idle"); setIdleSprite();
       }
-      setAnimation("idle");
-      setIdleSprite();
+      movePlayerOnIce(dx, dy, deltaSeconds);
       return;
     }
 
-    if (!moving) {
-      moving = true;
-      playerEl.classList.add("player--moving");
-      playerEl.classList.remove("player--idle");
+    clearIceVelocity(); updateIceVisual();
+    if (!hasInput) {
+      if (moving) { moving = false; playerEl.classList.remove("player--moving"); playerEl.classList.add("player--idle"); }
+      setAnimation("idle"); setIdleSprite(); return;
     }
-
-    const nextAnimation = getMovementAnimation(dx, dy);
-    setAnimation(nextAnimation);
-    renderMovementFrame(currentAnimation, deltaSeconds);
-
+    if (!moving) { moving = true; playerEl.classList.add("player--moving"); playerEl.classList.remove("player--idle"); }
+    const nextAnimation = getMovementAnimation(dx, dy); setAnimation(nextAnimation); renderMovementFrame(currentAnimation, deltaSeconds);
     movePlayerWithWorldCollision(dx, dy, deltaSeconds);
   }
 
@@ -5591,6 +5645,7 @@
     setIdleSprite();
 
     createAreaSigns();
+    installIcePlayerStyles();
     createRabbits();
     createWolves();
     createBoars();
