@@ -2116,6 +2116,25 @@
     );
   }
 
+  // HARD DEPTH SWITCH FOR THE TWO WALK-BEHIND TOWERS.
+  function updateChurchPlayerDepth() {
+    if (!playerEl) return;
+
+    const c = CHURCH_CONFIG;
+    const localX01 = (playerX - c.left) / c.width;
+    const localY01 = (playerY - c.top) / c.height;
+
+    const insideChurchBounds =
+      localX01 >= 0 && localX01 <= 1 &&
+      localY01 >= 0 && localY01 <= 1;
+
+    const behindTower =
+      insideChurchBounds &&
+      churchPointIsWalkBehind(localX01, localY01);
+
+    playerEl.style.zIndex = behindTower ? "3" : "100";
+  }
+
   function prepareChurchAlphaMask(image) {
     if (!image || !image.naturalWidth || !image.naturalHeight) return;
 
@@ -2232,9 +2251,6 @@
         top: 824.217px;
         width: 2827.409px;
         height: 4241.113px;
-
-        /* MUST be above #player (100) and #playerSprite (101).
-           This makes the character pass BEHIND the two clipped tower overlays. */
         z-index: 110;
       }
 
@@ -2814,6 +2830,7 @@
     updateRabbits(deltaSeconds, now);
     updateMole(now);
     renderPlayer();
+    updateChurchPlayerDepth();
     renderWorld();
 
     requestAnimationFrame(frame);
