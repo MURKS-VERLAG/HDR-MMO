@@ -1680,6 +1680,324 @@
     scheduleNextMoleCheck(performance.now());
   }
 
+
+  // ------------------------------------------------------------------
+  // RIVER COLLISION + TWO BRIDGE PATHS
+  // Coordinates are mapped from the supplied 10000 x 6667 map reference.
+  // Only the player's FOOT ANCHOR (playerX/playerY) participates in collision.
+  // ------------------------------------------------------------------
+  const RIVER_BLOCK_ZONES = Object.freeze([
+    // Upper river, north of the covered bridge.
+    Object.freeze([
+      [3896, 0], [4115, 821], [5164, 839], [5146, 565], [4982, 383], [4909, 0]
+    ]),
+    // Upper river, south of the covered bridge down to the central plaza.
+    Object.freeze([
+      [4097, 1450], [4170, 2107], [4069, 2645], [5109, 2645], [5274, 1450]
+    ]),
+    // Lower river, central plaza down to the stone bridge.
+    Object.freeze([
+      [3495, 5664], [4407, 5454], [5995, 5609], [5602, 5253],
+      [5310, 4633], [4352, 4624], [4279, 5281]
+    ]),
+    // Lower river, south of the stone bridge to the map edge.
+    Object.freeze([
+      [6250, 6147], [5237, 5910], [4316, 5937], [3057, 6211],
+      [2984, 6658], [5584, 6658], [5593, 6330]
+    ])
+  ]);
+
+  const STONE_BRIDGE_PATH = Object.freeze([
+    Object.freeze([3490, 5871]),
+    Object.freeze([3855, 5791]),
+    Object.freeze([4220, 5725]),
+    Object.freeze([4585, 5693]),
+    Object.freeze([4950, 5691]),
+    Object.freeze([5315, 5722]),
+    Object.freeze([5680, 5785]),
+    Object.freeze([6045, 5871]),
+    Object.freeze([6410, 5981]),
+    Object.freeze([6775, 5977]),
+    Object.freeze([7016, 5966])
+  ]);
+
+  const COVERED_BRIDGE_PATH = Object.freeze([
+    Object.freeze([3600, 1130]),
+    Object.freeze([5700, 1130])
+  ]);
+
+  const BRIDGE_CONFIG = Object.freeze({
+    stoneCorridor: 150,
+    coveredCorridor: 150,
+    engageDistance: 260,
+    coveredFadeMs: 190,
+    coveredInterior: Object.freeze({ x1: 3680, y1: 850, x2: 5660, y2: 1450 })
+  });
+
+  const bridgePathCache = new Map();
+  let activeBridge = null;
+
+  function worldPointInPolygon(x, y, polygon) {
+    let inside = false;
+
+    for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+      const xi = polygon[i][0];
+      const yi = polygon[i][1];
+      const xj = polygon[j][0];
+      const yj = polygon[j][1];
+
+      const intersects =
+        ((yi > y) !== (yj > y)) &&
+        (x < ((xj - xi) * (y - yi)) / ((yj - yi) || 0.000001) + xi);
+
+      if (intersects) inside = !inside;
+    }
+
+    return inside;
+  }
+
+  function getPathMetrics(path) {
+    if (bridgePathCache.has(path)) return bridgePathCache.get(path);
+
+    const cumulative = [0];
+    let total = 0;
+
+    for (let i = 1; i < path.length; i += 1) {
+      total += Math.hypot(
+        path[i][0] - path[i - 1][0],
+        path[i][1] - path[i - 1][1]
+      );
+      cumulative.push(total);
+    }
+
+    const metrics = { cumulative, total };
+    bridgePathCache.set(path, metrics);
+    return metrics;
+  }
+
+  function closestPointOnBridgePath(x, y, path) {
+    const metrics = getPathMetrics(path);
+    let best = null;
+
+    for (let i = 0; i < path.length - 1; i += 1) {
+      const ax = path[i][0];
+      const ay = path[i][1];
+      const bx = path[i + 1][0];
+      const by = path[i + 1][1];
+      const vx = bx - ax;
+      const vy = by - ay;
+      const len2 = vx * vx + vy * vy || 1;
+      const t = Math.max(0, Math.min(1, ((x - ax) * vx + (y - ay) * vy) / len2));
+      const px = ax + vx * t;
+      const py = ay + vy * t;
+      const distance = Math.hypot(x - px, y - py);
+      const segmentLength = Math.hypot(vx, vy);
+      const pathDistance = metrics.cumulative[i] + segmentLength * t;
+
+      if (!best || distance < best.distance) {
+        best = {
+          x: px,
+          y: py,
+          distance,
+          pathDistance,
+          progress: metrics.total ? pathDistance / metrics.total : 0
+        };
+      }
+    }
+
+    return best;
+  }
+
+  function pointAtBridgeDistance(path, distance) {
+    const metrics = getPathMetrics(path);
+    const d = Math.max(0, Math.min(metrics.total, distance));
+
+    for (let i = 0; i < path.length - 1; i += 1) {
+      const start = metrics.cumulative[i];
+      const end = metrics.cumulative[i + 1];
+
+      if (d <= end || i === path.length - 2) {
+        const span = Math.max(0.000001, end - start);
+        const t = Math.max(0, Math.min(1, (d - start) / span));
+        return {
+          x: path[i][0] + (path[i + 1][0] - path[i][0]) * t,
+          y: path[i][1] + (path[i + 1][1] - path[i][1]) * t,
+          distance: d
+        };
+      }
+    }
+
+    return { x: path[0][0], y: path[0][1], distance: 0 };
+  }
+
+  function bridgeDefinition(id) {
+    if (id === "stone") {
+      return {
+        id: "stone",
+        path: STONE_BRIDGE_PATH,
+        corridor: BRIDGE_CONFIG.stoneCorridor
+      };
+    }
+
+    return {
+      id: "covered",
+      path: COVERED_BRIDGE_PATH,
+      corridor: BRIDGE_CONFIG.coveredCorridor
+    };
+  }
+
+  function pointInsideBridgeCorridor(x, y, definition) {
+    const closest = closestPointOnBridgePath(x, y, definition.path);
+    return closest && closest.distance <= definition.corridor;
+  }
+
+  function isValidBridgeCrossingPoint(x, y) {
+    return (
+      pointInsideBridgeCorridor(x, y, bridgeDefinition("stone")) ||
+      pointInsideBridgeCorridor(x, y, bridgeDefinition("covered"))
+    );
+  }
+
+  function isRiverBlockedFootPoint(x, y) {
+    // Bridge surfaces are the ONLY legal exception to the red river zones.
+    if (isValidBridgeCrossingPoint(x, y)) return false;
+
+    for (const polygon of RIVER_BLOCK_ZONES) {
+      if (worldPointInPolygon(x, y, polygon)) return true;
+    }
+
+    return false;
+  }
+
+  function canMoveFootTo(x, y) {
+    const halfW = PLAYER.width / 2;
+    const minY = PLAYER.height;
+    const maxY = MAP.height - 10;
+
+    if (x < halfW || x > MAP.width - halfW) return false;
+    if (y < minY || y > maxY) return false;
+
+    return !isRiverBlockedFootPoint(x, y);
+  }
+
+  function tryEngageBridge(horizontalDirection) {
+    if (!horizontalDirection) return false;
+
+    let best = null;
+
+    for (const id of ["stone", "covered"]) {
+      const definition = bridgeDefinition(id);
+      const closest = closestPointOnBridgePath(playerX, playerY, definition.path);
+      if (!closest || closest.distance > BRIDGE_CONFIG.engageDistance) continue;
+
+      // At an endpoint only engage when the player is moving INTO the bridge.
+      if (closest.progress <= 0.035 && horizontalDirection < 0) continue;
+      if (closest.progress >= 0.965 && horizontalDirection > 0) continue;
+
+      if (!best || closest.distance < best.closest.distance) {
+        best = { definition, closest };
+      }
+    }
+
+    if (!best) return false;
+
+    activeBridge = {
+      id: best.definition.id,
+      path: best.definition.path,
+      distance: best.closest.pathDistance
+    };
+
+    // Smoothly converge to the path instead of teleporting hard to it.
+    const anchor = pointAtBridgeDistance(activeBridge.path, activeBridge.distance);
+    playerX += (anchor.x - playerX) * 0.42;
+    playerY += (anchor.y - playerY) * 0.42;
+    return true;
+  }
+
+  function moveAlongActiveBridge(horizontalDirection, deltaSeconds) {
+    if (!activeBridge) return false;
+
+    if (!horizontalDirection) {
+      // Standing still in a bridge/tunnel freezes the real map position.
+      return true;
+    }
+
+    const metrics = getPathMetrics(activeBridge.path);
+    const step = horizontalDirection * PLAYER.speed * deltaSeconds;
+    const nextDistance = Math.max(0, Math.min(metrics.total, activeBridge.distance + step));
+    const point = pointAtBridgeDistance(activeBridge.path, nextDistance);
+
+    activeBridge.distance = nextDistance;
+    playerX = point.x;
+    playerY = point.y;
+
+    const reachedLeftEnd = nextDistance <= 0.001 && horizontalDirection < 0;
+    const reachedRightEnd = nextDistance >= metrics.total - 0.001 && horizontalDirection > 0;
+
+    if (reachedLeftEnd || reachedRightEnd) {
+      activeBridge = null;
+    }
+
+    return true;
+  }
+
+  function movePlayerWithWorldCollision(dx, dy, deltaSeconds) {
+    const horizontalDirection = dx > 0 ? 1 : dx < 0 ? -1 : 0;
+
+    if (activeBridge || tryEngageBridge(horizontalDirection)) {
+      moveAlongActiveBridge(horizontalDirection, deltaSeconds);
+      clampPlayer();
+      return;
+    }
+
+    const length = Math.hypot(dx, dy) || 1;
+    const nx = dx / length;
+    const ny = dy / length;
+    const amount = PLAYER.speed * deltaSeconds;
+
+    // Axis-separated collision gives natural sliding along river banks.
+    const candidateX = playerX + nx * amount;
+    if (canMoveFootTo(candidateX, playerY)) {
+      playerX = candidateX;
+    }
+
+    const candidateY = playerY + ny * amount;
+    if (canMoveFootTo(playerX, candidateY)) {
+      playerY = candidateY;
+    }
+
+    clampPlayer();
+  }
+
+  function playerInsideCoveredBridgeInterior() {
+    const b = BRIDGE_CONFIG.coveredInterior;
+    if (
+      playerX < b.x1 || playerX > b.x2 ||
+      playerY < b.y1 || playerY > b.y2
+    ) {
+      return false;
+    }
+
+    return pointInsideBridgeCorridor(
+      playerX,
+      playerY,
+      bridgeDefinition("covered")
+    );
+  }
+
+  function updateCoveredBridgeVisibility() {
+    if (!playerEl) return;
+
+    if (!playerEl.dataset.coveredBridgeFadeReady) {
+      playerEl.dataset.coveredBridgeFadeReady = "1";
+      playerEl.style.transition =
+        `opacity ${BRIDGE_CONFIG.coveredFadeMs}ms ease`;
+      playerEl.style.willChange = "opacity";
+    }
+
+    playerEl.style.opacity = playerInsideCoveredBridgeInterior() ? "0" : "1";
+  }
+
   const game = document.getElementById("game");
   const world = document.getElementById("world");
   const mapImage = document.getElementById("map");
@@ -2086,18 +2404,13 @@
     setAnimation(nextAnimation);
     renderMovementFrame(currentAnimation, deltaSeconds);
 
-    const length = Math.hypot(dx, dy) || 1;
-    dx /= length;
-    dy /= length;
-
-    playerX += dx * PLAYER.speed * deltaSeconds;
-    playerY += dy * PLAYER.speed * deltaSeconds;
-    clampPlayer();
+    movePlayerWithWorldCollision(dx, dy, deltaSeconds);
   }
 
   function renderPlayer() {
     playerEl.style.left = `${playerX}px`;
     playerEl.style.top = `${playerY}px`;
+    updateCoveredBridgeVisibility();
   }
 
   function renderWorld() {
