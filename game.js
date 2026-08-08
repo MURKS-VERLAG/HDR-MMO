@@ -2200,6 +2200,187 @@
 
   const CHURCH_CONFIG = OBERKIRCH_BUILDINGS[0];
 
+  // ------------------------------------------------------------------
+  // R11 ADDITIONAL OBERKIRCH BUILDINGS
+  // Exact size/position reconstructed from the supplied R11 composite.
+  // IMPORTANT: NEUENSTEINER HOF is intentionally mirrored horizontally,
+  // exactly as clarified by the user.
+  // ------------------------------------------------------------------
+  const R11_BUILDINGS = Object.freeze([
+    Object.freeze({
+      id: "oberkirch-huette-holzfaeller",
+      src: "assets/buildings/HÜTTE 2 HOLZFÄLLER.png",
+      left: 1073,
+      top: 449,
+      width: 1133,
+      height: 1698,
+      mirrored: false,
+      groundedFromY: 0.31
+    }),
+    Object.freeze({
+      id: "oberkirch-neuensteiner-hof",
+      src: "assets/buildings/NEUENSTEINER HOF.png",
+      left: 2760,
+      top: 922,
+      width: 1445,
+      height: 2167,
+      mirrored: true,
+      groundedFromY: 0.34,
+      // Upper / first roof plane is intentionally traversable.
+      // While the player's FOOT anchor is inside this roof region,
+      // he is rendered one layer behind the house, like the church towers.
+      walkBehind: Object.freeze([
+        [0.03, 0.13],
+        [0.94, 0.13],
+        [0.97, 0.40],
+        [0.02, 0.40]
+      ])
+    }),
+    Object.freeze({
+      id: "oberkirch-huette-rund",
+      src: "assets/buildings/HÜTTE 1.png",
+      left: 7109,
+      top: 2375,
+      width: 1004,
+      height: 1508,
+      mirrored: false,
+      groundedFromY: 0.30
+    })
+  ]);
+
+  const r11AlphaMasks = new Map();
+
+  function prepareR11AlphaMask(config, image) {
+    if (!image || !image.naturalWidth || !image.naturalHeight) return;
+
+    try {
+      const canvas = document.createElement("canvas");
+      canvas.width = image.naturalWidth;
+      canvas.height = image.naturalHeight;
+
+      const ctx = canvas.getContext("2d", { willReadFrequently: true });
+      if (!ctx) return;
+
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(image, 0, 0);
+
+      const pixels = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+      const alpha = new Uint8Array(canvas.width * canvas.height);
+
+      for (let src = 3, dst = 0; src < pixels.length; src += 4, dst += 1) {
+        alpha[dst] = pixels[src];
+      }
+
+      r11AlphaMasks.set(config.id, {
+        width: canvas.width,
+        height: canvas.height,
+        alpha
+      });
+    } catch (error) {
+      console.warn("R11 building alpha mask unavailable:", config.id, error);
+    }
+  }
+
+  function r11LocalPoint(config, x, y) {
+    let localX01 = (x - config.left) / config.width;
+    const localY01 = (y - config.top) / config.height;
+
+    // Visual is mirrored with CSS; alpha-space must mirror too.
+    if (config.mirrored) localX01 = 1 - localX01;
+
+    return { localX01, localY01 };
+  }
+
+  function r11PointInWalkBehind(config, x, y) {
+    if (!config.walkBehind) return false;
+
+    const { localX01, localY01 } = r11LocalPoint(config, x, y);
+    return pointInNormalizedPolygon(
+      localX01,
+      localY01,
+      config.walkBehind
+    );
+  }
+
+  function isR11BuildingBlockedFootPoint(config, x, y) {
+    if (
+      x < config.left ||
+      x > config.left + config.width ||
+      y < config.top ||
+      y > config.top + config.height
+    ) {
+      return false;
+    }
+
+    const { localX01, localY01 } = r11LocalPoint(config, x, y);
+
+    // Transparent / upper decorative space never becomes an invisible wall.
+    if (localY01 < config.groundedFromY) return false;
+
+    // Neuensteiner Hof: first / upper roof plane is explicitly walk-behind.
+    if (config.walkBehind && pointInNormalizedPolygon(
+      localX01,
+      localY01,
+      config.walkBehind
+    )) {
+      return false;
+    }
+
+    const mask = r11AlphaMasks.get(config.id);
+    if (!mask) return false;
+
+    const px = Math.max(
+      0,
+      Math.min(mask.width - 1, Math.round(localX01 * (mask.width - 1)))
+    );
+    const py = Math.max(
+      0,
+      Math.min(mask.height - 1, Math.round(localY01 * (mask.height - 1)))
+    );
+
+    return mask.alpha[py * mask.width + px] >= 28;
+  }
+
+  function createR11Buildings() {
+    for (const config of R11_BUILDINGS) {
+      const image = document.createElement("img");
+      image.id = config.id;
+      image.className = "map-building map-building--r11";
+      image.src = encodeURI(config.src);
+      image.alt = "";
+      image.draggable = false;
+
+      image.style.left = `${config.left}px`;
+      image.style.top = `${config.top}px`;
+      image.style.width = `${config.width}px`;
+      image.style.height = `${config.height}px`;
+      image.style.zIndex = "6";
+      image.style.transformOrigin = "50% 50%";
+      if (config.mirrored) image.style.transform = "scaleX(-1)";
+
+      image.addEventListener("load", () => {
+        prepareR11AlphaMask(config, image);
+      }, { once: true });
+
+      world.appendChild(image);
+
+      if (image.complete && image.naturalWidth > 0) {
+        prepareR11AlphaMask(config, image);
+      }
+    }
+  }
+
+  function playerBehindNeuensteinerHofRoof() {
+    if (MAP.id !== "oberkirch-zentrum") return false;
+
+    const hof = R11_BUILDINGS.find(
+      (building) => building.id === "oberkirch-neuensteiner-hof"
+    );
+
+    return hof ? r11PointInWalkBehind(hof, playerX, playerY) : false;
+  }
+
+
   // The church collision is read directly from the PNG alpha channel.
   // Transparent pixels are always walkable. Only the lower, physically
   // grounded part of the visible church can block the player's FOOT anchor.
@@ -2312,7 +2493,9 @@
       insideChurchBounds &&
       churchPointIsWalkBehind(localX01, localY01);
 
-    playerEl.style.zIndex = behindTower ? "3" : "100";
+    const behindHofRoof = playerBehindNeuensteinerHofRoof();
+
+    playerEl.style.zIndex = (behindTower || behindHofRoof) ? "3" : "100";
   }
 
   function prepareChurchAlphaMask(image) {
@@ -2468,6 +2651,10 @@
         width: 1384.006px;
         height: 2076.009px;
       }
+
+      .map-building--r11 {
+        z-index: 6;
+      }
     `;
 
     document.head.appendChild(style);
@@ -2537,6 +2724,12 @@
     // Existing tavern footprint remains untouched.
     for (const polygon of BUILDING_BLOCK_ZONES) {
       if (worldPointInPolygon(x, y, polygon)) return true;
+    }
+
+    // R11 additions use the ORIGINAL transparent PNG alpha silhouettes.
+    // Transparent pixels stay walkable; visible grounded pixels block.
+    for (const config of R11_BUILDINGS) {
+      if (isR11BuildingBlockedFootPoint(config, x, y)) return true;
     }
 
     return false;
@@ -3494,6 +3687,7 @@
     createRabbits();
     createMoleSystem();
     createOberkirchBuildings();
+    createR11Buildings();
 
     clampPlayer();
     updateAreaSigns();
