@@ -112,7 +112,7 @@
       text: "WINTERBACH",
       x: 2595, y: 475,
       direction: "up",
-      glow: "#ff3030",
+      glow: "#ffffff",
       trigger: { x1: 1900, y1: 0, x2: 3300, y2: 1250 }
     },
     {
@@ -120,7 +120,7 @@
       text: "ÖDSBACH",
       x: 6380, y: 420,
       direction: "up",
-      glow: "#ffe83b",
+      glow: "#ffffff",
       trigger: { x1: 5650, y1: 0, x2: 7100, y2: 1250 }
     },
     {
@@ -128,7 +128,7 @@
       text: "HESSELBACH",
       x: 8305, y: 440,
       direction: "up",
-      glow: "#22d887",
+      glow: "#ffffff",
       trigger: { x1: 7550, y1: 0, x2: 9050, y2: 1250 }
     },
     {
@@ -136,7 +136,7 @@
       text: "SCHAUENBURG",
       x: 945, y: 1750,
       direction: "left",
-      glow: "#ff8fca",
+      glow: "#ffffff",
       trigger: { x1: 0, y1: 1100, x2: 1750, y2: 2400 }
     },
     {
@@ -144,7 +144,7 @@
       text: "RINGELBACH",
       x: 770, y: 2680,
       direction: "left",
-      glow: "#050505",
+      glow: "#ffffff",
       darkGlow: true,
       trigger: { x1: 0, y1: 2050, x2: 1650, y2: 3350 }
     },
@@ -153,7 +153,7 @@
       text: "BUTSCHBACH",
       x: 9150, y: 2390,
       direction: "right",
-      glow: "#c45cff",
+      glow: "#ffffff",
       trigger: { x1: 8400, y1: 1700, x2: 10000, y2: 3100 }
     },
     {
@@ -161,7 +161,7 @@
       text: "BOTTENAU",
       x: 9180, y: 4140,
       direction: "right",
-      glow: "#35c9ff",
+      glow: "#ffffff",
       trigger: { x1: 8400, y1: 3450, x2: 10000, y2: 4800 }
     },
     {
@@ -169,7 +169,7 @@
       text: "TIERGARTEN HASLACH",
       x: 945, y: 5980,
       direction: "left",
-      glow: "#888888",
+      glow: "#ffffff",
       trigger: { x1: 0, y1: 5250, x2: 1750, y2: 6667 }
     },
     {
@@ -185,7 +185,7 @@
       text: "ZUSENHOFEN",
       x: 7265, y: 6075,
       direction: "down",
-      glow: "#b9ff38",
+      glow: "#ffffff",
       trigger: { x1: 6500, y1: 5350, x2: 8050, y2: 6667 }
     },
     {
@@ -193,7 +193,7 @@
       text: "NUSSBACH",
       x: 9430, y: 6110,
       direction: "down",
-      glow: "#ff7a28",
+      glow: "#ffffff",
       trigger: { x1: 8650, y1: 5350, x2: 10000, y2: 6667 }
     }
   ]);
@@ -253,75 +253,36 @@
         line-height: .95;
         letter-spacing: 5px;
         text-align: center;
-        -webkit-text-stroke: 1px rgba(0,0,0,.95);
+        -webkit-text-stroke: 0;
         text-shadow:
-          0 0 3px var(--area-glow),
-          0 0 7px var(--area-glow),
-          0 0 13px var(--area-glow),
-          0 0 22px var(--area-glow),
-          0 0 34px var(--area-glow);
+          0 0 3px #ffffff,
+          0 0 7px #ffffff,
+          0 0 13px #ffffff,
+          0 0 22px #ffffff,
+          0 0 34px #ffffff;
         filter: drop-shadow(0 4px 1px rgba(0,0,0,.72));
       }
 
       .area-sign--dark .area-sign__label {
         color: #000000;
-        -webkit-text-stroke: 1px rgba(0,0,0,.95);
-        text-shadow:
-          0 0 2px #ffffff,
-          0 0 5px rgba(255,255,255,.72),
-          0 0 10px #000000,
-          0 0 20px #000000,
-          0 0 30px #000000;
-      }
-
-      .area-sign__arrow {
-        position: absolute;
-        z-index: 3;
-        width: 250px;
-        height: 250px;
-        display: grid;
-        place-items: center;
-        color: #ffffff;
-        font-family: Georgia, "Times New Roman", serif;
-        font-size: 230px;
-        font-weight: 900;
-        line-height: 1;
+        -webkit-text-stroke: 0;
         text-shadow:
           0 0 3px #ffffff,
           0 0 7px #ffffff,
-          0 0 14px #ffffff,
-          0 0 25px rgba(255,255,255,.95);
-        filter: drop-shadow(0 4px 2px rgba(0,0,0,.85));
+          0 0 13px #ffffff,
+          0 0 22px #ffffff,
+          0 0 34px #ffffff;
       }
+
 
       .area-sign--up    { --intro-y: 55px; --intro-x: 0px; }
       .area-sign--down  { --intro-y: -55px; --intro-x: 0px; }
       .area-sign--left  { --intro-y: 0px; --intro-x: 55px; }
       .area-sign--right { --intro-y: 0px; --intro-x: -55px; }
 
-      .area-sign--up .area-sign__arrow {
-        left: 50%;
-        top: -265px;
-        transform: translateX(-50%) rotate(0deg);
-      }
 
-      .area-sign--down .area-sign__arrow {
-        left: 50%;
-        bottom: -265px;
-        transform: translateX(-50%) rotate(180deg);
-      }
 
-      .area-sign--left .area-sign__arrow {
-        left: -285px;
-        top: 50%;
-        transform: translateY(-50%) rotate(-90deg);
-      }
 
-      .area-sign--right .area-sign__arrow {
-        right: -285px;
-        top: 50%;
-        transform: translateY(-50%) rotate(90deg);
-      }
 
       @media (prefers-reduced-motion: reduce) {
         .area-sign,
@@ -354,11 +315,7 @@
       label.className = "area-sign__label";
       label.textContent = config.text;
 
-      const arrow = document.createElement("div");
-      arrow.className = "area-sign__arrow";
-      arrow.textContent = "↑";
-
-      inner.append(label, arrow);
+      inner.append(label);
       root.appendChild(inner);
       world.appendChild(root);
 
