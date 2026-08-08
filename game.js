@@ -1,12 +1,47 @@
 (() => {
   "use strict";
 
-  const MAP = Object.freeze({
-    id: "oberkirch-zentrum",
-    name: "OBERKIRCH ZENTRUM",
-    image: "assets/maps/OBERKIRCH ZENTRUM.webp",
-    width: 10000,
-    height: 6667
+  const MAPS = Object.freeze({
+    oberkirch: Object.freeze({
+      id: "oberkirch-zentrum",
+      name: "OBERKIRCH ZENTRUM",
+      image: "assets/maps/OBERKIRCH ZENTRUM.webp",
+      width: 10000,
+      height: 6667
+    }),
+    winterbach: Object.freeze({
+      id: "winterbach-ranglehen",
+      name: "WINTERBACH · RANGLEHEN",
+      image: "assets/maps/MAP 2 WINTERBACH.png",
+      width: 10000,
+      height: 6006
+    })
+  });
+
+  let MAP = MAPS.oberkirch;
+  let mapTransitioning = false;
+
+  const MAP_EXIT_CONFIG = Object.freeze({
+    // Blue-arrow exit at the upper edge of OBERKIRCH.
+    oberkirchNorth: Object.freeze({
+      x1: 2150,
+      x2: 3250,
+      leaveY: -18
+    }),
+    // Spawn / return lane on the lower central-left footpath of WINTERBACH.
+    winterbachSouth: Object.freeze({
+      x1: 3650,
+      x2: 5000,
+      leavePadding: 18
+    }),
+    winterbachSpawn: Object.freeze({
+      x: 4300,
+      y: 5925
+    }),
+    oberkirchReturnSpawn: Object.freeze({
+      x: 2595,
+      y: 680
+    })
   });
 
   const PLAYER = Object.freeze({
@@ -357,6 +392,14 @@
   }
 
   function updateAreaSigns() {
+    if (MAP.id !== "oberkirch-zentrum") {
+      for (const sign of areaSignElements) {
+        sign.visible = false;
+        sign.element.classList.remove("area-sign--visible");
+      }
+      return;
+    }
+
     for (const sign of areaSignElements) {
       const t = sign.config.trigger;
 
@@ -996,6 +1039,7 @@
   }
 
   function resolveRabbitAttackFrame(frame) {
+    if (MAP.id !== "oberkirch-zentrum") return;
     if (!frame || !frame.hit) return;
 
     const direction = rabbitAttackDirection();
@@ -1096,6 +1140,8 @@
   }
 
   function updateRabbits(deltaSeconds, now) {
+    if (MAP.id !== "oberkirch-zentrum") return;
+
     for (const actor of rabbitActors) {
       if (actor.dead) {
         if (actor.respawnAt && now >= actor.respawnAt) {
@@ -1528,6 +1574,8 @@
   }
 
   function updateMole(now) {
+    if (MAP.id !== "oberkirch-zentrum") return;
+
     if (!moleEvent) {
       if (now < nextMoleCheckAt) return;
 
@@ -1595,6 +1643,7 @@
   }
 
   function resolveMoleAttackFrame(frame) {
+    if (MAP.id !== "oberkirch-zentrum") return;
     if (!frame || !frame.hit || !moleEvent) return;
     if (moleEvent.phase !== "exposed" || moleEvent.dead) return;
 
@@ -1733,12 +1782,29 @@
 
   const BRIDGE_CONFIG = Object.freeze({
     stoneCorridor: 150,
-    coveredCorridor: 62,
+    coveredCorridor: 72,
     engageDistance: 285,
-    coveredFadeMs: 190,
-    // Exact red roof box: only this part of the straight covered bridge hides
-    // the player while the covered bridge is actively being traversed.
-    coveredInterior: Object.freeze({ x1: 3770, y1: 800, x2: 5790, y2: 1470 })
+    coveredFadeMs: 145,
+
+    // FINAL covered-bridge roof hide area.
+    // Deliberately extended DOWNWARD so no part of the character stays visible
+    // while passing under the roof.
+    coveredInterior: Object.freeze({
+      x1: 3340,
+      y1: 610,
+      x2: 6300,
+      y2: 1840
+    }),
+
+    // Thin approach guides around both bridge entrances. Touching one while
+    // moving captures the player and smoothly pulls the FOOT anchor onto the
+    // thick straight bridge line.
+    coveredCaptureLeft: Object.freeze({
+      x1: 3000, y1: 940, x2: 3910, y2: 1710
+    }),
+    coveredCaptureRight: Object.freeze({
+      x1: 5690, y1: 940, x2: 6620, y2: 1710
+    })
   });
 
   const bridgePathCache = new Map();
@@ -1866,6 +1932,8 @@
   }
 
   function isRiverBlockedFootPoint(x, y) {
+    if (MAP.id !== "oberkirch-zentrum") return false;
+
     // Bridge surfaces are the ONLY legal exception to the red river zones.
     if (isValidBridgeCrossingPoint(x, y)) return false;
 
@@ -1882,7 +1950,28 @@
     const maxY = MAP.height - 10;
 
     if (x < halfW || x > MAP.width - halfW) return false;
-    if (y < minY || y > maxY) return false;
+
+    const inOberkirchNorthExit =
+      MAP.id === "oberkirch-zentrum" &&
+      x >= MAP_EXIT_CONFIG.oberkirchNorth.x1 &&
+      x <= MAP_EXIT_CONFIG.oberkirchNorth.x2;
+
+    const inWinterbachSouthExit =
+      MAP.id === "winterbach-ranglehen" &&
+      x >= MAP_EXIT_CONFIG.winterbachSouth.x1 &&
+      x <= MAP_EXIT_CONFIG.winterbachSouth.x2;
+
+    if (y < minY) {
+      if (!inOberkirchNorthExit || y < MAP_EXIT_CONFIG.oberkirchNorth.leaveY - 80) {
+        return false;
+      }
+    }
+
+    if (y > maxY) {
+      if (!inWinterbachSouthExit || y > MAP.height + MAP_EXIT_CONFIG.winterbachSouth.leavePadding + 80) {
+        return false;
+      }
+    }
 
     // Existing river/bridge collision remains unchanged.
     if (isRiverBlockedFootPoint(x, y)) return false;
@@ -1894,46 +1983,49 @@
     return true;
   }
 
-  function tryEngageBridge(horizontalDirection) {
-    if (!horizontalDirection) return false;
+  function pointInRect(x, y, rect) {
+    return x >= rect.x1 && x <= rect.x2 && y >= rect.y1 && y <= rect.y2;
+  }
 
-    // COVERED BRIDGE: hard entry capture at the marked black entrance line.
-    // Once touched while LEFT/RIGHT is held, movement is forced onto the
-    // perfectly straight bridge path until the opposite end is reached.
-    const covered = bridgeDefinition("covered");
-    const coveredMetrics = getPathMetrics(covered.path);
-    const atCoveredLeftEntry =
-      playerX >= 3125 && playerX <= 3350 &&
-      playerY >= 1175 && playerY <= 1435 &&
-      horizontalDirection > 0;
-    const atCoveredRightEntry =
-      playerX >= 6280 && playerX <= 6505 &&
-      playerY >= 1175 && playerY <= 1435 &&
-      horizontalDirection < 0;
+  function tryEngageBridge(dx, dy) {
+    const horizontalDirection = dx > 0 ? 1 : dx < 0 ? -1 : 0;
+    const movingAnyDirection = dx !== 0 || dy !== 0;
 
-    if (atCoveredLeftEntry || atCoveredRightEntry) {
-      activeBridge = {
-        id: "covered",
-        path: covered.path,
-        distance: atCoveredLeftEntry ? 0 : coveredMetrics.total
-      };
-      const entry = pointAtBridgeDistance(activeBridge.path, activeBridge.distance);
-      playerX = entry.x;
-      playerY = entry.y;
-      return true;
+    // FINAL COVERED BRIDGE:
+    // the thick white line is the forced path; the thin feeder regions on both
+    // sides catch the player from any approach direction and smoothly converge
+    // the foot anchor onto that straight line.
+    if (MAP.id === "oberkirch-zentrum" && movingAnyDirection) {
+      const covered = bridgeDefinition("covered");
+      const closest = closestPointOnBridgePath(playerX, playerY, covered.path);
+      const inLeftFeeder = pointInRect(
+        playerX, playerY, BRIDGE_CONFIG.coveredCaptureLeft
+      );
+      const inRightFeeder = pointInRect(
+        playerX, playerY, BRIDGE_CONFIG.coveredCaptureRight
+      );
+
+      if (closest && (inLeftFeeder || inRightFeeder)) {
+        activeBridge = {
+          id: "covered",
+          path: covered.path,
+          distance: closest.pathDistance,
+          snapping: true
+        };
+        return true;
+      }
     }
+
+    if (!horizontalDirection) return false;
 
     let best = null;
 
-    // The covered bridge is intentionally NOT handled by the generic
-    // proximity engagement below. It may only engage through the two precise
-    // entrance capture zones above, preventing side-snaps from the river bank.
+    // Lower stone bridge stays exactly on its existing curved forced path.
     for (const id of ["stone"]) {
       const definition = bridgeDefinition(id);
       const closest = closestPointOnBridgePath(playerX, playerY, definition.path);
       if (!closest || closest.distance > BRIDGE_CONFIG.engageDistance) continue;
 
-      // At an endpoint only engage when the player is moving INTO the bridge.
       if (closest.progress <= 0.035 && horizontalDirection < 0) continue;
       if (closest.progress >= 0.965 && horizontalDirection > 0) continue;
 
@@ -1947,21 +2039,37 @@
     activeBridge = {
       id: best.definition.id,
       path: best.definition.path,
-      distance: best.closest.pathDistance
+      distance: best.closest.pathDistance,
+      snapping: true
     };
 
-    // Smoothly converge to the path instead of teleporting hard to it.
-    const anchor = pointAtBridgeDistance(activeBridge.path, activeBridge.distance);
-    playerX += (anchor.x - playerX) * 0.42;
-    playerY += (anchor.y - playerY) * 0.42;
     return true;
   }
 
   function moveAlongActiveBridge(horizontalDirection, deltaSeconds) {
     if (!activeBridge) return false;
 
+    const anchor = pointAtBridgeDistance(activeBridge.path, activeBridge.distance);
+
+    if (activeBridge.snapping) {
+      const dx = anchor.x - playerX;
+      const dy = anchor.y - playerY;
+      const distance = Math.hypot(dx, dy);
+
+      if (distance > 5) {
+        const pull = Math.min(1, 10 * deltaSeconds);
+        playerX += dx * pull;
+        playerY += dy * pull;
+        return true;
+      }
+
+      playerX = anchor.x;
+      playerY = anchor.y;
+      activeBridge.snapping = false;
+    }
+
     if (!horizontalDirection) {
-      // Standing still in a bridge/tunnel freezes the real map position.
+      // Standing still in the covered bridge/tunnel freezes the real position.
       return true;
     }
 
@@ -1987,7 +2095,10 @@
   function movePlayerWithWorldCollision(dx, dy, deltaSeconds) {
     const horizontalDirection = dx > 0 ? 1 : dx < 0 ? -1 : 0;
 
-    if (activeBridge || tryEngageBridge(horizontalDirection)) {
+    if (
+      MAP.id === "oberkirch-zentrum" &&
+      (activeBridge || tryEngageBridge(dx, dy))
+    ) {
       moveAlongActiveBridge(horizontalDirection, deltaSeconds);
       clampPlayer();
       return;
@@ -2013,22 +2124,16 @@
   }
 
   function playerInsideCoveredBridgeInterior() {
-    // Never hide the player merely because coordinates overlap the roof box.
-    // Visibility is tied to an actively traversed covered bridge.
+    if (MAP.id !== "oberkirch-zentrum") return false;
+
+    // Visibility is tied to an actively traversed covered bridge, but the
+    // expanded roof rectangle also covers the smooth feeder-to-line snap.
     if (!activeBridge || activeBridge.id !== "covered") return false;
 
     const b = BRIDGE_CONFIG.coveredInterior;
-    if (
-      playerX < b.x1 || playerX > b.x2 ||
-      playerY < b.y1 || playerY > b.y2
-    ) {
-      return false;
-    }
-
-    return pointInsideBridgeCorridor(
-      playerX,
-      playerY,
-      bridgeDefinition("covered")
+    return (
+      playerX >= b.x1 && playerX <= b.x2 &&
+      playerY >= b.y1 && playerY <= b.y2
     );
   }
 
@@ -2168,6 +2273,11 @@
   // HARD DEPTH SWITCH FOR THE TWO WALK-BEHIND TOWERS.
   function updateChurchPlayerDepth() {
     if (!playerEl) return;
+
+    if (MAP.id !== "oberkirch-zentrum") {
+      playerEl.style.zIndex = "100";
+      return;
+    }
 
     const c = CHURCH_CONFIG;
     const localX01 = (playerX - c.left) / c.width;
@@ -2398,6 +2508,8 @@
   }
 
   function isBuildingBlockedFootPoint(x, y) {
+    if (MAP.id !== "oberkirch-zentrum") return false;
+
     // Precise PNG-alpha collision for the church.
     if (isChurchBlockedFootPoint(x, y)) return true;
 
@@ -2418,10 +2530,302 @@
   const zoomLabel = document.getElementById("zoomLabel");
   const coordLabel = document.getElementById("coordLabel");
   const playerLabel = document.getElementById("playerLabel");
+  const debugTitle = document.querySelector("#debug strong");
 
   if (!game || !world || !mapImage || !playerEl || !playerSprite) {
     throw new Error("Game DOM incomplete: map/player elements missing.");
   }
+
+  function installMapTransitionUI() {
+    if (document.getElementById("mapTransitionStyles")) return;
+
+    const style = document.createElement("style");
+    style.id = "mapTransitionStyles";
+    style.textContent = `
+      @property --iris-radius {
+        syntax: "<percentage>";
+        inherits: false;
+        initial-value: 0%;
+      }
+
+      #mapTransitionOverlay {
+        position: absolute;
+        inset: 0;
+        z-index: 5000;
+        pointer-events: none;
+        background: #000;
+        opacity: 0;
+        --iris-radius: 0%;
+        -webkit-mask-image:
+          radial-gradient(circle at 50% 50%,
+            transparent 0 var(--iris-radius),
+            #000 calc(var(--iris-radius) + 1%));
+        mask-image:
+          radial-gradient(circle at 50% 50%,
+            transparent 0 var(--iris-radius),
+            #000 calc(var(--iris-radius) + 1%));
+      }
+
+      #mapRegionTitle {
+        position: absolute;
+        left: 50%;
+        top: 46%;
+        z-index: 5100;
+        transform: translate(-50%, -50%) scale(.94);
+        pointer-events: none;
+        user-select: none;
+        text-align: center;
+        opacity: 0;
+        transition:
+          opacity 420ms ease,
+          transform 420ms cubic-bezier(.2,.8,.2,1);
+        color: #bfeeff;
+        font-family:
+          "Old English Text MT",
+          "Lucida Blackletter",
+          "UnifrakturCook",
+          Georgia,
+          serif;
+        font-weight: 900;
+        text-shadow:
+          0 0 4px #ffffff,
+          0 0 10px #8edfff,
+          0 0 22px #4bc9ff,
+          0 5px 4px rgba(0,0,0,.88);
+      }
+
+      #mapRegionTitle.visible {
+        opacity: 1;
+        transform: translate(-50%, -50%) scale(1);
+      }
+
+      #mapRegionTitle .main {
+        display: block;
+        font-size: clamp(54px, 7vw, 138px);
+        letter-spacing: .08em;
+        line-height: .92;
+      }
+
+      #mapRegionTitle .sub {
+        display: block;
+        margin-top: .18em;
+        font-size: clamp(28px, 3.3vw, 66px);
+        letter-spacing: .16em;
+        line-height: 1;
+      }
+    `;
+    document.head.appendChild(style);
+
+    const transition = document.createElement("div");
+    transition.id = "mapTransitionOverlay";
+    game.appendChild(transition);
+
+    const title = document.createElement("div");
+    title.id = "mapRegionTitle";
+    title.innerHTML =
+      '<span class="main">WINTERBACH</span>' +
+      '<span class="sub">RANGLEHEN</span>';
+    game.appendChild(title);
+  }
+
+  function transitionOverlay() {
+    return document.getElementById("mapTransitionOverlay");
+  }
+
+  function regionTitle() {
+    return document.getElementById("mapRegionTitle");
+  }
+
+  function waitMs(ms) {
+    return new Promise((resolve) => window.setTimeout(resolve, ms));
+  }
+
+  function waitForImage(image) {
+    if (image.complete && image.naturalWidth > 0) return Promise.resolve();
+
+    return new Promise((resolve, reject) => {
+      const onLoad = () => {
+        cleanup();
+        resolve();
+      };
+      const onError = () => {
+        cleanup();
+        reject(new Error("Map image failed to load."));
+      };
+      const cleanup = () => {
+        image.removeEventListener("load", onLoad);
+        image.removeEventListener("error", onError);
+      };
+
+      image.addEventListener("load", onLoad);
+      image.addEventListener("error", onError);
+    });
+  }
+
+  function setOberkirchWorldVisibility(visible) {
+    const selectors = [
+      ".area-sign",
+      ".map-rabbit",
+      ".map-mole",
+      ".black-penny-drop",
+      ".map-building"
+    ];
+
+    for (const element of world.querySelectorAll(selectors.join(","))) {
+      element.style.display = visible ? "" : "none";
+    }
+  }
+
+  function resizeWorldForCurrentMap() {
+    world.style.width = `${MAP.width}px`;
+    world.style.height = `${MAP.height}px`;
+    mapImage.style.width = `${MAP.width}px`;
+    mapImage.style.height = `${MAP.height}px`;
+  }
+
+  function showWinterbachTitle() {
+    const title = regionTitle();
+    if (!title) return;
+
+    title.classList.remove("visible");
+    void title.offsetWidth;
+    title.classList.add("visible");
+
+    window.setTimeout(() => {
+      title.classList.remove("visible");
+    }, 2000);
+  }
+
+  async function switchMap(nextMap, spawn, showWinterTitle = false) {
+    if (mapTransitioning) return;
+    mapTransitioning = true;
+    keys.clear();
+    cancelAttackImmediately();
+    if (blocking) stopBlocking();
+    activeBridge = null;
+
+    const overlay = transitionOverlay();
+
+    // Exact requested exit: one-second fade to black.
+    overlay.style.transition = "opacity 1000ms ease";
+    overlay.style.webkitMaskImage = "none";
+    overlay.style.maskImage = "none";
+    overlay.style.opacity = "1";
+    await waitMs(1000);
+
+    MAP = nextMap;
+    resizeWorldForCurrentMap();
+
+    mapImage.src = encodeURI(MAP.image);
+    try {
+      await waitForImage(mapImage);
+    } catch (_) {
+      mapTransitioning = false;
+      return;
+    }
+
+    playerX = spawn.x;
+    playerY = spawn.y;
+    cameraX = playerX;
+    cameraY = playerY;
+    activeBridge = null;
+
+    setOberkirchWorldVisibility(MAP.id === "oberkirch-zentrum");
+    if (debugTitle) debugTitle.textContent = MAP.name;
+
+    calculateFitScale();
+    displayScale = scaleForLevel(zoomLevel);
+    targetScale = displayScale;
+    zoomAnimating = false;
+
+    renderPlayer();
+    renderWorld();
+
+    // Iris reveal: black opens smoothly from the centre and gives the new map free.
+    overlay.style.transition = "none";
+    overlay.style.opacity = "1";
+    overlay.style.setProperty("--iris-radius", "0%");
+    overlay.style.webkitMaskImage =
+      "radial-gradient(circle at 50% 50%, transparent 0 var(--iris-radius), #000 calc(var(--iris-radius) + 1%))";
+    overlay.style.maskImage =
+      "radial-gradient(circle at 50% 50%, transparent 0 var(--iris-radius), #000 calc(var(--iris-radius) + 1%))";
+
+    await new Promise((resolve) => requestAnimationFrame(() =>
+      requestAnimationFrame(resolve)
+    ));
+
+    overlay.style.transition = "--iris-radius 900ms cubic-bezier(.2,.72,.2,1)";
+    overlay.style.setProperty("--iris-radius", "150%");
+
+    if (showWinterTitle) {
+      window.setTimeout(showWinterbachTitle, 220);
+    }
+
+    await waitMs(940);
+
+    overlay.style.transition = "none";
+    overlay.style.opacity = "0";
+    overlay.style.webkitMaskImage = "none";
+    overlay.style.maskImage = "none";
+    overlay.style.setProperty("--iris-radius", "0%");
+
+    lastFrame = performance.now();
+    mapTransitioning = false;
+  }
+
+  function playerInOberkirchNorthExitLane() {
+    return (
+      MAP.id === "oberkirch-zentrum" &&
+      playerX >= MAP_EXIT_CONFIG.oberkirchNorth.x1 &&
+      playerX <= MAP_EXIT_CONFIG.oberkirchNorth.x2
+    );
+  }
+
+  function playerInWinterbachSouthExitLane() {
+    return (
+      MAP.id === "winterbach-ranglehen" &&
+      playerX >= MAP_EXIT_CONFIG.winterbachSouth.x1 &&
+      playerX <= MAP_EXIT_CONFIG.winterbachSouth.x2
+    );
+  }
+
+  function checkMapExit() {
+    if (mapTransitioning) return false;
+
+    const movingUp = keys.has("KeyW") || keys.has("ArrowUp");
+    const movingDown = keys.has("KeyS") || keys.has("ArrowDown");
+
+    // The whole character, including the FOOT anchor, has left the top edge.
+    if (
+      playerInOberkirchNorthExitLane() &&
+      movingUp &&
+      playerY <= MAP_EXIT_CONFIG.oberkirchNorth.leaveY
+    ) {
+      switchMap(
+        MAPS.winterbach,
+        MAP_EXIT_CONFIG.winterbachSpawn,
+        true
+      );
+      return true;
+    }
+
+    // Symmetric return so Map 2 is not a one-way trap.
+    if (
+      playerInWinterbachSouthExitLane() &&
+      movingDown &&
+      playerY >= MAP.height + MAP_EXIT_CONFIG.winterbachSouth.leavePadding
+    ) {
+      switchMap(
+        MAPS.oberkirch,
+        MAP_EXIT_CONFIG.oberkirchReturnSpawn,
+        false
+      );
+      return true;
+    }
+
+    return false;
+  }
+
 
   const allSprites = [
     PLAYER.standRight,
@@ -2508,7 +2912,38 @@
     const bottomClearance = 10;
 
     playerX = Math.max(halfW, Math.min(MAP.width - halfW, playerX));
-    playerY = Math.max(topClearance, Math.min(MAP.height - bottomClearance, playerY));
+
+    const northExitOpen =
+      playerInOberkirchNorthExitLane() &&
+      (keys.has("KeyW") || keys.has("ArrowUp"));
+
+    const southExitOpen =
+      playerInWinterbachSouthExitLane() &&
+      (keys.has("KeyS") || keys.has("ArrowDown"));
+
+    if (northExitOpen) {
+      playerY = Math.max(
+        MAP_EXIT_CONFIG.oberkirchNorth.leaveY - 80,
+        Math.min(MAP.height - bottomClearance, playerY)
+      );
+      return;
+    }
+
+    if (southExitOpen) {
+      playerY = Math.max(
+        topClearance,
+        Math.min(
+          MAP.height + MAP_EXIT_CONFIG.winterbachSouth.leavePadding + 80,
+          playerY
+        )
+      );
+      return;
+    }
+
+    playerY = Math.max(
+      topClearance,
+      Math.min(MAP.height - bottomClearance, playerY)
+    );
   }
 
   function clampCamera(scale = displayScale) {
@@ -2881,10 +3316,15 @@
     lastFrame = now;
 
     updateZoom(now);
-    updatePlayer(deltaSeconds);
-    updateAreaSigns();
-    updateRabbits(deltaSeconds, now);
-    updateMole(now);
+
+    if (!mapTransitioning) {
+      updatePlayer(deltaSeconds);
+      checkMapExit();
+      updateAreaSigns();
+      updateRabbits(deltaSeconds, now);
+      updateMole(now);
+    }
+
     renderPlayer();
     updateChurchPlayerDepth();
     renderWorld();
@@ -3011,6 +3451,8 @@
 
   function initialize() {
     startBackgroundMusic();
+    installMapTransitionUI();
+    resizeWorldForCurrentMap();
     calculateFitScale();
     displayScale = scaleForLevel(0);
     targetScale = displayScale;
