@@ -1350,6 +1350,515 @@
   }
 
 
+
+  // ------------------------------------------------------------------
+  // R19 MAP 2 — WILDSCHWEINE
+  // Exactly the three red fenced field regions from the supplied reference.
+  // Maximum two boars per field. They may leave only through the open RIGHT edge.
+  // ------------------------------------------------------------------
+  const BOAR_CONFIG = Object.freeze({
+    mapId: "winterbach-ranglehen",
+
+    idleFrame: "assets/animals/boars/WILDSCHWEIN STAND.png",
+    runFrame: "assets/animals/boars/WILDSCHWEIN LAUF.png",
+
+    sounds: Object.freeze([
+      "assets/audio/boars/WILDSCHWEIN 1.mp3",
+      "assets/audio/boars/WILDSCHWEIN 2.mp3",
+      "assets/audio/boars/WILDSCHWEIN 3.mp3"
+    ]),
+
+    width: 520,
+    height: 410,
+
+    // Small bursts only; then the animal stops again.
+    speedMin: 120,
+    speedMax: 195,
+    moveDurationMin: 650,
+    moveDurationMax: 1450,
+    pauseMin: 1200,
+    pauseMax: 4200,
+
+    // If player is close, one nearby boar makes one random sound every 7 seconds.
+    soundDistance: 1500,
+    soundInterval: 7000,
+
+    zones: Object.freeze([
+      {
+        id: "boar-field-upper",
+        count: 2,
+        exits: ["right"],
+        polygon: [
+          [8820, 1260],
+          [10000, 930],
+          [10000, 2410],
+          [9570, 2510]
+        ]
+      },
+      {
+        id: "boar-field-middle",
+        count: 2,
+        exits: ["right"],
+        polygon: [
+          [9000, 3140],
+          [10000, 2810],
+          [10000, 4380],
+          [9320, 4460]
+        ]
+      },
+      {
+        id: "boar-field-lower",
+        count: 2,
+        exits: ["right"],
+        polygon: [
+          [8650, 4840],
+          [10000, 4410],
+          [10000, 6006],
+          [9410, 6006]
+        ]
+      }
+    ])
+  });
+
+  const boarSoundAudios = BOAR_CONFIG.sounds.map((src) => {
+    const audio = new Audio(src);
+    audio.preload = "auto";
+    audio.volume = 1.0;
+    return audio;
+  });
+
+  let boarActors = [];
+  let nextBoarNearbySoundAt = 0;
+
+  function installBoarStyles() {
+    if (document.getElementById("boarStyles")) return;
+
+    const style = document.createElement("style");
+    style.id = "boarStyles";
+    style.textContent = `
+      .map-boar {
+        position: absolute;
+        z-index: 5;
+        width: ${BOAR_CONFIG.width}px;
+        height: ${BOAR_CONFIG.height}px;
+        transform: translate(-50%, -84%);
+        pointer-events: none;
+        user-select: none;
+        opacity: 1;
+        transition: opacity 360ms ease;
+        will-change: left, top, opacity;
+      }
+
+      .map-boar--away {
+        opacity: 0;
+      }
+
+      .map-boar__sprite {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+        object-position: 50% 100%;
+        transform: scaleX(var(--boar-facing, 1));
+        transform-origin: 50% 100%;
+        opacity: 0;
+        visibility: hidden;
+        transition: none !important;
+        filter: drop-shadow(0 8px 5px rgba(0,0,0,.22));
+        backface-visibility: hidden;
+        -webkit-backface-visibility: hidden;
+      }
+
+      .map-boar__sprite--visible {
+        opacity: 1;
+        visibility: visible;
+      }
+    `;
+
+    document.head.appendChild(style);
+  }
+
+  function boarPointInPolygon(x, y, polygon) {
+    let inside = false;
+
+    for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+      const xi = polygon[i][0];
+      const yi = polygon[i][1];
+      const xj = polygon[j][0];
+      const yj = polygon[j][1];
+
+      const intersects =
+        ((yi > y) !== (yj > y)) &&
+        (x < ((xj - xi) * (y - yi)) / ((yj - yi) || 0.000001) + xi);
+
+      if (intersects) inside = !inside;
+    }
+
+    return inside;
+  }
+
+  function boarBounds(zone) {
+    let minX = Infinity;
+    let minY = Infinity;
+    let maxX = -Infinity;
+    let maxY = -Infinity;
+
+    for (const [x, y] of zone.polygon) {
+      minX = Math.min(minX, x);
+      minY = Math.min(minY, y);
+      maxX = Math.max(maxX, x);
+      maxY = Math.max(maxY, y);
+    }
+
+    return { minX, minY, maxX, maxY };
+  }
+
+  function boarRandomPoint(zone, inset = 80) {
+    const b = boarBounds(zone);
+
+    for (let i = 0; i < 160; i += 1) {
+      const x =
+        b.minX + inset +
+        Math.random() * Math.max(10, b.maxX - b.minX - inset * 2);
+      const y =
+        b.minY + inset +
+        Math.random() * Math.max(10, b.maxY - b.minY - inset * 2);
+
+      if (boarPointInPolygon(x, y, zone.polygon)) {
+        return { x, y };
+      }
+    }
+
+    return {
+      x: (b.minX + b.maxX) / 2,
+      y: (b.minY + b.maxY) / 2
+    };
+  }
+
+  function boarShowLayer(actor, index) {
+    if (!actor || !actor.ready || actor.visibleLayer === index) return;
+
+    for (let i = 0; i < actor.images.length; i += 1) {
+      actor.images[i].classList.toggle(
+        "map-boar__sprite--visible",
+        i === index
+      );
+    }
+
+    actor.visibleLayer = index;
+  }
+
+  function boarSetFacing(actor, facing) {
+    actor.facing = facing < 0 ? -1 : 1;
+    actor.element.style.setProperty("--boar-facing", actor.facing);
+  }
+
+  function boarStartPause(actor, now) {
+    actor.moving = false;
+    actor.moveEndAt = 0;
+    actor.pauseUntil =
+      now +
+      BOAR_CONFIG.pauseMin +
+      Math.random() * (BOAR_CONFIG.pauseMax - BOAR_CONFIG.pauseMin);
+
+    // Stand frame, left/right variant comes only from mirroring.
+    boarShowLayer(actor, 0);
+
+    // While idle, sometimes turn around so both standing variants appear naturally.
+    if (Math.random() < 0.36) {
+      boarSetFacing(actor, actor.facing * -1);
+    }
+  }
+
+  function boarChooseShortMove(actor, now) {
+    const target = boarRandomPoint(actor.zone, 100);
+
+    actor.targetX = target.x;
+    actor.targetY = target.y;
+    actor.speed =
+      BOAR_CONFIG.speedMin +
+      Math.random() * (BOAR_CONFIG.speedMax - BOAR_CONFIG.speedMin);
+
+    actor.moveEndAt =
+      now +
+      BOAR_CONFIG.moveDurationMin +
+      Math.random() * (BOAR_CONFIG.moveDurationMax - BOAR_CONFIG.moveDurationMin);
+
+    actor.moving = true;
+    actor.exiting = false;
+
+    const dx = actor.targetX - actor.x;
+    if (Math.abs(dx) > 12) {
+      boarSetFacing(actor, dx < 0 ? -1 : 1);
+    }
+
+    boarShowLayer(actor, 1);
+  }
+
+  function boarStartRightExit(actor, now) {
+    actor.targetX = MAP.width + 320;
+    actor.targetY = actor.y + (Math.random() - 0.5) * 220;
+    actor.speed = 165 + Math.random() * 110;
+    actor.moveEndAt = now + 9000;
+    actor.moving = true;
+    actor.exiting = true;
+
+    boarSetFacing(actor, 1);
+    boarShowLayer(actor, 1);
+  }
+
+  function boarGoAway(actor, now) {
+    actor.away = true;
+    actor.exiting = false;
+    actor.moving = false;
+    actor.element.classList.add("map-boar--away");
+    actor.returnAt = now + 3500 + Math.random() * 8500;
+  }
+
+  function boarReturnFromRight(actor, now) {
+    const b = boarBounds(actor.zone);
+
+    actor.x = MAP.width + 280;
+    actor.y =
+      Math.max(
+        b.minY + 120,
+        Math.min(
+          b.maxY - 120,
+          b.minY + 120 + Math.random() * Math.max(10, b.maxY - b.minY - 240)
+        )
+      );
+
+    const target = boarRandomPoint(actor.zone, 140);
+
+    actor.targetX = target.x;
+    actor.targetY = target.y;
+    actor.speed = 175 + Math.random() * 95;
+    actor.moveEndAt = now + 8500;
+    actor.away = false;
+    actor.exiting = false;
+    actor.entering = true;
+    actor.moving = true;
+
+    actor.element.classList.remove("map-boar--away");
+    boarSetFacing(actor, -1);
+    boarShowLayer(actor, 1);
+
+    actor.element.style.left = `${actor.x}px`;
+    actor.element.style.top = `${actor.y}px`;
+  }
+
+  function createBoarActor(zone, index) {
+    const start = boarRandomPoint(zone, 130);
+
+    const element = document.createElement("div");
+    element.className = "map-boar";
+    element.dataset.boarZone = zone.id;
+    element.dataset.boarIndex = String(index);
+
+    const idleImage = document.createElement("img");
+    idleImage.className = "map-boar__sprite map-boar__sprite--visible";
+    idleImage.src = encodeURI(BOAR_CONFIG.idleFrame);
+    idleImage.alt = "";
+    idleImage.draggable = false;
+    idleImage.decoding = "async";
+
+    const runImage = document.createElement("img");
+    runImage.className = "map-boar__sprite";
+    runImage.src = encodeURI(BOAR_CONFIG.runFrame);
+    runImage.alt = "";
+    runImage.draggable = false;
+    runImage.decoding = "async";
+
+    element.append(idleImage, runImage);
+    world.appendChild(element);
+
+    const actor = {
+      element,
+      images: [idleImage, runImage],
+      visibleLayer: 0,
+      zone,
+      x: start.x,
+      y: start.y,
+      targetX: start.x,
+      targetY: start.y,
+      facing: Math.random() < 0.5 ? -1 : 1,
+      speed: 150,
+      moving: false,
+      exiting: false,
+      entering: false,
+      away: false,
+      returnAt: 0,
+      pauseUntil: performance.now() + 500 + Math.random() * 2500,
+      moveEndAt: 0,
+      ready: false
+    };
+
+    element.style.left = `${actor.x}px`;
+    element.style.top = `${actor.y}px`;
+    element.style.setProperty("--boar-facing", actor.facing);
+    element.style.display = MAP.id === BOAR_CONFIG.mapId ? "" : "none";
+
+    const waitForImage = (img) => {
+      if (img.complete && img.naturalWidth > 0) {
+        if (typeof img.decode === "function") {
+          return img.decode().catch(() => {});
+        }
+        return Promise.resolve();
+      }
+
+      return new Promise((resolve) => {
+        const done = () => resolve();
+        img.addEventListener("load", done, { once: true });
+        img.addEventListener("error", done, { once: true });
+      }).then(() => {
+        if (typeof img.decode === "function") {
+          return img.decode().catch(() => {});
+        }
+      });
+    };
+
+    Promise.all(actor.images.map(waitForImage)).then(() => {
+      actor.ready = true;
+      actor.images[0].classList.add("map-boar__sprite--visible");
+      actor.images[1].classList.remove("map-boar__sprite--visible");
+      actor.visibleLayer = 0;
+    });
+
+    return actor;
+  }
+
+  function createBoars() {
+    installBoarStyles();
+
+    for (const src of [BOAR_CONFIG.idleFrame, BOAR_CONFIG.runFrame]) {
+      const image = new Image();
+      image.decoding = "async";
+      image.src = encodeURI(src);
+      if (typeof image.decode === "function") {
+        image.decode().catch(() => {});
+      }
+    }
+
+    boarActors = [];
+
+    for (const zone of BOAR_CONFIG.zones) {
+      for (let i = 0; i < zone.count; i += 1) {
+        boarActors.push(createBoarActor(zone, i));
+      }
+    }
+
+    nextBoarNearbySoundAt = performance.now() + BOAR_CONFIG.soundInterval;
+  }
+
+  function playRandomBoarNearbySound(now) {
+    if (now < nextBoarNearbySoundAt) return;
+
+    const nearby = boarActors.filter((actor) => {
+      if (!actor.ready || actor.away) return false;
+      return (
+        Math.hypot(playerX - actor.x, playerY - actor.y) <=
+        BOAR_CONFIG.soundDistance
+      );
+    });
+
+    if (!nearby.length) {
+      // Check again soon, but do not consume a full seven-second cycle
+      // when the player is nowhere near a boar.
+      nextBoarNearbySoundAt = now + 900;
+      return;
+    }
+
+    const actor = nearby[Math.floor(Math.random() * nearby.length)];
+    const audio = boarSoundAudios[
+      Math.floor(Math.random() * boarSoundAudios.length)
+    ];
+
+    // Actor selection is intentional even though sound is non-spatial.
+    // It guarantees "one nearby wild boar" is responsible for each call.
+    void actor;
+
+    try {
+      audio.pause();
+      audio.currentTime = 0;
+    } catch (_) {}
+
+    audio.play().catch(() => {});
+    nextBoarNearbySoundAt = now + BOAR_CONFIG.soundInterval;
+  }
+
+  function updateBoars(deltaSeconds, now) {
+    const active = MAP.id === BOAR_CONFIG.mapId;
+
+    for (const actor of boarActors) {
+      actor.element.style.display = active ? "" : "none";
+    }
+
+    if (!active) return;
+
+    playRandomBoarNearbySound(now);
+
+    for (const actor of boarActors) {
+      if (!actor.ready) continue;
+
+      if (actor.away) {
+        if (now >= actor.returnAt) {
+          boarReturnFromRight(actor, now);
+        }
+        continue;
+      }
+
+      if (actor.moving) {
+        const dx = actor.targetX - actor.x;
+        const dy = actor.targetY - actor.y;
+        const distance = Math.hypot(dx, dy);
+
+        if (distance <= 10) {
+          actor.x = actor.targetX;
+          actor.y = actor.targetY;
+          actor.moving = false;
+
+          if (actor.exiting) {
+            boarGoAway(actor, now);
+            continue;
+          }
+
+          actor.entering = false;
+          boarStartPause(actor, now);
+        } else {
+          const step = Math.min(distance, actor.speed * deltaSeconds);
+          actor.x += (dx / distance) * step;
+          actor.y += (dy / distance) * step;
+        }
+
+        actor.element.style.left = `${actor.x}px`;
+        actor.element.style.top = `${actor.y}px`;
+
+        // Normal movement is deliberately short.
+        // Return/exit movement is allowed to finish its map-edge traversal.
+        if (
+          !actor.exiting &&
+          !actor.entering &&
+          now >= actor.moveEndAt
+        ) {
+          boarStartPause(actor, now);
+        }
+
+        continue;
+      }
+
+      if (now < actor.pauseUntil) continue;
+
+      // Rarely leave through the only open side: right map edge.
+      if (Math.random() < 0.10) {
+        boarStartRightExit(actor, now);
+      } else {
+        boarChooseShortMove(actor, now);
+      }
+    }
+  }
+
+
   // ------------------------------------------------------------------
   // AMBIENT RABBITS
   // Four habitat polygons follow the WHITE outlined regions in the
@@ -4024,6 +4533,7 @@
     // Sync map-specific animals while the transition overlay is still covering the map.
     updateRabbits(0, performance.now());
     updateWolves(0, performance.now());
+    updateBoars(0, performance.now());
     updateMole(performance.now());
 
     if (debugTitle) debugTitle.textContent = MAP.name;
@@ -4648,6 +5158,7 @@
       updateTrunkenbold(deltaSeconds, now);
       updateRabbits(deltaSeconds, now);
       updateWolves(deltaSeconds, now);
+      updateBoars(deltaSeconds, now);
       updateMole(now);
     }
 
@@ -4792,6 +5303,7 @@
     createAreaSigns();
     createRabbits();
     createWolves();
+    createBoars();
     createMoleSystem();
     createOberkirchBuildings();
     createR11Buildings();
