@@ -1786,14 +1786,13 @@
     engageDistance: 285,
     coveredFadeMs: 145,
 
-    // FINAL covered-bridge roof hide area.
-    // Deliberately extended DOWNWARD so no part of the character stays visible
-    // while passing under the roof.
+    // FINAL: Unsichtbarkeit beginnt EXAKT am roten Dach-/Brückenkasten.
+    // Die Zuführungs-/Snap-Zonen dürfen den Spieler NICHT unsichtbar machen.
     coveredInterior: Object.freeze({
-      x1: 3340,
-      y1: 610,
-      x2: 6300,
-      y2: 1840
+      x1: 3770,
+      y1: 800,
+      x2: 5790,
+      y2: 1470
     }),
 
     // Thin approach guides around both bridge entrances. Touching one while
@@ -2006,13 +2005,23 @@
       );
 
       if (closest && (inLeftFeeder || inRightFeeder)) {
-        activeBridge = {
-          id: "covered",
-          path: covered.path,
-          distance: closest.pathDistance,
-          snapping: true
-        };
-        return true;
+        // RELEASE RULE:
+        // Wenn der Spieler ein Brückenende erreicht hat und NACH AUSSEN läuft,
+        // darf die Zuführungszone ihn nicht im nächsten Frame erneut fangen.
+        const leavingLeft =
+          closest.progress <= 0.04 && horizontalDirection < 0;
+        const leavingRight =
+          closest.progress >= 0.96 && horizontalDirection > 0;
+
+        if (!leavingLeft && !leavingRight) {
+          activeBridge = {
+            id: "covered",
+            path: covered.path,
+            distance: closest.pathDistance,
+            snapping: true
+          };
+          return true;
+        }
       }
     }
 
@@ -2086,7 +2095,14 @@
     const reachedRightEnd = nextDistance >= metrics.total - 0.001 && horizontalDirection > 0;
 
     if (reachedLeftEnd || reachedRightEnd) {
+      const finishedBridgeId = activeBridge.id;
       activeBridge = null;
+
+      if (finishedBridgeId === "covered") {
+        // Kleiner sauberer Austrittsschritt hinter das Linienende.
+        // Danach übernimmt sofort wieder die normale freie Bewegung.
+        playerX += horizontalDirection * 18;
+      }
     }
 
     return true;
@@ -2126,8 +2142,8 @@
   function playerInsideCoveredBridgeInterior() {
     if (MAP.id !== "oberkirch-zentrum") return false;
 
-    // Visibility is tied to an actively traversed covered bridge, but the
-    // expanded roof rectangle also covers the smooth feeder-to-line snap.
+    // Unsichtbar nur während aktiver Brückenpassage UND exakt innerhalb
+    // der roten Dach-Hitbox. Außerhalb bleibt der Spieler sichtbar.
     if (!activeBridge || activeBridge.id !== "covered") return false;
 
     const b = BRIDGE_CONFIG.coveredInterior;
@@ -2707,11 +2723,11 @@
     const overlay = transitionOverlay();
 
     // Exact requested exit: one-second fade to black.
-    overlay.style.transition = "opacity 1000ms ease";
+    overlay.style.transition = "opacity 200ms ease";
     overlay.style.webkitMaskImage = "none";
     overlay.style.maskImage = "none";
     overlay.style.opacity = "1";
-    await waitMs(1000);
+    await waitMs(200);
 
     MAP = nextMap;
     resizeWorldForCurrentMap();
@@ -2754,14 +2770,14 @@
       requestAnimationFrame(resolve)
     ));
 
-    overlay.style.transition = "--iris-radius 900ms cubic-bezier(.2,.72,.2,1)";
+    overlay.style.transition = "--iris-radius 2700ms cubic-bezier(.2,.72,.2,1)";
     overlay.style.setProperty("--iris-radius", "150%");
 
     if (showWinterTitle) {
       window.setTimeout(showWinterbachTitle, 220);
     }
 
-    await waitMs(940);
+    await waitMs(2740);
 
     overlay.style.transition = "none";
     overlay.style.opacity = "0";
