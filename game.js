@@ -2244,7 +2244,17 @@
       width: 1004,
       height: 1508,
       mirrored: false,
-      groundedFromY: 0.30
+      groundedFromY: 0.30,
+
+      // R13 BLUE CIRCLE ONLY:
+      // exact upper roof crossing area is walkable and drawn in front of player.
+      // The lower hut / wall / foundation keeps its existing collision.
+      walkBehind: Object.freeze([
+        [0.03, 0.16],
+        [0.97, 0.16],
+        [0.93, 0.46],
+        [0.08, 0.46]
+      ])
     })
   ]);
 
@@ -2383,6 +2393,16 @@
     return hof ? r11PointInWalkBehind(hof, playerX, playerY) : false;
   }
 
+  function playerBehindRoundHutRoof() {
+    if (MAP.id !== "oberkirch-zentrum") return false;
+
+    const hut = R11_BUILDINGS.find(
+      (building) => building.id === "oberkirch-huette-rund"
+    );
+
+    return hut ? r11PointInWalkBehind(hut, playerX, playerY) : false;
+  }
+
 
   // The church collision is read directly from the PNG alpha channel.
   // Transparent pixels are always walkable. Only the lower, physically
@@ -2497,14 +2517,15 @@
       churchPointIsWalkBehind(localX01, localY01);
 
     const behindHofRoof = playerBehindNeuensteinerHofRoof();
+    const behindRoundHutRoof = playerBehindRoundHutRoof();
 
-    // Three independent depth layers:
+    // Independent depth layers remain intact:
     // 100 = normal foreground
     //   3 = behind CHURCH tower only, but still IN FRONT of R11 buildings
-    //   1 = behind the Neuensteiner Hof roof
+    //   1 = behind a specifically walk-behind R11 roof
     //
-    // This fixes the red-marked overlap without changing the church tower rule.
-    if (behindHofRoof) {
+    // R13 changes ONLY the blue-circled roof of the round hut.
+    if (behindHofRoof || behindRoundHutRoof) {
       playerEl.style.zIndex = "1";
     } else if (behindTower) {
       playerEl.style.zIndex = "3";
