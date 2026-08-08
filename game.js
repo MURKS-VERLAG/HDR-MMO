@@ -30,8 +30,9 @@
     }),
     // R10 FINAL: exact lower exit lane at the marked blue arrow / black box.
     winterbachSouth: Object.freeze({
-      x1: 4870,
-      x2: 6040,
+      // R17 RED ARROW — new OBERKIRCH return lane at lower-right edge.
+      x1: 7750,
+      x2: 8600,
       leavePadding: 18
     }),
     winterbachSpawn: Object.freeze({
@@ -40,7 +41,8 @@
       y: 5925
     }),
     oberkirchReturnSpawn: Object.freeze({
-      x: 2595,
+      // R18 YELLOW ARROW — exact return point on Map 1.
+      x: 6225,
       y: 760
     })
   });
@@ -269,10 +271,37 @@
       id: "oberkirch-return",
       mapId: "winterbach-ranglehen",
       text: "OBERKIRCH",
-      x: 5485, y: 5460,
+      x: 8175, y: 5550,
       direction: "down",
       glow: "#ffffff",
-      trigger: { x1: 4550, y1: 4850, x2: 6400, y2: 6006 }
+      trigger: { x1: 7550, y1: 5000, x2: 8800, y2: 6006 }
+    },
+    {
+      id: "lautenbach",
+      mapId: "winterbach-ranglehen",
+      text: "LAUTENBACH",
+      x: 5520, y: 420,
+      direction: "up",
+      glow: "#ffffff",
+      trigger: { x1: 4900, y1: 0, x2: 6150, y2: 1150 }
+    },
+    {
+      id: "sendelbach",
+      mapId: "winterbach-ranglehen",
+      text: "SENDELBACH",
+      x: 7330, y: 420,
+      direction: "up",
+      glow: "#ffffff",
+      trigger: { x1: 6700, y1: 0, x2: 7950, y2: 1150 }
+    },
+    {
+      id: "oedsbach-winterbach-east",
+      mapId: "winterbach-ranglehen",
+      text: "ÖDSBACH",
+      x: 9580, y: 2715,
+      direction: "right",
+      glow: "#ffffff",
+      trigger: { x1: 8950, y1: 2050, x2: 10000, y2: 3420 }
     }
   ]);
 
@@ -879,8 +908,9 @@
     howlFrame: "assets/animals/wolves/WOLF HOWL.png",
     howlSound: "assets/audio/wolves/WOLF HOWL.mp3",
     count: 5,
-    width: 620,
-    height: 500,
+    // R17: one tick larger.
+    width: 685,
+    height: 552,
     speedMin: 150,
     speedMax: 250,
     frameDuration: 430,
@@ -935,7 +965,8 @@
         transform: scaleX(var(--wolf-facing, 1));
         transform-origin: 50% 100%;
         opacity: 0;
-        transition: opacity 260ms ease;
+        /* R17: short crossfade only. All wolf sources stay permanently decoded. */
+        transition: opacity 95ms linear;
         filter: drop-shadow(0 9px 5px rgba(0,0,0,.24));
       }
 
@@ -970,17 +1001,26 @@
     return { x: h.cx, y: Math.max(100, h.cy) };
   }
 
+  function wolfShowStaticLayer(actor, layerIndex) {
+    if (!actor || actor.visibleLayer === layerIndex) return;
+
+    const outgoing = actor.visibleLayer;
+    actor.images[layerIndex].classList.add("map-wolf__sprite--visible");
+    if (actor.images[outgoing]) {
+      actor.images[outgoing].classList.remove("map-wolf__sprite--visible");
+    }
+    actor.visibleLayer = layerIndex;
+  }
+
   function wolfPickWalkFrame(actor) {
     if (actor.howling || actor.away) return;
 
     actor.frameIndex = 1 - actor.frameIndex;
-    const incoming = 1 - actor.visibleLayer;
-    const outgoing = actor.visibleLayer;
 
-    actor.images[incoming].src = encodeURI(WOLF_CONFIG.frames[actor.frameIndex]);
-    actor.images[incoming].classList.add("map-wolf__sprite--visible");
-    actor.images[outgoing].classList.remove("map-wolf__sprite--visible");
-    actor.visibleLayer = incoming;
+    // R17 anti-flicker:
+    // both walk frames are permanent, already-loaded DOM images.
+    // Only opacity visibility changes; src is NEVER reassigned.
+    wolfShowStaticLayer(actor, actor.frameIndex);
     actor.nextFrameAt = performance.now() + WOLF_CONFIG.frameDuration;
   }
 
@@ -1065,12 +1105,8 @@
       actor.exiting = false;
       actor.entering = false;
 
-      const incoming = 1 - actor.visibleLayer;
-      const outgoing = actor.visibleLayer;
-      actor.images[incoming].src = encodeURI(WOLF_CONFIG.howlFrame);
-      actor.images[incoming].classList.add("map-wolf__sprite--visible");
-      actor.images[outgoing].classList.remove("map-wolf__sprite--visible");
-      actor.visibleLayer = incoming;
+      // Dedicated permanently loaded howl layer = index 2.
+      wolfShowStaticLayer(actor, 2);
 
       actor.howlEndAt = performance.now() + WOLF_CONFIG.howlDuration;
     }, delay);
@@ -1104,18 +1140,29 @@
     imageA.src = encodeURI(WOLF_CONFIG.frames[0]);
     imageA.alt = "";
     imageA.draggable = false;
+    imageA.decoding = "async";
 
     const imageB = document.createElement("img");
     imageB.className = "map-wolf__sprite";
+    imageB.src = encodeURI(WOLF_CONFIG.frames[1]);
     imageB.alt = "";
     imageB.draggable = false;
+    imageB.decoding = "async";
 
-    element.append(imageA, imageB);
+    const imageHowl = document.createElement("img");
+    imageHowl.className = "map-wolf__sprite";
+    imageHowl.src = encodeURI(WOLF_CONFIG.howlFrame);
+    imageHowl.alt = "";
+    imageHowl.draggable = false;
+    imageHowl.decoding = "async";
+
+    // All three sources exist permanently before the wolf ever animates.
+    element.append(imageA, imageB, imageHowl);
     world.appendChild(element);
 
     const actor = {
       element,
-      images: [imageA, imageB],
+      images: [imageA, imageB, imageHowl],
       visibleLayer: 0,
       frameIndex: 0,
       x: start.x,
@@ -1149,7 +1196,11 @@
 
     for (const src of [...WOLF_CONFIG.frames, WOLF_CONFIG.howlFrame]) {
       const image = new Image();
+      image.decoding = "async";
       image.src = encodeURI(src);
+      if (typeof image.decode === "function") {
+        image.decode().catch(() => {});
+      }
     }
 
     wolfActors = [];
@@ -1183,12 +1234,8 @@
         if (now >= actor.howlEndAt) {
           actor.howling = false;
           actor.frameIndex = 0;
-          const incoming = 1 - actor.visibleLayer;
-          const outgoing = actor.visibleLayer;
-          actor.images[incoming].src = encodeURI(WOLF_CONFIG.frames[0]);
-          actor.images[incoming].classList.add("map-wolf__sprite--visible");
-          actor.images[outgoing].classList.remove("map-wolf__sprite--visible");
-          actor.visibleLayer = incoming;
+          // Return to already-loaded walk frame 1; no runtime src swap.
+          wolfShowStaticLayer(actor, 0);
           actor.nextFrameAt = now + WOLF_CONFIG.frameDuration;
           actor.pauseUntil = now + 250 + Math.random() * 550;
           actor.nextDecision = actor.pauseUntil;
