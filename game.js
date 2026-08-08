@@ -2232,7 +2232,10 @@
         top: 824.217px;
         width: 2827.409px;
         height: 4241.113px;
-        z-index: 7;
+
+        /* MUST be above #player (100) and #playerSprite (101).
+           This makes the character pass BEHIND the two clipped tower overlays. */
+        z-index: 110;
       }
 
       /* LARGE CHURCH TOWER: foreground occluder, NO collision. */
