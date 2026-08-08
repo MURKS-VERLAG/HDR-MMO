@@ -89,7 +89,7 @@
 
   const attackAudio = new Audio("assets/audio/PLAYER ATTACK.mp3");
   attackAudio.preload = "auto";
-  attackAudio.loop = true;
+  attackAudio.loop = false;
   attackAudio.volume = 1.0;
 
   const game = document.getElementById("game");
@@ -308,8 +308,14 @@
 
 
   function startAttackSound() {
+    // Hard restart from the beginning of the trimmed attack sound.
+    // This is called at the first attack frame of EVERY combo cycle.
     attackAudio.pause();
-    attackAudio.currentTime = 0;
+    try {
+      attackAudio.currentTime = 0;
+    } catch (_) {
+      // Ignore if metadata is not ready yet.
+    }
     attackAudio.play().catch(() => {});
   }
 
@@ -369,9 +375,12 @@
         // Full combo completed.
         if (attackHeld) {
           // Same orientation starts again immediately.
+          // IMPORTANT: restart the sound exactly with the first frame
+          // of every new combo cycle so sound and animation stay synchronized.
           attackSequence = chooseAttackSequence();
           attackStep = 0;
           attackTimer = 0;
+          startAttackSound();
           setSprite(attackSequence[0].sprite);
         } else {
           finishAttackState();
