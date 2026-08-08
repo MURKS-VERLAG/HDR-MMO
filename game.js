@@ -28,10 +28,10 @@
       x2: 3250,
       leaveY: -18
     }),
-    // Spawn / return lane on the lower central-left footpath of WINTERBACH.
+    // R10 FINAL: exact lower exit lane at the marked blue arrow / black box.
     winterbachSouth: Object.freeze({
-      x1: 3650,
-      x2: 5000,
+      x1: 4870,
+      x2: 6040,
       leavePadding: 18
     }),
     winterbachSpawn: Object.freeze({
@@ -40,7 +40,7 @@
     }),
     oberkirchReturnSpawn: Object.freeze({
       x: 2595,
-      y: 680
+      y: 760
     })
   });
 
@@ -263,6 +263,15 @@
       direction: "down",
       glow: "#ffffff",
       trigger: { x1: 8650, y1: 5350, x2: 10000, y2: 6667 }
+    },
+    {
+      id: "oberkirch-return",
+      mapId: "winterbach-ranglehen",
+      text: "OBERKIRCH",
+      x: 5485, y: 5460,
+      direction: "down",
+      glow: "#ffffff",
+      trigger: { x1: 4550, y1: 4850, x2: 6400, y2: 6006 }
     }
   ]);
 
@@ -392,18 +401,13 @@
   }
 
   function updateAreaSigns() {
-    if (MAP.id !== "oberkirch-zentrum") {
-      for (const sign of areaSignElements) {
-        sign.visible = false;
-        sign.element.classList.remove("area-sign--visible");
-      }
-      return;
-    }
-
     for (const sign of areaSignElements) {
-      const t = sign.config.trigger;
+      const config = sign.config;
+      const signMapId = config.mapId || "oberkirch-zentrum";
+      const t = config.trigger;
 
       const visible =
+        MAP.id === signMapId &&
         playerX >= t.x1 &&
         playerX <= t.x2 &&
         playerY >= t.y1 &&
@@ -1775,9 +1779,10 @@
   ]);
 
   const COVERED_BRIDGE_PATH = Object.freeze([
-    // Straight forced walk line from the red arrow in the supplied reference.
-    Object.freeze([3225, 1305]),
-    Object.freeze([6408, 1305])
+    // FINAL: only the short straight bridge corridor is forced.
+    // The road junctions inside the blue circles stay completely free.
+    Object.freeze([3500, 1305]),
+    Object.freeze([6020, 1305])
   ]);
 
   const BRIDGE_CONFIG = Object.freeze({
@@ -1786,23 +1791,22 @@
     engageDistance: 285,
     coveredFadeMs: 145,
 
-    // FINAL: Unsichtbarkeit beginnt EXAKT am roten Dach-/Brückenkasten.
-    // Die Zuführungs-/Snap-Zonen dürfen den Spieler NICHT unsichtbar machen.
+    // FINAL R9: left invisibility starts exactly at the red vertical line.
+    // The confirmed-perfect right boundary stays unchanged.
     coveredInterior: Object.freeze({
-      x1: 3770,
+      x1: 3650,
       y1: 800,
       x2: 5790,
       y2: 1470
     }),
 
-    // Thin approach guides around both bridge entrances. Touching one while
-    // moving captures the player and smoothly pulls the FOOT anchor onto the
-    // thick straight bridge line.
+    // FINAL R9: capture zones exist only immediately before the bridge.
+    // They no longer reach into either blue-circled road junction.
     coveredCaptureLeft: Object.freeze({
-      x1: 3000, y1: 940, x2: 3910, y2: 1710
+      x1: 3435, y1: 1080, x2: 3735, y2: 1535
     }),
     coveredCaptureRight: Object.freeze({
-      x1: 5690, y1: 940, x2: 6620, y2: 1710
+      x1: 5700, y1: 1080, x2: 6050, y2: 1535
     })
   });
 
@@ -2825,7 +2829,7 @@
       return true;
     }
 
-    // Symmetric return so Map 2 is not a one-way trap.
+    // R10: return only through the exact lower OBERKIRCH exit lane.
     if (
       playerInWinterbachSouthExitLane() &&
       movingDown &&
