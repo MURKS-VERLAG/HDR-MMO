@@ -340,6 +340,441 @@
     }
   }
 
+
+  // ------------------------------------------------------------------
+  // AMBIENT RABBITS
+  // Four habitat polygons follow the WHITE outlined regions in the
+  // supplied map reference. Each zone contains 1-2 freely hopping rabbits.
+  // ------------------------------------------------------------------
+  const RABBIT_FRAMES = Object.freeze([
+    "assets/animals/rabbits/RABBIT 1.webp",
+    "assets/animals/rabbits/RABBIT 2.webp",
+    "assets/animals/rabbits/RABBIT 3.webp",
+    "assets/animals/rabbits/RABBIT 4.webp"
+  ]);
+
+  const RABBIT_ZONES = Object.freeze([
+    {
+      id: "rabbit-northwest",
+      polygon: [
+        [0, 0],
+        [1775, 0],
+        [856, 1011],
+        [0, 624]
+      ],
+      exits: ["top", "left"],
+      count: 2
+    },
+    {
+      id: "rabbit-west",
+      polygon: [
+        [0, 2797],
+        [1031, 3140],
+        [0, 4588]
+      ],
+      exits: ["left"],
+      count: 1
+    },
+    {
+      id: "rabbit-northeast",
+      polygon: [
+        [9313, 0],
+        [10000, 0],
+        [10000, 1785],
+        [9731, 1854],
+        [8488, 693]
+      ],
+      exits: ["top", "right"],
+      count: 2
+    },
+    {
+      id: "rabbit-southeast",
+      polygon: [
+        [8913, 4257],
+        [10000, 4257],
+        [10000, 6249],
+        [8700, 5019]
+      ],
+      exits: ["right"],
+      count: 2
+    }
+  ]);
+
+  let rabbitActors = [];
+
+  function installRabbitStyles() {
+    if (document.getElementById("rabbitStyles")) return;
+
+    const style = document.createElement("style");
+    style.id = "rabbitStyles";
+    style.textContent = `
+      .map-rabbit {
+        position: absolute;
+        z-index: 4;
+        width: 330px;
+        height: 260px;
+        pointer-events: none;
+        user-select: none;
+        transform: translate(-50%, -82%);
+        will-change: left, top, transform, opacity;
+        opacity: 1;
+        transition: opacity 420ms ease;
+      }
+
+      .map-rabbit--away {
+        opacity: 0;
+      }
+
+      .map-rabbit__sprite {
+        position: absolute;
+        left: 50%;
+        bottom: 0;
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+        object-position: 50% 100%;
+        transform: translateX(-50%) scaleX(var(--rabbit-facing, 1));
+        transform-origin: 50% 100%;
+        opacity: 0;
+        transition: opacity 260ms ease;
+        filter: drop-shadow(0 8px 5px rgba(0,0,0,.18));
+      }
+
+      .map-rabbit__sprite--visible {
+        opacity: 1;
+      }
+
+      .map-rabbit__bob {
+        position: absolute;
+        inset: 0;
+        animation: rabbitHopBob 620ms ease-in-out infinite;
+        animation-play-state: paused;
+      }
+
+      .map-rabbit--moving .map-rabbit__bob {
+        animation-play-state: running;
+      }
+
+      @keyframes rabbitHopBob {
+        0%, 100% { transform: translateY(0); }
+        45%      { transform: translateY(-22px); }
+        70%      { transform: translateY(-6px); }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .map-rabbit,
+        .map-rabbit__sprite {
+          transition-duration: 1ms !important;
+        }
+
+        .map-rabbit__bob {
+          animation: none !important;
+        }
+      }
+    `;
+
+    document.head.appendChild(style);
+  }
+
+  function rabbitPointInPolygon(x, y, polygon) {
+    let inside = false;
+
+    for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+      const xi = polygon[i][0];
+      const yi = polygon[i][1];
+      const xj = polygon[j][0];
+      const yj = polygon[j][1];
+
+      const intersect =
+        ((yi > y) !== (yj > y)) &&
+        (x < ((xj - xi) * (y - yi)) / ((yj - yi) || 0.000001) + xi);
+
+      if (intersect) inside = !inside;
+    }
+
+    return inside;
+  }
+
+  function rabbitRandomPoint(zone, inset = 85) {
+    const xs = zone.polygon.map((p) => p[0]);
+    const ys = zone.polygon.map((p) => p[1]);
+
+    const minX = Math.min(...xs) + inset;
+    const maxX = Math.max(...xs) - inset;
+    const minY = Math.min(...ys) + inset;
+    const maxY = Math.max(...ys) - inset;
+
+    for (let attempt = 0; attempt < 120; attempt += 1) {
+      const x = minX + Math.random() * Math.max(1, maxX - minX);
+      const y = minY + Math.random() * Math.max(1, maxY - minY);
+
+      if (rabbitPointInPolygon(x, y, zone.polygon)) {
+        return { x, y };
+      }
+    }
+
+    const p = zone.polygon[Math.floor(Math.random() * zone.polygon.length)];
+    return { x: p[0], y: p[1] };
+  }
+
+  function rabbitExitPoint(zone, side) {
+    const interior = rabbitRandomPoint(zone, 40);
+    const margin = 260;
+
+    if (side === "left") {
+      return { x: -margin, y: interior.y };
+    }
+
+    if (side === "right") {
+      return { x: MAP.width + margin, y: interior.y };
+    }
+
+    if (side === "top") {
+      return { x: interior.x, y: -margin };
+    }
+
+    return { x: interior.x, y: MAP.height + margin };
+  }
+
+  function rabbitEntryPoint(zone, side) {
+    return rabbitExitPoint(zone, side);
+  }
+
+  function rabbitPickFrame(actor, forceDifferent = true) {
+    let next = Math.floor(Math.random() * RABBIT_FRAMES.length);
+
+    if (forceDifferent && RABBIT_FRAMES.length > 1) {
+      while (next === actor.frameIndex) {
+        next = Math.floor(Math.random() * RABBIT_FRAMES.length);
+      }
+    }
+
+    actor.frameIndex = next;
+    const incoming = 1 - actor.visibleLayer;
+
+    actor.images[incoming].src = encodeURI(RABBIT_FRAMES[next]);
+    actor.images[incoming].classList.add("map-rabbit__sprite--visible");
+    actor.images[actor.visibleLayer].classList.remove("map-rabbit__sprite--visible");
+    actor.visibleLayer = incoming;
+
+    actor.nextFrameChange =
+      performance.now() + 520 + Math.random() * 1100;
+  }
+
+  function rabbitChooseInteriorTarget(actor, now) {
+    const target = rabbitRandomPoint(actor.zone, 120);
+
+    actor.targetX = target.x;
+    actor.targetY = target.y;
+    actor.speed = 150 + Math.random() * 150;
+    actor.moving = true;
+    actor.element.classList.add("map-rabbit--moving");
+    actor.pauseUntil = 0;
+
+    const dx = actor.targetX - actor.x;
+    if (Math.abs(dx) > 25) {
+      actor.facing = dx < 0 ? -1 : 1;
+      actor.element.style.setProperty("--rabbit-facing", actor.facing);
+    }
+
+    actor.nextDecision =
+      now + 1500 + Math.random() * 3500;
+  }
+
+  function rabbitStartExit(actor, now) {
+    if (!actor.zone.exits.length) {
+      rabbitChooseInteriorTarget(actor, now);
+      return;
+    }
+
+    actor.exitSide =
+      actor.zone.exits[Math.floor(Math.random() * actor.zone.exits.length)];
+
+    const target = rabbitExitPoint(actor.zone, actor.exitSide);
+    actor.targetX = target.x;
+    actor.targetY = target.y;
+    actor.speed = 190 + Math.random() * 130;
+    actor.moving = true;
+    actor.exiting = true;
+    actor.element.classList.add("map-rabbit--moving");
+
+    const dx = actor.targetX - actor.x;
+    if (Math.abs(dx) > 25) {
+      actor.facing = dx < 0 ? -1 : 1;
+      actor.element.style.setProperty("--rabbit-facing", actor.facing);
+    }
+  }
+
+  function rabbitGoAway(actor, now) {
+    actor.away = true;
+    actor.exiting = false;
+    actor.moving = false;
+    actor.element.classList.remove("map-rabbit--moving");
+    actor.element.classList.add("map-rabbit--away");
+    actor.returnAt = now + 3500 + Math.random() * 8500;
+  }
+
+  function rabbitReturn(actor, now) {
+    const side =
+      actor.zone.exits[Math.floor(Math.random() * actor.zone.exits.length)];
+
+    const start = rabbitEntryPoint(actor.zone, side);
+    const target = rabbitRandomPoint(actor.zone, 180);
+
+    actor.x = start.x;
+    actor.y = start.y;
+    actor.targetX = target.x;
+    actor.targetY = target.y;
+    actor.speed = 190 + Math.random() * 120;
+    actor.away = false;
+    actor.entering = true;
+    actor.moving = true;
+    actor.element.style.left = `${actor.x}px`;
+    actor.element.style.top = `${actor.y}px`;
+
+    const dx = actor.targetX - actor.x;
+    actor.facing = dx < 0 ? -1 : 1;
+    actor.element.style.setProperty("--rabbit-facing", actor.facing);
+
+    rabbitPickFrame(actor, false);
+    actor.element.classList.remove("map-rabbit--away");
+    actor.element.classList.add("map-rabbit--moving");
+    actor.nextDecision = now + 2000 + Math.random() * 3000;
+  }
+
+  function createRabbitActor(zone, index) {
+    const start = rabbitRandomPoint(zone, 150);
+
+    const element = document.createElement("div");
+    element.className = "map-rabbit";
+    element.dataset.rabbitZone = zone.id;
+    element.dataset.rabbitIndex = String(index);
+
+    const bob = document.createElement("div");
+    bob.className = "map-rabbit__bob";
+
+    const imageA = document.createElement("img");
+    imageA.className = "map-rabbit__sprite map-rabbit__sprite--visible";
+    imageA.alt = "";
+    imageA.draggable = false;
+
+    const imageB = document.createElement("img");
+    imageB.className = "map-rabbit__sprite";
+    imageB.alt = "";
+    imageB.draggable = false;
+
+    bob.append(imageA, imageB);
+    element.appendChild(bob);
+    world.appendChild(element);
+
+    const firstFrame = Math.floor(Math.random() * RABBIT_FRAMES.length);
+    imageA.src = encodeURI(RABBIT_FRAMES[firstFrame]);
+
+    const actor = {
+      zone,
+      element,
+      images: [imageA, imageB],
+      visibleLayer: 0,
+      frameIndex: firstFrame,
+
+      x: start.x,
+      y: start.y,
+      targetX: start.x,
+      targetY: start.y,
+      speed: 170,
+      facing: Math.random() < 0.5 ? -1 : 1,
+
+      moving: false,
+      away: false,
+      exiting: false,
+      entering: false,
+
+      pauseUntil: performance.now() + 500 + Math.random() * 2000,
+      nextDecision: performance.now() + 1000 + Math.random() * 3000,
+      nextFrameChange: performance.now() + 350 + Math.random() * 1000,
+      returnAt: 0
+    };
+
+    element.style.left = `${actor.x}px`;
+    element.style.top = `${actor.y}px`;
+    element.style.setProperty("--rabbit-facing", actor.facing);
+
+    return actor;
+  }
+
+  function createRabbits() {
+    installRabbitStyles();
+
+    for (const src of RABBIT_FRAMES) {
+      const preload = new Image();
+      preload.src = src;
+    }
+
+    rabbitActors = [];
+
+    for (const zone of RABBIT_ZONES) {
+      for (let i = 0; i < zone.count; i += 1) {
+        rabbitActors.push(createRabbitActor(zone, i));
+      }
+    }
+  }
+
+  function updateRabbits(deltaSeconds, now) {
+    for (const actor of rabbitActors) {
+      if (actor.away) {
+        if (now >= actor.returnAt) {
+          rabbitReturn(actor, now);
+        }
+        continue;
+      }
+
+      if (now >= actor.nextFrameChange) {
+        rabbitPickFrame(actor);
+      }
+
+      if (actor.moving) {
+        const dx = actor.targetX - actor.x;
+        const dy = actor.targetY - actor.y;
+        const distance = Math.hypot(dx, dy);
+
+        if (distance <= 12) {
+          actor.x = actor.targetX;
+          actor.y = actor.targetY;
+          actor.moving = false;
+          actor.element.classList.remove("map-rabbit--moving");
+
+          if (actor.exiting) {
+            rabbitGoAway(actor, now);
+            continue;
+          }
+
+          actor.entering = false;
+          actor.pauseUntil = now + 500 + Math.random() * 2400;
+          actor.nextDecision = actor.pauseUntil;
+        } else {
+          const step = Math.min(distance, actor.speed * deltaSeconds);
+          actor.x += (dx / distance) * step;
+          actor.y += (dy / distance) * step;
+        }
+
+        actor.element.style.left = `${actor.x}px`;
+        actor.element.style.top = `${actor.y}px`;
+        continue;
+      }
+
+      if (now < actor.pauseUntil || now < actor.nextDecision) {
+        continue;
+      }
+
+      // Occasionally leave the map completely, then return later.
+      if (actor.zone.exits.length && Math.random() < 0.16) {
+        rabbitStartExit(actor, now);
+      } else {
+        rabbitChooseInteriorTarget(actor, now);
+      }
+    }
+  }
+
   const game = document.getElementById("game");
   const world = document.getElementById("world");
   const mapImage = document.getElementById("map");
@@ -813,6 +1248,7 @@
     updateZoom(now);
     updatePlayer(deltaSeconds);
     updateAreaSigns();
+    updateRabbits(deltaSeconds, now);
     renderPlayer();
     renderWorld();
 
@@ -938,6 +1374,7 @@
     setIdleSprite();
 
     createAreaSigns();
+    createRabbits();
 
     clampPlayer();
     updateAreaSigns();
