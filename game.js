@@ -1693,7 +1693,8 @@
     ]),
     // Upper river, south of the covered bridge down to the central plaza.
     Object.freeze([
-      [4097, 1450], [4170, 2107], [4069, 2645], [5109, 2645], [5274, 1450]
+      [3865, 1450], [3865, 2675], [5115, 2675], [5115, 2645],
+      [5740, 2645], [6165, 2250], [6165, 1540], [5700, 1450]
     ]),
     // Lower river, central plaza down to the stone bridge.
     Object.freeze([
@@ -1722,14 +1723,14 @@
   ]);
 
   const COVERED_BRIDGE_PATH = Object.freeze([
-    Object.freeze([3600, 1130]),
-    Object.freeze([5700, 1130])
+    Object.freeze([3480, 1130]),
+    Object.freeze([5850, 1130])
   ]);
 
   const BRIDGE_CONFIG = Object.freeze({
     stoneCorridor: 150,
-    coveredCorridor: 150,
-    engageDistance: 260,
+    coveredCorridor: 62,
+    engageDistance: 285,
     coveredFadeMs: 190,
     coveredInterior: Object.freeze({ x1: 3680, y1: 850, x2: 5660, y2: 1450 })
   });
@@ -1890,6 +1891,33 @@
   function tryEngageBridge(horizontalDirection) {
     if (!horizontalDirection) return false;
 
+    // COVERED BRIDGE: hard entry capture at the marked black entrance line.
+    // Once touched while LEFT/RIGHT is held, movement is forced onto the
+    // perfectly straight bridge path until the opposite end is reached.
+    const covered = bridgeDefinition("covered");
+    const coveredMetrics = getPathMetrics(covered.path);
+    const coveredClosest = closestPointOnBridgePath(playerX, playerY, covered.path);
+    const atCoveredLeftEntry =
+      playerX >= 3300 && playerX <= 3725 &&
+      playerY >= 900 && playerY <= 1370 &&
+      horizontalDirection > 0;
+    const atCoveredRightEntry =
+      playerX >= 5600 && playerX <= 6030 &&
+      playerY >= 900 && playerY <= 1370 &&
+      horizontalDirection < 0;
+
+    if (atCoveredLeftEntry || atCoveredRightEntry) {
+      activeBridge = {
+        id: "covered",
+        path: covered.path,
+        distance: atCoveredLeftEntry ? 0 : coveredMetrics.total
+      };
+      const entry = pointAtBridgeDistance(activeBridge.path, activeBridge.distance);
+      playerX = entry.x;
+      playerY = entry.y;
+      return true;
+    }
+
     let best = null;
 
     for (const id of ["stone", "covered"]) {
@@ -2046,6 +2074,15 @@
     // Above it are roof/tower pixels that must not become invisible walls.
     groundedFromY: 0.485,
 
+    // Marked ORANGE clearance beside the church: explicitly walkable.
+    // This removes the last snag without changing any other church collision.
+    orangePassage: Object.freeze([
+      [0.640, 0.420],
+      [0.825, 0.420],
+      [0.825, 0.505],
+      [0.640, 0.505]
+    ]),
+
     // Coordinates are normalized to the original church PNG (0..1).
     // Large central clock/spire tower.
     walkBehindLargeTower: Object.freeze([
@@ -2184,6 +2221,13 @@
 
     const localX01 = (x - c.left) / c.width;
     const localY01 = (y - c.top) / c.height;
+
+    // Exact marked ORANGE passage is always walkable.
+    if (pointInNormalizedPolygon(
+      localX01,
+      localY01,
+      CHURCH_COLLISION.orangePassage
+    )) return false;
 
     // Roofs / spires are not floor obstacles.
     if (localY01 < CHURCH_COLLISION.groundedFromY) return false;
