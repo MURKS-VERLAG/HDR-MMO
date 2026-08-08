@@ -36,12 +36,26 @@
       leavePadding: 18
     }),
     winterbachSpawn: Object.freeze({
-      // Same exact R10 lower path/arrow used to return from Map 2 to Map 1.
+      // Existing original north exit pair remains untouched.
       x: 5485,
       y: 5925
     }),
+
+    // R18 NEW GREEN ARROW on MAP 1.
+    oberkirchGreenNorth: Object.freeze({
+      x1: 5750,
+      x2: 6750,
+      leaveY: -18
+    }),
+
+    // R17 RED ARROW on MAP 2 — spawn when entering from the new green arrow.
+    winterbachRedSpawn: Object.freeze({
+      x: 8175,
+      y: 5925
+    }),
+
     oberkirchReturnSpawn: Object.freeze({
-      // R18 YELLOW ARROW — exact return point on Map 1.
+      // Existing R18 YELLOW ARROW return point remains untouched.
       x: 6225,
       y: 760
     })
@@ -909,8 +923,9 @@
     howlSound: "assets/audio/wolves/WOLF HOWL.mp3",
     count: 5,
     // R17: one tick larger.
-    width: 685,
-    height: 552,
+    // R18: another very small size increase.
+    width: 735,
+    height: 592,
     speedMin: 150,
     speedMax: 250,
     frameDuration: 430,
@@ -965,13 +980,18 @@
         transform: scaleX(var(--wolf-facing, 1));
         transform-origin: 50% 100%;
         opacity: 0;
-        /* R17: short crossfade only. All wolf sources stay permanently decoded. */
-        transition: opacity 95ms linear;
+        visibility: hidden;
+        /* R18 HARD NO-FLICKER:
+           no crossfade. Different transparent silhouettes caused a luminance pulse. */
+        transition: none !important;
         filter: drop-shadow(0 9px 5px rgba(0,0,0,.24));
+        backface-visibility: hidden;
+        -webkit-backface-visibility: hidden;
       }
 
       .map-wolf__sprite--visible {
         opacity: 1;
+        visibility: visible;
       }
     `;
     document.head.appendChild(style);
@@ -1003,12 +1023,17 @@
 
   function wolfShowStaticLayer(actor, layerIndex) {
     if (!actor || actor.visibleLayer === layerIndex) return;
+    if (!actor.ready) return;
 
-    const outgoing = actor.visibleLayer;
-    actor.images[layerIndex].classList.add("map-wolf__sprite--visible");
-    if (actor.images[outgoing]) {
-      actor.images[outgoing].classList.remove("map-wolf__sprite--visible");
+    // Remove every visible class first, then show exactly ONE already-decoded layer.
+    // No overlap, no opacity interpolation, no brightness pulse.
+    for (let i = 0; i < actor.images.length; i += 1) {
+      actor.images[i].classList.toggle(
+        "map-wolf__sprite--visible",
+        i === layerIndex
+      );
     }
+
     actor.visibleLayer = layerIndex;
   }
 
@@ -1098,7 +1123,7 @@
 
   function wolfSetHowl(actor, now, delay) {
     window.setTimeout(() => {
-      if (!actor || actor.away || MAP.id !== WOLF_CONFIG.mapId) return;
+      if (!actor || !actor.ready || actor.away || MAP.id !== WOLF_CONFIG.mapId) return;
 
       actor.howling = true;
       actor.moving = false;
@@ -1180,13 +1205,48 @@
       nextDecision: performance.now() + 900 + Math.random() * 2500,
       nextFrameAt: performance.now() + WOLF_CONFIG.frameDuration,
       howling: false,
-      howlEndAt: 0
+      howlEndAt: 0,
+      ready: false
     };
 
     element.style.left = `${actor.x}px`;
     element.style.top = `${actor.y}px`;
     element.style.setProperty("--wolf-facing", actor.facing);
     element.style.display = MAP.id === WOLF_CONFIG.mapId ? "" : "none";
+
+    const waitForWolfImage = (img) => {
+      if (img.complete && img.naturalWidth > 0) {
+        if (typeof img.decode === "function") {
+          return img.decode().catch(() => {});
+        }
+        return Promise.resolve();
+      }
+
+      return new Promise((resolve) => {
+        const done = () => resolve();
+        img.addEventListener("load", done, { once: true });
+        img.addEventListener("error", done, { once: true });
+      }).then(() => {
+        if (typeof img.decode === "function") {
+          return img.decode().catch(() => {});
+        }
+      });
+    };
+
+    Promise.all(actor.images.map(waitForWolfImage)).then(() => {
+      actor.ready = true;
+
+      // Establish one deterministic first frame after every source is decoded.
+      for (let i = 0; i < actor.images.length; i += 1) {
+        actor.images[i].classList.toggle(
+          "map-wolf__sprite--visible",
+          i === 0
+        );
+      }
+      actor.visibleLayer = 0;
+      actor.frameIndex = 0;
+      actor.nextFrameAt = performance.now() + WOLF_CONFIG.frameDuration;
+    });
 
     return actor;
   }
@@ -1225,6 +1285,8 @@
     }
 
     for (const actor of wolfActors) {
+      if (!actor.ready) continue;
+
       if (actor.away) {
         if (now >= actor.returnAt) wolfReturn(actor, now);
         continue;
@@ -2907,8 +2969,16 @@
 
     const inOberkirchNorthExit =
       MAP.id === "oberkirch-zentrum" &&
-      x >= MAP_EXIT_CONFIG.oberkirchNorth.x1 &&
-      x <= MAP_EXIT_CONFIG.oberkirchNorth.x2;
+      (
+        (
+          x >= MAP_EXIT_CONFIG.oberkirchNorth.x1 &&
+          x <= MAP_EXIT_CONFIG.oberkirchNorth.x2
+        ) ||
+        (
+          x >= MAP_EXIT_CONFIG.oberkirchGreenNorth.x1 &&
+          x <= MAP_EXIT_CONFIG.oberkirchGreenNorth.x2
+        )
+      );
 
     const inWinterbachSouthExit =
       MAP.id === "winterbach-ranglehen" &&
@@ -2916,7 +2986,12 @@
       x <= MAP_EXIT_CONFIG.winterbachSouth.x2;
 
     if (y < minY) {
-      if (!inOberkirchNorthExit || y < MAP_EXIT_CONFIG.oberkirchNorth.leaveY - 80) {
+      const northLeaveFloor = Math.min(
+        MAP_EXIT_CONFIG.oberkirchNorth.leaveY,
+        MAP_EXIT_CONFIG.oberkirchGreenNorth.leaveY
+      ) - 80;
+
+      if (!inOberkirchNorthExit || y < northLeaveFloor) {
         return false;
       }
     }
@@ -4001,6 +4076,14 @@
     );
   }
 
+  function playerInOberkirchGreenNorthExitLane() {
+    return (
+      MAP.id === "oberkirch-zentrum" &&
+      playerX >= MAP_EXIT_CONFIG.oberkirchGreenNorth.x1 &&
+      playerX <= MAP_EXIT_CONFIG.oberkirchGreenNorth.x2
+    );
+  }
+
   function playerInWinterbachSouthExitLane() {
     return (
       MAP.id === "winterbach-ranglehen" &&
@@ -4015,7 +4098,22 @@
     const movingUp = keys.has("KeyW") || keys.has("ArrowUp");
     const movingDown = keys.has("KeyS") || keys.has("ArrowDown");
 
-    // The whole character, including the FOOT anchor, has left the top edge.
+    // R18 GREEN ARROW: MAP 1 -> MAP 2 RED ARROW.
+    // Same existing transition / iris system, only a second exit pair.
+    if (
+      playerInOberkirchGreenNorthExitLane() &&
+      movingUp &&
+      playerY <= MAP_EXIT_CONFIG.oberkirchGreenNorth.leaveY
+    ) {
+      switchMap(
+        MAPS.winterbach,
+        MAP_EXIT_CONFIG.winterbachRedSpawn,
+        true
+      );
+      return true;
+    }
+
+    // Existing original MAP 1 north exit stays untouched.
     if (
       playerInOberkirchNorthExitLane() &&
       movingUp &&
@@ -4134,7 +4232,10 @@
     playerX = Math.max(halfW, Math.min(MAP.width - halfW, playerX));
 
     const northExitOpen =
-      playerInOberkirchNorthExitLane() &&
+      (
+        playerInOberkirchNorthExitLane() ||
+        playerInOberkirchGreenNorthExitLane()
+      ) &&
       (keys.has("KeyW") || keys.has("ArrowUp"));
 
     const southExitOpen =
@@ -4143,7 +4244,10 @@
 
     if (northExitOpen) {
       playerY = Math.max(
-        MAP_EXIT_CONFIG.oberkirchNorth.leaveY - 80,
+        Math.min(
+          MAP_EXIT_CONFIG.oberkirchNorth.leaveY,
+          MAP_EXIT_CONFIG.oberkirchGreenNorth.leaveY
+        ) - 80,
         Math.min(MAP.height - bottomClearance, playerY)
       );
       return;
