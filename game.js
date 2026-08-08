@@ -1368,8 +1368,13 @@
       "assets/audio/boars/WILDSCHWEIN 3.mp3"
     ]),
 
-    width: 520,
-    height: 410,
+    // R20: deutlich größer als R19 (> 1/3; knapp Richtung doppelte Wirkung).
+    width: 820,
+    height: 647,
+
+    // R20: sichtbarer Körper darf die roten Zaunlinien beim normalen
+    // Herumlaufen nicht mehr überschneiden.
+    fenceClearance: 330,
 
     // Small bursts only; then the animal stops again.
     speedMin: 120,
@@ -1399,11 +1404,12 @@
         id: "boar-field-middle",
         count: 2,
         exits: ["right"],
+        // R20: exact wheat-field fence boundary from the red markup.
         polygon: [
-          [9000, 3140],
-          [10000, 2810],
-          [10000, 4380],
-          [9320, 4460]
+          [9015, 3160],
+          [10000, 2825],
+          [10000, 4375],
+          [9335, 4445]
         ]
       },
       {
@@ -1514,21 +1520,81 @@
     return { minX, minY, maxX, maxY };
   }
 
+  function boarPointToSegmentDistance(px, py, ax, ay, bx, by) {
+    const abx = bx - ax;
+    const aby = by - ay;
+    const apx = px - ax;
+    const apy = py - ay;
+    const denom = abx * abx + aby * aby;
+
+    if (denom <= 0.000001) {
+      return Math.hypot(px - ax, py - ay);
+    }
+
+    const t = Math.max(
+      0,
+      Math.min(1, (apx * abx + apy * aby) / denom)
+    );
+
+    const qx = ax + abx * t;
+    const qy = ay + aby * t;
+    return Math.hypot(px - qx, py - qy);
+  }
+
+  function boarFenceClearanceAt(zone, x, y) {
+    let clearance = Infinity;
+    const polygon = zone.polygon;
+
+    for (let i = 0; i < polygon.length; i += 1) {
+      const a = polygon[i];
+      const b = polygon[(i + 1) % polygon.length];
+      clearance = Math.min(
+        clearance,
+        boarPointToSegmentDistance(
+          x, y,
+          a[0], a[1],
+          b[0], b[1]
+        )
+      );
+    }
+
+    return clearance;
+  }
+
   function boarRandomPoint(zone, inset = 80) {
     const b = boarBounds(zone);
+    const requiredClearance = Math.max(
+      inset,
+      BOAR_CONFIG.fenceClearance
+    );
 
-    for (let i = 0; i < 160; i += 1) {
-      const x =
-        b.minX + inset +
-        Math.random() * Math.max(10, b.maxX - b.minX - inset * 2);
-      const y =
-        b.minY + inset +
-        Math.random() * Math.max(10, b.maxY - b.minY - inset * 2);
+    let best = null;
+    let bestClearance = -Infinity;
 
-      if (boarPointInPolygon(x, y, zone.polygon)) {
+    // R20: sample inside the ACTUAL red polygon and additionally keep
+    // the foot anchor far enough from EVERY fence edge. This is what
+    // prevents the much larger boar artwork from visibly crossing the fence.
+    for (let i = 0; i < 900; i += 1) {
+      const x = b.minX + Math.random() * (b.maxX - b.minX);
+      const y = b.minY + Math.random() * (b.maxY - b.minY);
+
+      if (!boarPointInPolygon(x, y, zone.polygon)) continue;
+
+      const clearance = boarFenceClearanceAt(zone, x, y);
+
+      if (clearance > bestClearance) {
+        bestClearance = clearance;
+        best = { x, y };
+      }
+
+      if (clearance >= requiredClearance) {
         return { x, y };
       }
     }
+
+    // Extremely narrow fallback: use the safest sampled point rather than
+    // ever falling back outside / directly onto a fence line.
+    if (best) return best;
 
     return {
       x: (b.minX + b.maxX) / 2,
@@ -3948,6 +4014,214 @@
   }
 
 
+
+  // ------------------------------------------------------------------
+  // R20 MAP 2 — OBSTHOF / HAUS
+  // Position and scale are mapped directly from the supplied R20 composite.
+  // Rabbits ignore this collision entirely; only the PLAYER foot anchor uses it.
+  // ------------------------------------------------------------------
+  const WINTERBACH_OBSTHOF = Object.freeze({
+    id: "winterbach-obsthof",
+    src: "assets/buildings/WINTERBACH OBSTHOF.png",
+
+    // Exact full transparent PNG placement reconstructed from R20.
+    // Visible painted content lands at the exact supplied lower-left position.
+    left: 155,
+    top: 2548,
+    width: 2190,
+    height: 3285,
+
+    alphaThreshold: 28,
+
+    // Upper tree / roofs are visual only; grounded visible pixels below this
+    // line participate in player collision.
+    groundedFromY: 0.345,
+
+    // The very front / foot-height foreground may be crossed again.
+    // While crossing it, the player is drawn BEHIND the asset.
+    walkBehindFront: Object.freeze([
+      [0.00, 0.535],
+      [1.00, 0.535],
+      [1.00, 0.615],
+      [0.00, 0.615]
+    ])
+  });
+
+  let winterbachObsthofAlphaMask = null;
+  let winterbachObsthofElement = null;
+
+  function prepareWinterbachObsthofAlphaMask(image) {
+    if (!image || !image.naturalWidth || !image.naturalHeight) return;
+
+    try {
+      const canvas = document.createElement("canvas");
+      canvas.width = image.naturalWidth;
+      canvas.height = image.naturalHeight;
+
+      const ctx = canvas.getContext("2d", { willReadFrequently: true });
+      if (!ctx) return;
+
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(image, 0, 0);
+
+      const pixels = ctx.getImageData(
+        0, 0, canvas.width, canvas.height
+      ).data;
+
+      const alpha = new Uint8Array(canvas.width * canvas.height);
+
+      for (let src = 3, dst = 0; src < pixels.length; src += 4, dst += 1) {
+        alpha[dst] = pixels[src];
+      }
+
+      winterbachObsthofAlphaMask = {
+        width: canvas.width,
+        height: canvas.height,
+        alpha
+      };
+    } catch (error) {
+      winterbachObsthofAlphaMask = null;
+      console.warn("Winterbach Obsthof alpha mask unavailable:", error);
+    }
+  }
+
+  function winterbachObsthofLocalPoint(x, y) {
+    const c = WINTERBACH_OBSTHOF;
+    return {
+      localX01: (x - c.left) / c.width,
+      localY01: (y - c.top) / c.height
+    };
+  }
+
+  function playerBehindWinterbachObsthofFront() {
+    if (MAP.id !== "winterbach-ranglehen") return false;
+
+    const { localX01, localY01 } =
+      winterbachObsthofLocalPoint(playerX, playerY);
+
+    if (
+      localX01 < 0 || localX01 > 1 ||
+      localY01 < 0 || localY01 > 1
+    ) {
+      return false;
+    }
+
+    return pointInNormalizedPolygon(
+      localX01,
+      localY01,
+      WINTERBACH_OBSTHOF.walkBehindFront
+    );
+  }
+
+  function isWinterbachObsthofBlockedFootPoint(x, y) {
+    if (MAP.id !== "winterbach-ranglehen") return false;
+
+    const c = WINTERBACH_OBSTHOF;
+
+    if (
+      x < c.left ||
+      x > c.left + c.width ||
+      y < c.top ||
+      y > c.top + c.height
+    ) {
+      return false;
+    }
+
+    const { localX01, localY01 } =
+      winterbachObsthofLocalPoint(x, y);
+
+    // Roof / tree canopy / decorative upper pixels never become invisible walls.
+    if (localY01 < c.groundedFromY) return false;
+
+    // Requested front strip at foot height stays traversable.
+    if (pointInNormalizedPolygon(
+      localX01,
+      localY01,
+      c.walkBehindFront
+    )) {
+      return false;
+    }
+
+    if (!winterbachObsthofAlphaMask) return false;
+
+    const mask = winterbachObsthofAlphaMask;
+    const px = Math.max(
+      0,
+      Math.min(
+        mask.width - 1,
+        Math.round(localX01 * (mask.width - 1))
+      )
+    );
+    const py = Math.max(
+      0,
+      Math.min(
+        mask.height - 1,
+        Math.round(localY01 * (mask.height - 1))
+      )
+    );
+
+    // Exact PNG silhouette collision: transparent asset space is walkable.
+    return mask.alpha[py * mask.width + px] >= c.alphaThreshold;
+  }
+
+  function installWinterbachObsthofStyles() {
+    if (document.getElementById("winterbachObsthofStyles")) return;
+
+    const c = WINTERBACH_OBSTHOF;
+    const style = document.createElement("style");
+    style.id = "winterbachObsthofStyles";
+    style.textContent = `
+      .winterbach-building--obsthof {
+        position: absolute;
+        left: ${c.left}px;
+        top: ${c.top}px;
+        width: ${c.width}px;
+        height: ${c.height}px;
+        z-index: 6;
+        display: block;
+        object-fit: fill;
+        max-width: none;
+        max-height: none;
+        pointer-events: none;
+        user-select: none;
+        -webkit-user-drag: none;
+      }
+    `;
+
+    document.head.appendChild(style);
+  }
+
+  function createWinterbachObsthof() {
+    installWinterbachObsthofStyles();
+
+    const image = document.createElement("img");
+    image.id = WINTERBACH_OBSTHOF.id;
+    image.className = "winterbach-building winterbach-building--obsthof";
+    image.src = encodeURI(WINTERBACH_OBSTHOF.src);
+    image.alt = "";
+    image.draggable = false;
+    image.style.display =
+      MAP.id === "winterbach-ranglehen" ? "" : "none";
+
+    image.addEventListener("load", () => {
+      prepareWinterbachObsthofAlphaMask(image);
+    }, { once: true });
+
+    world.appendChild(image);
+    winterbachObsthofElement = image;
+
+    if (image.complete && image.naturalWidth > 0) {
+      prepareWinterbachObsthofAlphaMask(image);
+    }
+  }
+
+  function setWinterbachWorldVisibility(visible) {
+    for (const element of world.querySelectorAll(".winterbach-building")) {
+      element.style.display = visible ? "" : "none";
+    }
+  }
+
+
   // The church collision is read directly from the PNG alpha channel.
   // Transparent pixels are always walkable. Only the lower, physically
   // grounded part of the visible church can block the player's FOOT anchor.
@@ -4042,6 +4316,14 @@
   // HARD DEPTH SWITCH FOR THE TWO WALK-BEHIND TOWERS.
   function updateChurchPlayerDepth() {
     if (!playerEl) return;
+
+    // R20 MAP 2: only the front foot-height strip of the Obsthof is
+    // walk-behind. All existing Oberkirch depth rules below stay untouched.
+    if (MAP.id === "winterbach-ranglehen") {
+      playerEl.style.zIndex =
+        playerBehindWinterbachObsthofFront() ? "1" : "100";
+      return;
+    }
 
     if (MAP.id !== "oberkirch-zentrum") {
       playerEl.style.zIndex = "100";
@@ -4296,6 +4578,13 @@
   }
 
   function isBuildingBlockedFootPoint(x, y) {
+    // R20 MAP 2 Obsthof: PLAYER-only precise PNG collision.
+    // Rabbits/animals do not call canMoveFootTo(), therefore they keep
+    // moving through this asset exactly as requested.
+    if (MAP.id === "winterbach-ranglehen") {
+      return isWinterbachObsthofBlockedFootPoint(x, y);
+    }
+
     if (MAP.id !== "oberkirch-zentrum") return false;
 
     // Precise PNG-alpha collision for the church.
@@ -4529,6 +4818,7 @@
     activeBridge = null;
 
     setOberkirchWorldVisibility(MAP.id === "oberkirch-zentrum");
+    setWinterbachWorldVisibility(MAP.id === "winterbach-ranglehen");
 
     // Sync map-specific animals while the transition overlay is still covering the map.
     updateRabbits(0, performance.now());
@@ -5307,6 +5597,7 @@
     createMoleSystem();
     createOberkirchBuildings();
     createR11Buildings();
+    createWinterbachObsthof();
     createTrunkenbold();
 
     clampPlayer();
