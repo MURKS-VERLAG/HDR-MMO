@@ -200,7 +200,7 @@
     {
       id: "tiergarten-haslach",
       text: "TIERGARTEN HASLACH",
-      x: 945, y: 5980,
+      x: 1300, y: 5980,
       direction: "left",
       glow: "#ffffff",
       trigger: { x1: 0, y1: 5250, x2: 1750, y2: 6667 }
@@ -1692,9 +1692,12 @@
       [3896, 0], [4115, 821], [5164, 839], [5146, 565], [4982, 383], [4909, 0]
     ]),
     // Upper river, south of the covered bridge down to the central plaza.
+    // Precisely follows the marked pink river banks from the supplied reference:
+    // the player's FOOT anchor may not cross these banks; the covered bridge
+    // corridor remains the only legal exception.
     Object.freeze([
-      [3865, 1450], [3865, 2675], [5115, 2675], [5115, 2645],
-      [5740, 2645], [6165, 2250], [6165, 1540], [5700, 1450]
+      [4140, 1450], [4140, 2380], [4005, 2710], [5220, 2710],
+      [5220, 2650], [5740, 2645], [6165, 2250], [5990, 1770], [5870, 1450]
     ]),
     // Lower river, central plaza down to the stone bridge.
     Object.freeze([
@@ -1723,8 +1726,9 @@
   ]);
 
   const COVERED_BRIDGE_PATH = Object.freeze([
-    Object.freeze([3480, 1130]),
-    Object.freeze([5850, 1130])
+    // Straight forced walk line from the red arrow in the supplied reference.
+    Object.freeze([3225, 1305]),
+    Object.freeze([6408, 1305])
   ]);
 
   const BRIDGE_CONFIG = Object.freeze({
@@ -1732,7 +1736,9 @@
     coveredCorridor: 62,
     engageDistance: 285,
     coveredFadeMs: 190,
-    coveredInterior: Object.freeze({ x1: 3680, y1: 850, x2: 5660, y2: 1450 })
+    // Exact red roof box: only this part of the straight covered bridge hides
+    // the player while the covered bridge is actively being traversed.
+    coveredInterior: Object.freeze({ x1: 3770, y1: 800, x2: 5790, y2: 1470 })
   });
 
   const bridgePathCache = new Map();
@@ -1896,14 +1902,13 @@
     // perfectly straight bridge path until the opposite end is reached.
     const covered = bridgeDefinition("covered");
     const coveredMetrics = getPathMetrics(covered.path);
-    const coveredClosest = closestPointOnBridgePath(playerX, playerY, covered.path);
     const atCoveredLeftEntry =
-      playerX >= 3300 && playerX <= 3725 &&
-      playerY >= 900 && playerY <= 1370 &&
+      playerX >= 3125 && playerX <= 3350 &&
+      playerY >= 1175 && playerY <= 1435 &&
       horizontalDirection > 0;
     const atCoveredRightEntry =
-      playerX >= 5600 && playerX <= 6030 &&
-      playerY >= 900 && playerY <= 1370 &&
+      playerX >= 6280 && playerX <= 6505 &&
+      playerY >= 1175 && playerY <= 1435 &&
       horizontalDirection < 0;
 
     if (atCoveredLeftEntry || atCoveredRightEntry) {
@@ -1920,7 +1925,10 @@
 
     let best = null;
 
-    for (const id of ["stone", "covered"]) {
+    // The covered bridge is intentionally NOT handled by the generic
+    // proximity engagement below. It may only engage through the two precise
+    // entrance capture zones above, preventing side-snaps from the river bank.
+    for (const id of ["stone"]) {
       const definition = bridgeDefinition(id);
       const closest = closestPointOnBridgePath(playerX, playerY, definition.path);
       if (!closest || closest.distance > BRIDGE_CONFIG.engageDistance) continue;
@@ -2005,6 +2013,10 @@
   }
 
   function playerInsideCoveredBridgeInterior() {
+    // Never hide the player merely because coordinates overlap the roof box.
+    // Visibility is tied to an actively traversed covered bridge.
+    if (!activeBridge || activeBridge.id !== "covered") return false;
+
     const b = BRIDGE_CONFIG.coveredInterior;
     if (
       playerX < b.x1 || playerX > b.x2 ||
