@@ -1877,7 +1877,14 @@
     if (x < halfW || x > MAP.width - halfW) return false;
     if (y < minY || y > maxY) return false;
 
-    return !isRiverBlockedFootPoint(x, y);
+    // Existing river/bridge collision remains unchanged.
+    if (isRiverBlockedFootPoint(x, y)) return false;
+
+    // New hard collision for church body + tavern.
+    // Only the player's foot anchor participates.
+    if (isBuildingBlockedFootPoint(x, y)) return false;
+
+    return true;
   }
 
   function tryEngageBridge(horizontalDirection) {
@@ -1996,6 +2003,124 @@
     }
 
     playerEl.style.opacity = playerInsideCoveredBridgeInterior() ? "0" : "1";
+  }
+
+
+  // ------------------------------------------------------------------
+  // OBERKIRCH BUILDINGS
+  // Exact size/position mapped from the supplied reference composite.
+  // Both images are the original supplied transparent PNGs, unchanged.
+  // ------------------------------------------------------------------
+  const OBERKIRCH_BUILDINGS = Object.freeze([
+    {
+      id: "oberkirch-kirche",
+      src: "assets/buildings/OBERKIRCH KIRCHE.png",
+      left: 1052.152,
+      top: 824.217,
+      width: 2827.409,
+      height: 4241.113,
+      className: "map-building map-building--church"
+    },
+    {
+      id: "oberkirch-schenke",
+      src: "assets/buildings/OBERKIRCH SCHENKE.png",
+      left: 4997.233,
+      top: 1252.397,
+      width: 1384.006,
+      height: 2076.009,
+      className: "map-building map-building--tavern"
+    }
+  ]);
+
+  // HARD COLLISION is intentionally based on the player's FOOT ANCHOR.
+  // The church tower itself is NOT part of the collision footprint.
+  // Therefore the player can walk behind the tower and is naturally
+  // occluded by the foreground building image.
+  const BUILDING_BLOCK_ZONES = Object.freeze([
+    // Church: nave / lower building footprint only. Tower excluded.
+    Object.freeze([
+      [1025, 2880],
+      [3400, 2880],
+      [3760, 3210],
+      [3750, 4190],
+      [3530, 4415],
+      [1150, 4415],
+      [950, 4210],
+      [930, 3320]
+    ]),
+
+    // Tavern / inn hard footprint.
+    Object.freeze([
+      [5010, 1960],
+      [6260, 1960],
+      [6430, 2200],
+      [6420, 2760],
+      [6250, 2860],
+      [5030, 2860],
+      [4930, 2720],
+      [4930, 2140]
+    ])
+  ]);
+
+  function installOberkirchBuildingStyles() {
+    if (document.getElementById("oberkirchBuildingStyles")) return;
+
+    const style = document.createElement("style");
+    style.id = "oberkirchBuildingStyles";
+    style.textContent = `
+      .map-building {
+        position: absolute;
+        z-index: 6;
+        display: block;
+        pointer-events: none;
+        user-select: none;
+        -webkit-user-drag: none;
+        object-fit: fill;
+        max-width: none;
+        max-height: none;
+      }
+
+      .map-building--church {
+        left: 1052.152px;
+        top: 824.217px;
+        width: 2827.409px;
+        height: 4241.113px;
+      }
+
+      .map-building--tavern {
+        left: 4997.233px;
+        top: 1252.397px;
+        width: 1384.006px;
+        height: 2076.009px;
+      }
+    `;
+
+    document.head.appendChild(style);
+  }
+
+  function createOberkirchBuildings() {
+    installOberkirchBuildingStyles();
+
+    for (const config of OBERKIRCH_BUILDINGS) {
+      const image = document.createElement("img");
+      image.id = config.id;
+      image.className = config.className;
+      image.src = encodeURI(config.src);
+      image.alt = "";
+      image.draggable = false;
+
+      // Append after the player. z-index 6 keeps buildings in the foreground.
+      // Because only the lower church body is collidable, the character may
+      // pass behind the non-collidable tower and visually disappear behind it.
+      world.appendChild(image);
+    }
+  }
+
+  function isBuildingBlockedFootPoint(x, y) {
+    for (const polygon of BUILDING_BLOCK_ZONES) {
+      if (worldPointInPolygon(x, y, polygon)) return true;
+    }
+    return false;
   }
 
   const game = document.getElementById("game");
@@ -2612,6 +2737,7 @@
     createAreaSigns();
     createRabbits();
     createMoleSystem();
+    createOberkirchBuildings();
 
     clampPlayer();
     updateAreaSigns();
