@@ -2032,24 +2032,42 @@
     }
   ]);
 
-  // HARD COLLISION is intentionally based on the player's FOOT ANCHOR.
-  // The church tower itself is NOT part of the collision footprint.
-  // Therefore the player can walk behind the tower and is naturally
-  // occluded by the foreground building image.
-  const BUILDING_BLOCK_ZONES = Object.freeze([
-    // Church: nave / lower building footprint only. Tower excluded.
-    Object.freeze([
-      [1025, 2880],
-      [3400, 2880],
-      [3760, 3210],
-      [3750, 4190],
-      [3530, 4415],
-      [1150, 4415],
-      [950, 4210],
-      [930, 3320]
+  const CHURCH_CONFIG = OBERKIRCH_BUILDINGS[0];
+
+  // The church collision is read directly from the PNG alpha channel.
+  // Transparent pixels are always walkable. Only the lower, physically
+  // grounded part of the visible church can block the player's FOOT anchor.
+  // The large central tower and the small tower at lower-right are explicit
+  // walk-behind zones: they NEVER block movement; the already-foreground PNG
+  // naturally occludes the player while he passes behind them.
+  const CHURCH_COLLISION = Object.freeze({
+    alphaThreshold: 28,
+    // The old hand-made footprint started around this visual height.
+    // Above it are roof/tower pixels that must not become invisible walls.
+    groundedFromY: 0.485,
+
+    // Coordinates are normalized to the original church PNG (0..1).
+    // Large central clock/spire tower.
+    walkBehindLargeTower: Object.freeze([
+      [0.432, 0.000],
+      [0.686, 0.000],
+      [0.702, 0.505],
+      [0.446, 0.505]
     ]),
 
-    // Tavern / inn hard footprint.
+    // Small tower / chapel at the lower-right edge of the church artwork.
+    // Entire visible tower may be crossed so the character can pass behind it,
+    // including its foreground/lower section.
+    walkBehindSmallTower: Object.freeze([
+      [0.892, 0.535],
+      [0.958, 0.535],
+      [0.972, 0.700],
+      [0.898, 0.700]
+    ])
+  });
+
+  // Tavern collision stays EXACTLY as before.
+  const BUILDING_BLOCK_ZONES = Object.freeze([
     Object.freeze([
       [5010, 1960],
       [6260, 1960],
@@ -2061,6 +2079,124 @@
       [4930, 2140]
     ])
   ]);
+
+  let churchAlphaMask = null;
+
+  function pointInNormalizedPolygon(x, y, polygon) {
+    let inside = false;
+
+    for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+      const xi = polygon[i][0];
+      const yi = polygon[i][1];
+      const xj = polygon[j][0];
+      const yj = polygon[j][1];
+
+      const intersects =
+        ((yi > y) !== (yj > y)) &&
+        (x < ((xj - xi) * (y - yi)) / ((yj - yi) || 0.000001) + xi);
+
+      if (intersects) inside = !inside;
+    }
+
+    return inside;
+  }
+
+  function churchPointIsWalkBehind(localX01, localY01) {
+    return (
+      pointInNormalizedPolygon(
+        localX01,
+        localY01,
+        CHURCH_COLLISION.walkBehindLargeTower
+      ) ||
+      pointInNormalizedPolygon(
+        localX01,
+        localY01,
+        CHURCH_COLLISION.walkBehindSmallTower
+      )
+    );
+  }
+
+  function prepareChurchAlphaMask(image) {
+    if (!image || !image.naturalWidth || !image.naturalHeight) return;
+
+    try {
+      const canvas = document.createElement("canvas");
+      canvas.width = image.naturalWidth;
+      canvas.height = image.naturalHeight;
+
+      const ctx = canvas.getContext("2d", { willReadFrequently: true });
+      if (!ctx) return;
+
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(image, 0, 0);
+
+      const pixels = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+
+      churchAlphaMask = {
+        width: canvas.width,
+        height: canvas.height,
+        alpha: new Uint8Array(canvas.width * canvas.height)
+      };
+
+      for (let src = 3, dst = 0; src < pixels.length; src += 4, dst += 1) {
+        churchAlphaMask.alpha[dst] = pixels[src];
+      }
+    } catch (error) {
+      // If canvas pixel access is unavailable, do NOT reintroduce the huge
+      // old church polygon. The church remains visually correct and the
+      // tavern/river collision continues to work normally.
+      churchAlphaMask = null;
+      console.warn("Church alpha collision mask unavailable:", error);
+    }
+  }
+
+  function isChurchBlockedFootPoint(x, y) {
+    const c = CHURCH_CONFIG;
+
+    // Completely outside the actual placed church image = walkable.
+    if (
+      x < c.left ||
+      x > c.left + c.width ||
+      y < c.top ||
+      y > c.top + c.height
+    ) {
+      return false;
+    }
+
+    const localX01 = (x - c.left) / c.width;
+    const localY01 = (y - c.top) / c.height;
+
+    // Roofs / spires are not floor obstacles.
+    if (localY01 < CHURCH_COLLISION.groundedFromY) return false;
+
+    // Both requested towers are fully traversable and work purely as
+    // foreground occluders because the church PNG itself stays at z-index 6.
+    if (churchPointIsWalkBehind(localX01, localY01)) return false;
+
+    // Until the image's alpha mask is ready, never fall back to the oversized
+    // legacy polygon. This avoids blocking transparent PNG space at startup.
+    if (!churchAlphaMask) return false;
+
+    const px = Math.max(
+      0,
+      Math.min(
+        churchAlphaMask.width - 1,
+        Math.round(localX01 * (churchAlphaMask.width - 1))
+      )
+    );
+    const py = Math.max(
+      0,
+      Math.min(
+        churchAlphaMask.height - 1,
+        Math.round(localY01 * (churchAlphaMask.height - 1))
+      )
+    );
+
+    const alpha = churchAlphaMask.alpha[py * churchAlphaMask.width + px];
+
+    // EXACT RULE: transparent church PNG pixel = walkable.
+    return alpha >= CHURCH_COLLISION.alphaThreshold;
+  }
 
   function installOberkirchBuildingStyles() {
     if (document.getElementById("oberkirchBuildingStyles")) return;
@@ -2085,6 +2221,39 @@
         top: 824.217px;
         width: 2827.409px;
         height: 4241.113px;
+        z-index: 4;
+      }
+
+      /* Main church body stays behind the player.
+         ONLY the two requested traversable towers are duplicated above him,
+         so the character disappears naturally behind their visible PNG pixels. */
+      .map-building--church-foreground {
+        left: 1052.152px;
+        top: 824.217px;
+        width: 2827.409px;
+        height: 4241.113px;
+        z-index: 7;
+      }
+
+      /* LARGE CHURCH TOWER: foreground occluder, NO collision. */
+      .map-building--church-large-tower-foreground {
+        clip-path: polygon(
+          43.2% 0%,
+          68.6% 0%,
+          70.2% 50.5%,
+          44.6% 50.5%
+        );
+      }
+
+      /* SMALL LOWER-RIGHT TURRET ONLY: foreground occluder, NO collision.
+         The neighbouring wall is deliberately NOT part of this mask. */
+      .map-building--church-small-tower-foreground {
+        clip-path: polygon(
+          89.2% 53.5%,
+          95.8% 53.5%,
+          97.2% 70.0%,
+          89.8% 70.0%
+        );
       }
 
       .map-building--tavern {
@@ -2109,17 +2278,59 @@
       image.alt = "";
       image.draggable = false;
 
-      // Append after the player. z-index 6 keeps buildings in the foreground.
-      // Because only the lower church body is collidable, the character may
-      // pass behind the non-collidable tower and visually disappear behind it.
+      // Main church image stays behind the player.
+      // Dedicated foreground copies below place BOTH requested towers above him.
+      if (config.id === "oberkirch-kirche") {
+        image.addEventListener("load", () => prepareChurchAlphaMask(image), {
+          once: true
+        });
+      }
+
       world.appendChild(image);
+
+      if (config.id === "oberkirch-kirche") {
+        // Two foreground copies of the SAME transparent PNG.
+        // Only the large tower and the small lower-right turret render above
+        // the player. Both regions stay fully walkable.
+        const towerOverlays = [
+          {
+            id: "oberkirch-kirche-large-tower-foreground",
+            className:
+              "map-building map-building--church-foreground map-building--church-large-tower-foreground"
+          },
+          {
+            id: "oberkirch-kirche-small-tower-foreground",
+            className:
+              "map-building map-building--church-foreground map-building--church-small-tower-foreground"
+          }
+        ];
+
+        for (const overlayConfig of towerOverlays) {
+          const foreground = document.createElement("img");
+          foreground.id = overlayConfig.id;
+          foreground.className = overlayConfig.className;
+          foreground.src = encodeURI(config.src);
+          foreground.alt = "";
+          foreground.draggable = false;
+          world.appendChild(foreground);
+        }
+
+        if (image.complete && image.naturalWidth > 0) {
+          prepareChurchAlphaMask(image);
+        }
+      }
     }
   }
 
   function isBuildingBlockedFootPoint(x, y) {
+    // Precise PNG-alpha collision for the church.
+    if (isChurchBlockedFootPoint(x, y)) return true;
+
+    // Existing tavern footprint remains untouched.
     for (const polygon of BUILDING_BLOCK_ZONES) {
       if (worldPointInPolygon(x, y, polygon)) return true;
     }
+
     return false;
   }
 
