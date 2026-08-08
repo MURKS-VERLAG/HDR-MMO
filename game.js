@@ -1158,6 +1158,528 @@
     }
   }
 
+
+  // ------------------------------------------------------------------
+  // RARE MOLE EVENT + BLACK PENNY DROP
+  // ------------------------------------------------------------------
+  const MOLE_CONFIG = Object.freeze({
+    checkInterval: 30000,
+    spawnChance: 0.33,
+    maxHp: 100,
+    digDuration: 8673,
+    exposedDuration: 5000,
+    deadDuration: 5000,
+    fadeDuration: 420,
+    pickupRadius: 820
+  });
+
+  const MOLE_IMAGES = Object.freeze({
+    mound: "assets/animals/moles/MOLE MOUND.webp",
+    alive: "assets/animals/moles/MOLE ALIVE.webp",
+    dead: "assets/animals/moles/MOLE DEAD.webp"
+  });
+
+  const BLACK_PENNY_ITEM = Object.freeze({
+    id: "black-penny",
+    name: "SCHWARZER PFENNIG",
+    description: "MAULWURFKOT"
+  });
+
+  const moleDigAudio = new Audio("assets/audio/moles/MOLE DIG.mp3");
+  moleDigAudio.preload = "auto";
+  moleDigAudio.loop = false;
+  moleDigAudio.volume = 1.0;
+
+  let moleEvent = null;
+  let nextMoleCheckAt = 0;
+  let blackPennyCount = 0;
+  let blackPennyDrops = [];
+
+  function installMoleStyles() {
+    if (document.getElementById("moleStyles")) return;
+
+    const style = document.createElement("style");
+    style.id = "moleStyles";
+    style.textContent = `
+      .map-mole {
+        position: absolute;
+        z-index: 5;
+        width: 610px;
+        height: 430px;
+        transform: translate(-50%, -82%);
+        pointer-events: none;
+        user-select: none;
+        opacity: 1;
+        transition: opacity 420ms ease;
+      }
+
+      .map-mole--fading {
+        opacity: 0;
+      }
+
+      .map-mole__image {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+        object-position: 50% 100%;
+        opacity: 0;
+        transition: opacity 420ms ease;
+        filter: drop-shadow(0 8px 5px rgba(0,0,0,.18));
+      }
+
+      .map-mole__image--visible {
+        opacity: 1;
+      }
+
+      .mole-dust-field {
+        position: absolute;
+        left: 50%;
+        bottom: 35px;
+        width: 620px;
+        height: 210px;
+        transform: translateX(-50%);
+        opacity: 0;
+        pointer-events: none;
+      }
+
+      .map-mole--digging .mole-dust-field {
+        opacity: 1;
+      }
+
+      .mole-dust-field::before,
+      .mole-dust-field::after {
+        content: "";
+        position: absolute;
+        bottom: 0;
+        width: 260px;
+        height: 120px;
+        border-radius: 50%;
+        background:
+          radial-gradient(
+            ellipse at center,
+            rgba(190,164,120,.64) 0%,
+            rgba(153,126,86,.42) 45%,
+            rgba(112,86,53,0) 76%
+          );
+        filter: blur(8px);
+        animation: moleDustLoop 1150ms ease-in-out infinite alternate;
+      }
+
+      .mole-dust-field::before {
+        left: 20px;
+      }
+
+      .mole-dust-field::after {
+        right: 20px;
+        animation-delay: -520ms;
+      }
+
+      @keyframes moleDustLoop {
+        0% {
+          opacity: .38;
+          transform: translateY(26px) scale(.72);
+        }
+        55% {
+          opacity: .86;
+          transform: translateY(-12px) scale(1.10);
+        }
+        100% {
+          opacity: .18;
+          transform: translateY(-42px) scale(1.42);
+        }
+      }
+
+      .black-penny-drop {
+        position: absolute;
+        z-index: 11;
+        width: 115px;
+        height: 115px;
+        transform: translate(-50%, -50%) scale(1);
+        border-radius: 50%;
+        pointer-events: none;
+        opacity: 1;
+        transition:
+          opacity 360ms ease,
+          transform 360ms ease;
+        filter:
+          drop-shadow(0 0 7px rgba(255,255,255,.80))
+          drop-shadow(0 8px 5px rgba(0,0,0,.48));
+      }
+
+      .black-penny-drop::before {
+        content: "";
+        position: absolute;
+        inset: 8px;
+        border-radius: 50%;
+        background:
+          radial-gradient(circle at 35% 30%,
+            #414141 0%,
+            #151515 27%,
+            #050505 62%,
+            #000000 100%);
+        border: 7px ridge #4b4b4b;
+        box-shadow:
+          inset 0 0 0 5px #090909,
+          inset 7px 8px 14px rgba(255,255,255,.12);
+      }
+
+      .black-penny-drop::after {
+        content: "●";
+        position: absolute;
+        inset: 0;
+        display: grid;
+        place-items: center;
+        color: #090909;
+        font-size: 47px;
+        text-shadow:
+          1px 1px 0 #555,
+          -1px -1px 0 #000;
+      }
+
+      .black-penny-drop--pickup {
+        opacity: 0;
+        transform: translate(-50%, -90%) scale(.42);
+      }
+
+      .black-penny-plus {
+        position: absolute;
+        z-index: 30;
+        transform: translate(-50%, -50%);
+        pointer-events: none;
+        user-select: none;
+        white-space: nowrap;
+        font-family: Georgia, "Times New Roman", serif;
+        font-size: 130px;
+        font-weight: 900;
+        color: #050505;
+        -webkit-text-stroke: 4px #ffffff;
+        text-shadow:
+          0 0 5px #ffffff,
+          0 0 12px #ffffff,
+          0 0 22px rgba(255,255,255,.85);
+        animation: blackPennyPlus 1100ms ease-out forwards;
+      }
+
+      .black-penny-plus__coin {
+        display: inline-grid;
+        place-items: center;
+        width: 76px;
+        height: 76px;
+        margin-right: 18px;
+        border-radius: 50%;
+        vertical-align: middle;
+        background: #050505;
+        border: 5px ridge #595959;
+        -webkit-text-stroke: 0;
+        box-shadow:
+          0 0 8px #ffffff,
+          inset 5px 5px 8px rgba(255,255,255,.10);
+      }
+
+      @keyframes blackPennyPlus {
+        0% {
+          opacity: 0;
+          transform: translate(-50%, -15%) scale(.72);
+        }
+        18% {
+          opacity: 1;
+          transform: translate(-50%, -80%) scale(1.08);
+        }
+        76% {
+          opacity: 1;
+          transform: translate(-50%, -145%) scale(1);
+        }
+        100% {
+          opacity: 0;
+          transform: translate(-50%, -190%) scale(.9);
+        }
+      }
+    `;
+
+    document.head.appendChild(style);
+  }
+
+  function moleSpawnPoint() {
+    // Use the existing agricultural edge regions as the valid field areas.
+    const zone =
+      RABBIT_ZONES[Math.floor(Math.random() * RABBIT_ZONES.length)];
+
+    return rabbitRandomPoint(zone, 210);
+  }
+
+  function scheduleNextMoleCheck(now = performance.now()) {
+    nextMoleCheckAt = now + MOLE_CONFIG.checkInterval;
+  }
+
+  function setMoleImage(src) {
+    if (!moleEvent) return;
+
+    const incoming = 1 - moleEvent.visibleLayer;
+    const outgoing = moleEvent.visibleLayer;
+
+    moleEvent.images[incoming].src = encodeURI(src);
+    moleEvent.images[incoming].classList.add("map-mole__image--visible");
+    moleEvent.images[outgoing].classList.remove("map-mole__image--visible");
+
+    moleEvent.visibleLayer = incoming;
+  }
+
+  function createMoleEvent(now) {
+    const point = moleSpawnPoint();
+
+    const element = document.createElement("div");
+    element.className = "map-mole map-mole--digging";
+    element.style.left = `${point.x}px`;
+    element.style.top = `${point.y}px`;
+
+    const imageA = document.createElement("img");
+    imageA.className = "map-mole__image map-mole__image--visible";
+    imageA.alt = "";
+    imageA.draggable = false;
+    imageA.src = encodeURI(MOLE_IMAGES.mound);
+
+    const imageB = document.createElement("img");
+    imageB.className = "map-mole__image";
+    imageB.alt = "";
+    imageB.draggable = false;
+
+    const dust = document.createElement("div");
+    dust.className = "mole-dust-field";
+
+    element.append(imageA, imageB, dust);
+    world.appendChild(element);
+
+    moleEvent = {
+      element,
+      images: [imageA, imageB],
+      visibleLayer: 0,
+      x: point.x,
+      y: point.y,
+      hp: MOLE_CONFIG.maxHp,
+      phase: "digging",
+      phaseEndAt: now + MOLE_CONFIG.digDuration,
+      dead: false
+    };
+
+    moleDigAudio.pause();
+    try {
+      moleDigAudio.currentTime = 0;
+    } catch (_) {}
+    moleDigAudio.play().catch(() => {});
+  }
+
+  function exposeMole(now) {
+    if (!moleEvent || moleEvent.phase !== "digging") return;
+
+    moleEvent.phase = "exposed";
+    moleEvent.phaseEndAt = now + MOLE_CONFIG.exposedDuration;
+    moleEvent.element.classList.remove("map-mole--digging");
+    setMoleImage(MOLE_IMAGES.alive);
+  }
+
+  function killMole(now) {
+    if (!moleEvent || moleEvent.dead) return;
+
+    moleEvent.dead = true;
+    moleEvent.hp = 0;
+    moleEvent.phase = "dead";
+    moleEvent.phaseEndAt = now + MOLE_CONFIG.deadDuration;
+    moleEvent.element.classList.remove("map-mole--digging");
+    setMoleImage(MOLE_IMAGES.dead);
+  }
+
+  function spawnBlackPenny(x, y) {
+    const element = document.createElement("div");
+    element.className = "black-penny-drop";
+    element.dataset.itemId = BLACK_PENNY_ITEM.id;
+    element.title =
+      `${BLACK_PENNY_ITEM.name} — ${BLACK_PENNY_ITEM.description}`;
+    element.style.left = `${x}px`;
+    element.style.top = `${y}px`;
+
+    world.appendChild(element);
+
+    blackPennyDrops.push({
+      element,
+      x,
+      y,
+      collected: false
+    });
+  }
+
+  function removeMole(now, dropItem) {
+    if (!moleEvent) return;
+
+    const finished = moleEvent;
+    finished.element.classList.add("map-mole--fading");
+
+    if (dropItem) {
+      spawnBlackPenny(finished.x, finished.y);
+    }
+
+    window.setTimeout(() => {
+      finished.element.remove();
+    }, MOLE_CONFIG.fadeDuration + 30);
+
+    moleEvent = null;
+    scheduleNextMoleCheck(now);
+  }
+
+  function updateMole(now) {
+    if (!moleEvent) {
+      if (now < nextMoleCheckAt) return;
+
+      // EXACT RULE:
+      // every 30 seconds -> 33% spawn chance.
+      // on failure -> new 30 second timer.
+      if (Math.random() < MOLE_CONFIG.spawnChance) {
+        createMoleEvent(now);
+      } else {
+        scheduleNextMoleCheck(now);
+      }
+
+      return;
+    }
+
+    if (now < moleEvent.phaseEndAt) return;
+
+    if (moleEvent.phase === "digging") {
+      exposeMole(now);
+      return;
+    }
+
+    if (moleEvent.phase === "exposed") {
+      // Player failed to kill it within the exact 5 second attack window.
+      removeMole(now, false);
+      return;
+    }
+
+    if (moleEvent.phase === "dead") {
+      // Dead image stayed visible for exactly five seconds.
+      // Drop appears when the mole despawns.
+      removeMole(now, true);
+    }
+  }
+
+  function moleInsideAttackHitbox(direction) {
+    if (!moleEvent || moleEvent.phase !== "exposed" || moleEvent.dead) {
+      return false;
+    }
+
+    const dx = moleEvent.x - playerX;
+    const dy = moleEvent.y - playerY;
+
+    if (direction === "right") {
+      return (
+        dx >= -RABBIT_ATTACK_HITBOX.sideBack &&
+        dx <= RABBIT_ATTACK_HITBOX.sideForward &&
+        Math.abs(dy) <= RABBIT_ATTACK_HITBOX.sideHalfHeight
+      );
+    }
+
+    if (direction === "left") {
+      return (
+        dx <= RABBIT_ATTACK_HITBOX.sideBack &&
+        dx >= -RABBIT_ATTACK_HITBOX.sideForward &&
+        Math.abs(dy) <= RABBIT_ATTACK_HITBOX.sideHalfHeight
+      );
+    }
+
+    return (
+      dy >= -RABBIT_ATTACK_HITBOX.downBack &&
+      dy <= RABBIT_ATTACK_HITBOX.downForward &&
+      Math.abs(dx) <= RABBIT_ATTACK_HITBOX.downHalfWidth
+    );
+  }
+
+  function resolveMoleAttackFrame(frame) {
+    if (!frame || !frame.hit || !moleEvent) return;
+    if (moleEvent.phase !== "exposed" || moleEvent.dead) return;
+
+    const direction = rabbitAttackDirection();
+    if (!moleInsideAttackHitbox(direction)) return;
+
+    const amount = frame.damage || 20;
+    const critical = Boolean(frame.critical);
+
+    moleEvent.hp = Math.max(0, moleEvent.hp - amount);
+
+    // Same damage popup and same hit sound as rabbits.
+    createRabbitDamageText(moleEvent, amount, critical);
+    playRabbitHitSound();
+
+    if (moleEvent.hp <= 0) {
+      killMole(performance.now());
+    }
+  }
+
+  function showBlackPennyPlusOne() {
+    const popup = document.createElement("div");
+    popup.className = "black-penny-plus";
+    popup.style.left = `${playerX}px`;
+    popup.style.top = `${playerY - 360}px`;
+
+    const coin = document.createElement("span");
+    coin.className = "black-penny-plus__coin";
+
+    const value = document.createElement("span");
+    value.textContent = "+1";
+
+    popup.append(coin, value);
+    world.appendChild(popup);
+
+    window.setTimeout(() => popup.remove(), 1160);
+  }
+
+  function collectBlackPenny() {
+    let nearest = null;
+    let nearestDistance = Infinity;
+
+    for (const drop of blackPennyDrops) {
+      if (drop.collected) continue;
+
+      const distance = Math.hypot(
+        drop.x - playerX,
+        drop.y - playerY
+      );
+
+      if (
+        distance <= MOLE_CONFIG.pickupRadius &&
+        distance < nearestDistance
+      ) {
+        nearest = drop;
+        nearestDistance = distance;
+      }
+    }
+
+    if (!nearest) return;
+
+    nearest.collected = true;
+    blackPennyCount += 1;
+
+    nearest.element.classList.add("black-penny-drop--pickup");
+    showBlackPennyPlusOne();
+
+    window.setTimeout(() => {
+      nearest.element.remove();
+      blackPennyDrops =
+        blackPennyDrops.filter((drop) => drop !== nearest);
+    }, 390);
+  }
+
+  function createMoleSystem() {
+    installMoleStyles();
+
+    for (const src of Object.values(MOLE_IMAGES)) {
+      const image = new Image();
+      image.src = src;
+    }
+
+    scheduleNextMoleCheck(performance.now());
+  }
+
   const game = document.getElementById("game");
   const world = document.getElementById("world");
   const mapImage = document.getElementById("map");
@@ -1419,6 +1941,7 @@
 
     setSprite(attackSequence[0].sprite);
     resolveRabbitAttackFrame(attackSequence[0]);
+    resolveMoleAttackFrame(attackSequence[0]);
   }
 
   function finishAttackState() {
@@ -1450,6 +1973,7 @@
           startAttackSound();
           setSprite(attackSequence[0].sprite);
           resolveRabbitAttackFrame(attackSequence[0]);
+    resolveMoleAttackFrame(attackSequence[0]);
         } else {
           finishAttackState();
         }
@@ -1458,6 +1982,7 @@
 
       setSprite(attackSequence[attackStep].sprite);
       resolveRabbitAttackFrame(attackSequence[attackStep]);
+      resolveMoleAttackFrame(attackSequence[attackStep]);
     }
   }
 
@@ -1635,6 +2160,7 @@
     updatePlayer(deltaSeconds);
     updateAreaSigns();
     updateRabbits(deltaSeconds, now);
+    updateMole(now);
     renderPlayer();
     renderWorld();
 
@@ -1652,7 +2178,7 @@
       "KeyW", "KeyA", "KeyS", "KeyD",
       "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight",
       "Equal", "NumpadAdd", "Minus", "NumpadSubtract",
-      "Space", "ControlLeft", "ControlRight"
+      "Space", "ControlLeft", "ControlRight", "Backquote"
     ];
 
     if (controlled.includes(event.code) || event.key === "Control") {
@@ -1671,6 +2197,16 @@
     }
 
     if (blocking) return;
+
+    if (
+      event.code === "Backquote" ||
+      event.key === "^" ||
+      event.key === "°"
+    ) {
+      event.preventDefault();
+      collectBlackPenny();
+      return;
+    }
 
     if (event.code === "Space") {
       attackHeld = true;
@@ -1762,6 +2298,7 @@
 
     createAreaSigns();
     createRabbits();
+    createMoleSystem();
 
     clampPlayer();
     updateAreaSigns();
