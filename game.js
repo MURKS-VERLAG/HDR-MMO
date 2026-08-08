@@ -58,8 +58,8 @@
     { sprite: PLAYER.attackFinish, duration: 400 },
     { sprite: PLAYER.combatBase, duration: 100 },
 
-    { sprite: PLAYER.attackRight1, duration: 400 },
-    { sprite: PLAYER.combatBase, duration: 300 }
+    { sprite: PLAYER.attackRight1, duration: 500 },
+    { sprite: PLAYER.combatBase, duration: 400 }
   ]);
 
   const ATTACK_LEFT = Object.freeze([
@@ -72,8 +72,8 @@
     { sprite: PLAYER.attackFinishLeft, duration: 400 },
     { sprite: PLAYER.combatBaseLeft, duration: 100 },
 
-    { sprite: PLAYER.attackLeft1, duration: 400 },
-    { sprite: PLAYER.combatBaseLeft, duration: 300 }
+    { sprite: PLAYER.attackLeft1, duration: 500 },
+    { sprite: PLAYER.combatBaseLeft, duration: 400 }
   ]);
 
   const ATTACK_DOWN = Object.freeze([
@@ -88,8 +88,8 @@
     { sprite: PLAYER.attackFinish, duration: 400 },
     { sprite: PLAYER.combatBase, duration: 100 },
 
-    { sprite: PLAYER.attackDown1, duration: 400 },
-    { sprite: PLAYER.combatBase, duration: 300 }
+    { sprite: PLAYER.attackDown1, duration: 500 },
+    { sprite: PLAYER.combatBase, duration: 400 }
   ]);
 
   const ZOOM_MULTIPLIERS = [1, 1.75, 3, 4.5];
