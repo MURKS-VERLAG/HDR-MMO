@@ -100,6 +100,39 @@
   attackAudio.loop = false;
   attackAudio.volume = 1.0;
 
+  const backgroundMusic = new Audio("assets/audio/THE WEEPING STONE.mp3");
+  backgroundMusic.preload = "auto";
+  backgroundMusic.loop = true;
+  backgroundMusic.volume = 1.0;
+
+  let backgroundMusicStarted = false;
+
+  function startBackgroundMusic() {
+    if (backgroundMusicStarted && !backgroundMusic.paused) return;
+
+    backgroundMusic.play()
+      .then(() => {
+        backgroundMusicStarted = true;
+      })
+      .catch(() => {
+        // Browser autoplay may be blocked until the first user interaction.
+      });
+  }
+
+  function unlockBackgroundMusic() {
+    startBackgroundMusic();
+
+    if (backgroundMusicStarted) {
+      window.removeEventListener("pointerdown", unlockBackgroundMusic);
+      window.removeEventListener("keydown", unlockBackgroundMusic);
+      window.removeEventListener("touchstart", unlockBackgroundMusic);
+    }
+  }
+
+  window.addEventListener("pointerdown", unlockBackgroundMusic, { passive: true });
+  window.addEventListener("keydown", unlockBackgroundMusic);
+  window.addEventListener("touchstart", unlockBackgroundMusic, { passive: true });
+
 
   // ------------------------------------------------------------------
   // DYNAMIC AREA / EXIT SIGNS
@@ -1363,6 +1396,7 @@
   });
 
   function initialize() {
+    startBackgroundMusic();
     calculateFitScale();
     displayScale = scaleForLevel(0);
     targetScale = displayScale;
