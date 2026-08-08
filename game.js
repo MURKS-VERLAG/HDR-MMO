@@ -49,39 +49,47 @@
   });
 
   const ATTACK_RIGHT = Object.freeze([
-    // SCHLAG -> TRITT -> SCHLAG -> FINISH
     { sprite: PLAYER.attackRight1, duration: 400 },
     { sprite: PLAYER.combatBase, duration: 100 },
+
     { sprite: PLAYER.attackRight3, duration: 400 },
     { sprite: PLAYER.combatBase, duration: 100 },
-    { sprite: PLAYER.attackRight1, duration: 400 },
-    { sprite: PLAYER.combatBase, duration: 100 },
+
     { sprite: PLAYER.attackFinish, duration: 400 },
-    { sprite: PLAYER.combatBase, duration: 100 }
+    { sprite: PLAYER.combatBase, duration: 100 },
+
+    { sprite: PLAYER.attackRight1, duration: 400 },
+    { sprite: PLAYER.combatBase, duration: 300 }
   ]);
 
   const ATTACK_LEFT = Object.freeze([
-    // GESPIEGELT: SCHLAG -> TRITT -> SCHLAG -> FINISH
     { sprite: PLAYER.attackLeft1, duration: 400 },
     { sprite: PLAYER.combatBaseLeft, duration: 100 },
+
     { sprite: PLAYER.attackLeft3, duration: 400 },
     { sprite: PLAYER.combatBaseLeft, duration: 100 },
-    { sprite: PLAYER.attackLeft1, duration: 400 },
-    { sprite: PLAYER.combatBaseLeft, duration: 100 },
+
     { sprite: PLAYER.attackFinishLeft, duration: 400 },
-    { sprite: PLAYER.combatBaseLeft, duration: 100 }
+    { sprite: PLAYER.combatBaseLeft, duration: 100 },
+
+    { sprite: PLAYER.attackLeft1, duration: 400 },
+    { sprite: PLAYER.combatBaseLeft, duration: 300 }
   ]);
 
   const ATTACK_DOWN = Object.freeze([
     { sprite: PLAYER.combatBase, duration: 100 },
+
     { sprite: PLAYER.attackDown1, duration: 400 },
     { sprite: PLAYER.combatBase, duration: 100 },
+
     { sprite: PLAYER.attackDown2, duration: 400 },
     { sprite: PLAYER.combatBase, duration: 100 },
-    { sprite: PLAYER.attackDown1, duration: 400 },
-    { sprite: PLAYER.combatBase, duration: 100 },
+
     { sprite: PLAYER.attackFinish, duration: 400 },
-    { sprite: PLAYER.combatBase, duration: 100 }
+    { sprite: PLAYER.combatBase, duration: 100 },
+
+    { sprite: PLAYER.attackDown1, duration: 400 },
+    { sprite: PLAYER.combatBase, duration: 300 }
   ]);
 
   const ZOOM_MULTIPLIERS = [1, 1.75, 3, 4.5];
