@@ -2354,7 +2354,10 @@
       image.style.top = `${config.top}px`;
       image.style.width = `${config.width}px`;
       image.style.height = `${config.height}px`;
-      image.style.zIndex = "6";
+      // R11 buildings stay below the special church-tower depth layer.
+      // This prevents the Neuensteiner Hof from covering the player when
+      // the player is only supposed to be behind the church tower.
+      image.style.zIndex = "2";
       image.style.transformOrigin = "50% 50%";
       if (config.mirrored) image.style.transform = "scaleX(-1)";
 
@@ -2495,7 +2498,19 @@
 
     const behindHofRoof = playerBehindNeuensteinerHofRoof();
 
-    playerEl.style.zIndex = (behindTower || behindHofRoof) ? "3" : "100";
+    // Three independent depth layers:
+    // 100 = normal foreground
+    //   3 = behind CHURCH tower only, but still IN FRONT of R11 buildings
+    //   1 = behind the Neuensteiner Hof roof
+    //
+    // This fixes the red-marked overlap without changing the church tower rule.
+    if (behindHofRoof) {
+      playerEl.style.zIndex = "1";
+    } else if (behindTower) {
+      playerEl.style.zIndex = "3";
+    } else {
+      playerEl.style.zIndex = "100";
+    }
   }
 
   function prepareChurchAlphaMask(image) {
@@ -2653,7 +2668,7 @@
       }
 
       .map-building--r11 {
-        z-index: 6;
+        z-index: 2;
       }
     `;
 
