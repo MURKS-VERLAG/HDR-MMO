@@ -422,6 +422,364 @@
   }
 
 
+
+  // ------------------------------------------------------------------
+  // TRUNKENBOLD — R14 NPC V1
+  // Only moves inside the black marked courtyard rectangle.
+  // May randomly enter/leave either yellow tavern door.
+  // ------------------------------------------------------------------
+  const TRUNKENBOLD_CONFIG = Object.freeze({
+    outsideSprite: "assets/npcs/TRUNKENBOLD OUTSIDE.png",
+    enterSprite: "assets/npcs/TRUNKENBOLD ENTER.png",
+
+    // Exact black R14 movement rectangle.
+    bounds: Object.freeze({
+      x1: 5130,
+      y1: 2690,
+      x2: 6295,
+      y2: 3220
+    }),
+
+    // Two yellow R14 tavern doors.
+    doors: Object.freeze([
+      Object.freeze({ id: "left",  x: 5505, y: 2535 }),
+      Object.freeze({ id: "right", x: 5985, y: 2535 })
+    ]),
+
+    width: 365,
+    height: 550,
+    speedMin: 82,
+    speedMax: 138,
+
+    // Random outdoor behaviour.
+    outdoorPauseMin: 900,
+    outdoorPauseMax: 3800,
+    enterChancePerDecision: 0.22,
+
+    // Once inside, duration is random.
+    indoorMin: 4500,
+    indoorMax: 15000,
+
+    // Exact requested door animation length.
+    doorPoseDuration: 1000,
+    fadeDuration: 420,
+
+    // Outside sprite flips every exact second.
+    flipEvery: 1000
+  });
+
+  let trunkenbold = null;
+
+  function installTrunkenboldStyles() {
+    if (document.getElementById("trunkenboldStyles")) return;
+
+    const style = document.createElement("style");
+    style.id = "trunkenboldStyles";
+    style.textContent = `
+      .trunkenbold {
+        position: absolute;
+        z-index: 7;
+        width: ${TRUNKENBOLD_CONFIG.width}px;
+        height: ${TRUNKENBOLD_CONFIG.height}px;
+        transform: translate(-50%, -100%);
+        transform-origin: 50% 100%;
+        pointer-events: none;
+        user-select: none;
+        opacity: 1;
+        transition: opacity ${TRUNKENBOLD_CONFIG.fadeDuration}ms ease;
+        will-change: left, top, opacity, transform;
+      }
+
+      .trunkenbold--hidden {
+        opacity: 0;
+      }
+
+      .trunkenbold__sway {
+        position: absolute;
+        inset: 0;
+        transform-origin: 50% 100%;
+      }
+
+      .trunkenbold--moving .trunkenbold__sway {
+        animation: trunkenboldSway 1450ms ease-in-out infinite alternate;
+      }
+
+      .trunkenbold__sprite {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+        object-position: 50% 100%;
+        transform-origin: 50% 100%;
+        transition: transform 240ms ease;
+        filter: drop-shadow(0 9px 5px rgba(0,0,0,.26));
+      }
+
+      @keyframes trunkenboldSway {
+        0% {
+          transform: translate(-17px, 2px) rotate(-5.8deg);
+        }
+        34% {
+          transform: translate(8px, -5px) rotate(2.8deg);
+        }
+        68% {
+          transform: translate(-5px, 1px) rotate(-2.2deg);
+        }
+        100% {
+          transform: translate(19px, -3px) rotate(6.5deg);
+        }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .trunkenbold--moving .trunkenbold__sway {
+          animation: none;
+        }
+      }
+    `;
+    document.head.appendChild(style);
+  }
+
+  function trunkenboldRandom(min, max) {
+    return min + Math.random() * (max - min);
+  }
+
+  function trunkenboldRandomOutdoorPoint() {
+    const b = TRUNKENBOLD_CONFIG.bounds;
+    return {
+      x: trunkenboldRandom(b.x1 + 95, b.x2 - 95),
+      y: trunkenboldRandom(b.y1 + 80, b.y2 - 70)
+    };
+  }
+
+  function trunkenboldPickDoor() {
+    return TRUNKENBOLD_CONFIG.doors[
+      Math.floor(Math.random() * TRUNKENBOLD_CONFIG.doors.length)
+    ];
+  }
+
+  function setTrunkenboldOutsideSprite() {
+    if (!trunkenbold) return;
+    trunkenbold.image.src = encodeURI(TRUNKENBOLD_CONFIG.outsideSprite);
+  }
+
+  function setTrunkenboldDoorSprite() {
+    if (!trunkenbold) return;
+    trunkenbold.image.src = encodeURI(TRUNKENBOLD_CONFIG.enterSprite);
+    trunkenbold.image.style.transform = "scaleX(1)";
+  }
+
+  function trunkenboldStartOutdoorWalk(now, explicitTarget = null) {
+    if (!trunkenbold) return;
+
+    const target = explicitTarget || trunkenboldRandomOutdoorPoint();
+
+    trunkenbold.targetX = target.x;
+    trunkenbold.targetY = target.y;
+    trunkenbold.speed = trunkenboldRandom(
+      TRUNKENBOLD_CONFIG.speedMin,
+      TRUNKENBOLD_CONFIG.speedMax
+    );
+    trunkenbold.phase = "outdoor-walk";
+    trunkenbold.phaseEndAt = 0;
+    trunkenbold.element.classList.add("trunkenbold--moving");
+    trunkenbold.nextFlipAt = now + TRUNKENBOLD_CONFIG.flipEvery;
+  }
+
+  function trunkenboldStartOutdoorPause(now) {
+    if (!trunkenbold) return;
+
+    trunkenbold.phase = "outdoor-pause";
+    trunkenbold.element.classList.remove("trunkenbold--moving");
+    trunkenbold.phaseEndAt =
+      now + trunkenboldRandom(
+        TRUNKENBOLD_CONFIG.outdoorPauseMin,
+        TRUNKENBOLD_CONFIG.outdoorPauseMax
+      );
+  }
+
+  function trunkenboldWalkToDoor(now) {
+    if (!trunkenbold) return;
+
+    const door = trunkenboldPickDoor();
+    trunkenbold.door = door;
+    trunkenbold.targetX = door.x;
+    trunkenbold.targetY = door.y;
+    trunkenbold.speed = trunkenboldRandom(92, 126);
+    trunkenbold.phase = "to-door";
+    trunkenbold.phaseEndAt = 0;
+    trunkenbold.element.classList.add("trunkenbold--moving");
+    trunkenbold.nextFlipAt = now + TRUNKENBOLD_CONFIG.flipEvery;
+  }
+
+  function trunkenboldBeginDoorEntry(now) {
+    if (!trunkenbold) return;
+
+    trunkenbold.phase = "door-entry";
+    trunkenbold.phaseEndAt = now + TRUNKENBOLD_CONFIG.doorPoseDuration;
+    trunkenbold.element.classList.remove("trunkenbold--moving");
+    setTrunkenboldDoorSprite();
+  }
+
+  function trunkenboldDisappearInside(now) {
+    if (!trunkenbold) return;
+
+    trunkenbold.phase = "inside";
+    trunkenbold.element.classList.add("trunkenbold--hidden");
+    trunkenbold.phaseEndAt =
+      now + trunkenboldRandom(
+        TRUNKENBOLD_CONFIG.indoorMin,
+        TRUNKENBOLD_CONFIG.indoorMax
+      );
+  }
+
+  function trunkenboldLeaveTavern(now) {
+    if (!trunkenbold) return;
+
+    const door = trunkenboldPickDoor();
+    trunkenbold.door = door;
+    trunkenbold.x = door.x;
+    trunkenbold.y = door.y;
+    trunkenbold.element.style.left = `${trunkenbold.x}px`;
+    trunkenbold.element.style.top = `${trunkenbold.y}px`;
+
+    setTrunkenboldOutsideSprite();
+    trunkenbold.flip = 1;
+    trunkenbold.image.style.transform = "scaleX(1)";
+    trunkenbold.element.classList.remove("trunkenbold--hidden");
+
+    // He immediately staggers back into the black outdoor rectangle.
+    const target = trunkenboldRandomOutdoorPoint();
+    trunkenboldStartOutdoorWalk(now, target);
+  }
+
+  function createTrunkenbold() {
+    installTrunkenboldStyles();
+
+    for (const src of [
+      TRUNKENBOLD_CONFIG.outsideSprite,
+      TRUNKENBOLD_CONFIG.enterSprite
+    ]) {
+      const preload = new Image();
+      preload.src = encodeURI(src);
+    }
+
+    const element = document.createElement("div");
+    element.id = "trunkenbold";
+    element.className = "trunkenbold";
+
+    const sway = document.createElement("div");
+    sway.className = "trunkenbold__sway";
+
+    const image = document.createElement("img");
+    image.className = "trunkenbold__sprite";
+    image.src = encodeURI(TRUNKENBOLD_CONFIG.outsideSprite);
+    image.alt = "";
+    image.draggable = false;
+
+    sway.appendChild(image);
+    element.appendChild(sway);
+    world.appendChild(element);
+
+    const start = {
+      x: 5680,
+      y: 2995
+    };
+
+    trunkenbold = {
+      element,
+      sway,
+      image,
+      x: start.x,
+      y: start.y,
+      targetX: start.x,
+      targetY: start.y,
+      speed: 100,
+      phase: "outdoor-pause",
+      phaseEndAt: performance.now() + 1500,
+      nextFlipAt: performance.now() + TRUNKENBOLD_CONFIG.flipEvery,
+      flip: 1,
+      door: null
+    };
+
+    element.style.left = `${trunkenbold.x}px`;
+    element.style.top = `${trunkenbold.y}px`;
+  }
+
+  function updateTrunkenbold(deltaSeconds, now) {
+    if (!trunkenbold) return;
+
+    if (MAP.id !== "oberkirch-zentrum") {
+      trunkenbold.element.style.display = "none";
+      return;
+    }
+
+    trunkenbold.element.style.display = "";
+
+    if (
+      (trunkenbold.phase === "outdoor-walk" ||
+       trunkenbold.phase === "to-door") &&
+      now >= trunkenbold.nextFlipAt
+    ) {
+      trunkenbold.flip *= -1;
+      trunkenbold.image.style.transform = `scaleX(${trunkenbold.flip})`;
+      trunkenbold.nextFlipAt += TRUNKENBOLD_CONFIG.flipEvery;
+    }
+
+    if (
+      trunkenbold.phase === "outdoor-walk" ||
+      trunkenbold.phase === "to-door"
+    ) {
+      const dx = trunkenbold.targetX - trunkenbold.x;
+      const dy = trunkenbold.targetY - trunkenbold.y;
+      const distance = Math.hypot(dx, dy);
+
+      if (distance <= 9) {
+        trunkenbold.x = trunkenbold.targetX;
+        trunkenbold.y = trunkenbold.targetY;
+        trunkenbold.element.style.left = `${trunkenbold.x}px`;
+        trunkenbold.element.style.top = `${trunkenbold.y}px`;
+
+        if (trunkenbold.phase === "to-door") {
+          trunkenboldBeginDoorEntry(now);
+        } else {
+          trunkenboldStartOutdoorPause(now);
+        }
+        return;
+      }
+
+      const step = Math.min(distance, trunkenbold.speed * deltaSeconds);
+      trunkenbold.x += (dx / distance) * step;
+      trunkenbold.y += (dy / distance) * step;
+      trunkenbold.element.style.left = `${trunkenbold.x}px`;
+      trunkenbold.element.style.top = `${trunkenbold.y}px`;
+      return;
+    }
+
+    if (trunkenbold.phase === "outdoor-pause") {
+      if (now < trunkenbold.phaseEndAt) return;
+
+      if (Math.random() < TRUNKENBOLD_CONFIG.enterChancePerDecision) {
+        trunkenboldWalkToDoor(now);
+      } else {
+        trunkenboldStartOutdoorWalk(now);
+      }
+      return;
+    }
+
+    if (trunkenbold.phase === "door-entry") {
+      if (now < trunkenbold.phaseEndAt) return;
+      trunkenboldDisappearInside(now);
+      return;
+    }
+
+    if (trunkenbold.phase === "inside") {
+      if (now < trunkenbold.phaseEndAt) return;
+      trunkenboldLeaveTavern(now);
+    }
+  }
+
+
   // ------------------------------------------------------------------
   // AMBIENT RABBITS
   // Four habitat polygons follow the WHITE outlined regions in the
@@ -2921,7 +3279,8 @@
       ".map-rabbit",
       ".map-mole",
       ".black-penny-drop",
-      ".map-building"
+      ".map-building",
+      ".trunkenbold"
     ];
 
     for (const element of world.querySelectorAll(selectors.join(","))) {
@@ -3577,6 +3936,7 @@
       updatePlayer(deltaSeconds);
       checkMapExit();
       updateAreaSigns();
+      updateTrunkenbold(deltaSeconds, now);
       updateRabbits(deltaSeconds, now);
       updateMole(now);
     }
@@ -3724,6 +4084,7 @@
     createMoleSystem();
     createOberkirchBuildings();
     createR11Buildings();
+    createTrunkenbold();
 
     clampPlayer();
     updateAreaSigns();
