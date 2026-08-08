@@ -49,22 +49,24 @@
   });
 
   const ATTACK_RIGHT = Object.freeze([
+    // SCHLAG -> TRITT -> SCHLAG -> FINISH
     { sprite: PLAYER.attackRight1, duration: 400 },
     { sprite: PLAYER.combatBase, duration: 100 },
-    { sprite: PLAYER.attackRight2, duration: 400 },
-    { sprite: PLAYER.combatBase, duration: 100 },
     { sprite: PLAYER.attackRight3, duration: 400 },
+    { sprite: PLAYER.combatBase, duration: 100 },
+    { sprite: PLAYER.attackRight1, duration: 400 },
     { sprite: PLAYER.combatBase, duration: 100 },
     { sprite: PLAYER.attackFinish, duration: 400 },
     { sprite: PLAYER.combatBase, duration: 100 }
   ]);
 
   const ATTACK_LEFT = Object.freeze([
+    // GESPIEGELT: SCHLAG -> TRITT -> SCHLAG -> FINISH
     { sprite: PLAYER.attackLeft1, duration: 400 },
     { sprite: PLAYER.combatBaseLeft, duration: 100 },
-    { sprite: PLAYER.attackLeft2, duration: 400 },
-    { sprite: PLAYER.combatBaseLeft, duration: 100 },
     { sprite: PLAYER.attackLeft3, duration: 400 },
+    { sprite: PLAYER.combatBaseLeft, duration: 100 },
+    { sprite: PLAYER.attackLeft1, duration: 400 },
     { sprite: PLAYER.combatBaseLeft, duration: 100 },
     { sprite: PLAYER.attackFinishLeft, duration: 400 },
     { sprite: PLAYER.combatBaseLeft, duration: 100 }
@@ -158,6 +160,7 @@
   let attackStep = 0;
   let attackTimer = 0;
   let blocking = false;
+  let blockFacing = "right";
 
   const keys = new Set();
   let lastFrame = performance.now();
@@ -348,38 +351,59 @@
 
 
   function getBlockSprite() {
-    return facing === "left" ? PLAYER.blockLeft : PLAYER.blockRight;
+    return blockFacing === "left" ? PLAYER.blockLeft : PLAYER.blockRight;
+  }
+
+  function forceSprite(src) {
+    activeSprite = "";
+    setSprite(src);
   }
 
   function startBlocking() {
+    if (blocking) return;
+
+    // Remember the orientation that existed BEFORE CTRL was pressed.
+    blockFacing = facing === "left" ? "left" : facing === "down" ? "down" : "right";
     blocking = true;
 
-    // CTRL = absolute freeze.
-    // Cancel attack and forget movement keys so nothing resumes automatically.
+    // Block is NOT part of any combo. Cancel a running combo completely.
     attackHeld = false;
     attacking = false;
     attackSequence = null;
     attackStep = 0;
     attackTimer = 0;
 
-    keys.clear();
-
     moving = false;
     currentAnimation = "idle";
     walkFrame = 0;
     walkFrameTimer = 0;
 
+    keys.clear();
+
     playerEl.classList.remove("player--moving");
     playerEl.classList.add("player--idle");
 
-    setSprite(getBlockSprite());
+    forceSprite(getBlockSprite());
   }
 
   function stopBlocking() {
+    if (!blocking) return;
+
     blocking = false;
 
-    // On CTRL release return immediately to the correct resting pose.
-    setIdleSprite();
+    // Restore the actual resting pose immediately and FORCE the image swap.
+    if (blockFacing === "down") {
+      facing = "down";
+      forceSprite(PLAYER.combatBase);
+    } else if (blockFacing === "left") {
+      facing = "left";
+      lastHorizontalFacing = "left";
+      forceSprite(PLAYER.standLeft);
+    } else {
+      facing = "right";
+      lastHorizontalFacing = "right";
+      forceSprite(PLAYER.standRight);
+    }
   }
 
   function updatePlayer(deltaSeconds) {
@@ -502,6 +526,12 @@
     requestAnimationFrame(frame);
   }
 
+  function isControlEvent(event) {
+    return event.code === "ControlLeft" ||
+           event.code === "ControlRight" ||
+           event.key === "Control";
+  }
+
   window.addEventListener("keydown", (event) => {
     const controlled = [
       "KeyW", "KeyA", "KeyS", "KeyD",
@@ -510,21 +540,24 @@
       "Space", "ControlLeft", "ControlRight"
     ];
 
-    if (controlled.includes(event.code)) event.preventDefault();
+    if (controlled.includes(event.code) || event.key === "Control") {
+      event.preventDefault();
+    }
 
-    if (event.code === "ControlLeft" || event.code === "ControlRight") {
-      if (!blocking) startBlocking();
+    if (isControlEvent(event)) {
+      startBlocking();
       return;
     }
 
-    // While CTRL is held the block image is frozen.
-    // Ignore every gameplay key until CTRL is released.
-    if (blocking) {
-      return;
+    // Failsafe: if the browser missed CTRL-keyup but Ctrl is no longer held,
+    // the next keyboard event immediately releases the block.
+    if (blocking && !event.ctrlKey) {
+      stopBlocking();
     }
+
+    if (blocking) return;
 
     if (event.code === "Space") {
-      if (blocking) return;
       attackHeld = true;
 
       if (!attacking) {
@@ -548,9 +581,9 @@
   }, { passive: false });
 
   window.addEventListener("keyup", (event) => {
-    if (event.code === "ControlLeft" || event.code === "ControlRight") {
+    if (isControlEvent(event)) {
       event.preventDefault();
-      if (blocking) stopBlocking();
+      stopBlocking();
       return;
     }
 
@@ -562,6 +595,13 @@
 
     keys.delete(event.code);
   }, { passive: false });
+
+  // Extra safety for lost modifier-key events (Alt-Tab, browser focus changes, etc.).
+  window.addEventListener("blur", () => {
+    if (blocking) stopBlocking();
+    attackHeld = false;
+    keys.clear();
+  });
 
   game.addEventListener("wheel", (event) => {
     event.preventDefault();
