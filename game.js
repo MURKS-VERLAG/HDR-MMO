@@ -1462,7 +1462,8 @@
     style.textContent = `
       .map-goat {
         position: absolute;
-        z-index: 5;
+        /* R25: goat must always render in FRONT of the Obsthof (building z-index 6). */
+        z-index: 7;
         width: ${GOAT_CONFIG.width}px;
         height: ${GOAT_CONFIG.height}px;
         transform: translate(-50%, -88%);
@@ -4477,12 +4478,14 @@
     // fully walkable, but PLAYER is rendered behind the house/roof.
     // This EXTENDS the existing R22 purple walk-behind zone; it does not replace it.
     walkBehindRoofWorld: Object.freeze([
-      [1515, 3745],
+      // R25 MINIFIX: only the LEFT edge is extended slightly toward the blue arrow.
+      // All other edges remain unchanged.
+      [1395, 3745],
       [2355, 3700],
       [2520, 3845],
       [2525, 4195],
       [2025, 4180],
-      [1415, 4080]
+      [1295, 4080]
     ])
   });
 
