@@ -6737,7 +6737,9 @@
         playerInOberkirchNorthExitLane() ||
         playerInOberkirchGreenNorthExitLane() ||
         playerInWinterbachNorthLeftExitLane() ||
-        playerInWinterbachNorthRightExitLane()
+        playerInWinterbachNorthRightExitLane() ||
+        playerInLautenbachNorthLeftExitLane() ||
+        playerInLautenbachNorthRightExitLane()
       ) &&
       (keys.has("KeyW") || keys.has("ArrowUp"));
 
@@ -6761,6 +6763,11 @@
         leaveFloor = Math.min(
           MAP_EXIT_CONFIG.winterbachNorthLeft.leaveY,
           MAP_EXIT_CONFIG.winterbachNorthRight.leaveY
+        ) - 80;
+      } else if (MAP.id === "lautenbach") {
+        leaveFloor = Math.min(
+          MAP_EXIT_CONFIG.lautenbachNorthLeft.leaveY,
+          MAP_EXIT_CONFIG.lautenbachNorthRight.leaveY
         ) - 80;
       }
 
