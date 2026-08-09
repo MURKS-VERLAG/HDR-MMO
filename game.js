@@ -3600,6 +3600,15 @@
         (drop.mapId || "oberkirch-zentrum") === MAP.id ? "" : "none";
     }
 
+    // R27 MINIFIX: MAP 3 LAUTENBACH never shows or spawns a mole.
+    // Existing OBERKIRCH / WINTERBACH spawn fields and rules remain untouched.
+    if (MAP.id === "lautenbach") {
+      if (moleEvent) {
+        moleEvent.element.style.display = "none";
+      }
+      return;
+    }
+
     if (moleEvent) {
       const eventMapId = moleEvent.mapId || "oberkirch-zentrum";
       moleEvent.element.style.display = eventMapId === MAP.id ? "" : "none";
@@ -5295,7 +5304,7 @@
         transition:
           opacity 420ms ease,
           transform 420ms cubic-bezier(.2,.8,.2,1);
-        color: #bfeeff;
+        color: #000000;
         font-family:
           "Old English Text MT",
           "Lucida Blackletter",
@@ -5304,27 +5313,16 @@
           serif;
         font-weight: 900;
         text-shadow:
-          0 0 4px #ffffff,
-          0 0 10px #8edfff,
-          0 0 22px #4bc9ff,
-          0 5px 4px rgba(0,0,0,.88);
-      }
-
-      #mapRegionTitle.visible {
-        opacity: 1;
-        transform: translate(-50%, -50%) scale(1);
-      }
-
-      /* R26 LAUTENBACH title: same existing title mechanic/font,
-         specifically black lettering with strong white glow. */
-      #mapRegionTitle.mapRegionTitle--lautenbach {
-        color: #000000;
-        text-shadow:
           0 0 3px #ffffff,
           0 0 8px #ffffff,
           0 0 16px #ffffff,
           0 0 28px #ffffff,
           0 5px 4px rgba(0,0,0,.78);
+      }
+
+      #mapRegionTitle.visible {
+        opacity: 1;
+        transform: translate(-50%, -50%) scale(1);
       }
 
       #mapRegionTitle .main {
@@ -5419,17 +5417,20 @@
     const title = regionTitle();
     if (!title || !map) return;
 
-    title.classList.remove("visible", "mapRegionTitle--lautenbach");
+    title.classList.remove("visible");
 
-    if (map.id === "lautenbach") {
-      title.innerHTML = '<span class="main">LAUTENBACH</span>';
-      title.classList.add("mapRegionTitle--lautenbach");
+    let label = "";
+    if (map.id === "winterbach-ranglehen") {
+      label = "WINTERBACH";
+    } else if (map.id === "lautenbach") {
+      label = "LAUTENBACH";
+    } else if (map.id === "oberkirch-zentrum") {
+      label = "OBERKIRCH";
     } else {
-      // Existing MAP 2 title remains exactly as before.
-      title.innerHTML =
-        '<span class="main">WINTERBACH</span>' +
-        '<span class="sub">RANGLEHEN</span>';
+      label = map.name || "";
     }
+
+    title.innerHTML = `<span class="main">${label}</span>`;
 
     void title.offsetWidth;
     title.classList.add("visible");
@@ -5687,7 +5688,7 @@
       switchMap(
         MAPS.oberkirch,
         MAP_EXIT_CONFIG.oberkirchReturnSpawn,
-        false
+        true
       );
       return true;
     }
