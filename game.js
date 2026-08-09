@@ -5179,12 +5179,20 @@
       top: 1220,
       width: 2660,
       height: 2485,
+
+      // R30: ROSA upper church area only.
+      // Player may pass here and stays BEHIND the church.
+      // The zone now ends safely ABOVE the orange collision rectangle.
       behindZone: Object.freeze([
         [2510, 1220],
         [5170, 1220],
-        [5170, 2760],
-        [2510, 2760]
+        [5170, 2685],
+        [2510, 2685]
       ]),
+
+      // R30: ORANGE lower church rectangle.
+      // Hard collision. Player feet may approach the edge but never enter.
+      // Player must remain in FOREGROUND here.
       blockedZone: Object.freeze([
         [2510, 2760],
         [5225, 2760],
@@ -5217,6 +5225,20 @@
   function playerBehindLautenbachBuilding() {
     if (MAP.id !== "lautenbach") return false;
 
+    // R30: orange / blocked building areas ALWAYS keep player in foreground.
+    // This specifically fixes the lower Wallfahrtskirche box.
+    if (
+      LAUTENBACH_BUILDINGS.some(
+        config => worldPointInPolygon(
+          playerX,
+          playerY,
+          config.blockedZone
+        )
+      )
+    ) {
+      return false;
+    }
+
     return LAUTENBACH_BUILDINGS.some(
       config => worldPointInPolygon(
         playerX,
@@ -5229,13 +5251,31 @@
   function isLautenbachBuildingBlockedFootPoint(x, y) {
     if (MAP.id !== "lautenbach") return false;
 
-    return LAUTENBACH_BUILDINGS.some(
-      config => worldPointInPolygon(
-        x,
-        y,
-        config.blockedZone
-      )
-    );
+    return LAUTENBACH_BUILDINGS.some((config) => {
+      if (worldPointInPolygon(x, y, config.blockedZone)) {
+        return true;
+      }
+
+      // R30: tiny safety border ONLY around the church's lower orange box,
+      // so the player's foot anchor stops cleanly AT the marked edge.
+      if (config.id === "lautenbach-wallfahrtskirche") {
+        const p = config.blockedZone;
+        const minX = Math.min(...p.map(v => v[0]));
+        const maxX = Math.max(...p.map(v => v[0]));
+        const minY = Math.min(...p.map(v => v[1]));
+        const maxY = Math.max(...p.map(v => v[1]));
+        const pad = 10;
+
+        return (
+          x >= minX - pad &&
+          x <= maxX + pad &&
+          y >= minY - pad &&
+          y <= maxY + pad
+        );
+      }
+
+      return false;
+    });
   }
 
   function installLautenbachBuildingStyles() {
