@@ -3999,7 +3999,18 @@
       [2428,3611],[2863,3800]
     ]),
     hillSnapDistance: 330,
-    hillTravelSpeed: PLAYER.speed * 0.92
+    hillTravelSpeed: PLAYER.speed * 0.92,
+
+    // R29: narrow lower-left PLAYER passage to the rabbit side.
+    // This is a player-only exception; animals still treat the red terrain as blocked.
+    playerPassages: Object.freeze([
+      Object.freeze([
+        [620, 4920],
+        [1325, 4920],
+        [1325, 5355],
+        [620, 5355]
+      ])
+    ])
   });
 
   let activeLautenbachHillPath = false;
@@ -4034,6 +4045,17 @@
 
   function isLautenbachBlockedFootPoint(x,y){
     if(MAP.id!=="lautenbach") return false;
+
+    // R29: exact lower-left narrow PLAYER-only passage.
+    if (
+      LAUTENBACH_TERRAIN.playerPassages &&
+      LAUTENBACH_TERRAIN.playerPassages.some(
+        p => worldPointInPolygon(x, y, p)
+      )
+    ) {
+      return false;
+    }
+
     return LAUTENBACH_TERRAIN.blocked.some(
       p=>worldPointInPolygon(x,y,p) ||
          pointNearPolygonBoundaryR21(x,y,p,LAUTENBACH_TERRAIN.boundaryPadding)
@@ -4412,6 +4434,54 @@
   }
 
 
+  // ------------------------------------------------------------------
+  // R29 MAP 3 — YELLOW ARROW / WOODEN BRIDGE SNAP
+  // Horizontal A/D passage across the Rench.
+  // ------------------------------------------------------------------
+  const LAUTENBACH_WOOD_BRIDGE = Object.freeze({
+    path: Object.freeze([
+      Object.freeze([6250, 930]),
+      Object.freeze([7545, 930])
+    ]),
+    engageDistance: 225
+  });
+
+  function tryEngageLautenbachWoodBridge(dx, dy) {
+    if (MAP.id !== "lautenbach") return false;
+
+    const horizontalDirection = dx > 0 ? 1 : dx < 0 ? -1 : 0;
+    if (!horizontalDirection) return false;
+
+    const closest = closestPointOnBridgePath(
+      playerX,
+      playerY,
+      LAUTENBACH_WOOD_BRIDGE.path
+    );
+
+    if (
+      !closest ||
+      closest.distance > LAUTENBACH_WOOD_BRIDGE.engageDistance
+    ) {
+      return false;
+    }
+
+    // At either end, moving outward releases immediately.
+    if (closest.progress <= 0.035 && horizontalDirection < 0) return false;
+    if (closest.progress >= 0.965 && horizontalDirection > 0) return false;
+
+    activeBridge = {
+      id: "lautenbach-wood",
+      path: LAUTENBACH_WOOD_BRIDGE.path,
+      distance: closest.pathDistance,
+      snapping: true
+    };
+
+    clearIceVelocity();
+    updateIceVisual();
+    return true;
+  }
+
+
   function lautenbachHillPathMetrics() {
     return getPathMetrics(LAUTENBACH_TERRAIN.hillPath);
   }
@@ -4489,6 +4559,19 @@
 
   function movePlayerWithWorldCollision(dx, dy, deltaSeconds) {
     const horizontalDirection = dx > 0 ? 1 : dx < 0 ? -1 : 0;
+
+    // R29: yellow-arrow wooden bridge gets first priority on MAP 3.
+    if (
+      MAP.id === "lautenbach" &&
+      (
+        (activeBridge && activeBridge.id === "lautenbach-wood") ||
+        tryEngageLautenbachWoodBridge(dx, dy)
+      )
+    ) {
+      moveAlongActiveBridge(horizontalDirection, deltaSeconds);
+      clampPlayer();
+      return;
+    }
 
     if (
       MAP.id === "lautenbach" &&
@@ -5082,6 +5165,126 @@
   }
 
 
+  // ------------------------------------------------------------------
+  // R29 MAP 3 — LAUTENBACH BUILDINGS
+  // Exact placement follows the supplied marked composite.
+  // PINK rectangles: walkable, player is BEHIND the building.
+  // ORANGE rectangles: hard foot collision, player stays in foreground.
+  // ------------------------------------------------------------------
+  const LAUTENBACH_BUILDINGS = Object.freeze([
+    Object.freeze({
+      id: "lautenbach-wallfahrtskirche",
+      src: "assets/buildings/LAUTENBACH WALLFAHRTSKIRCHE.png",
+      left: 2510,
+      top: 1220,
+      width: 2660,
+      height: 2485,
+      behindZone: Object.freeze([
+        [2510, 1220],
+        [5170, 1220],
+        [5170, 2760],
+        [2510, 2760]
+      ]),
+      blockedZone: Object.freeze([
+        [2510, 2760],
+        [5225, 2760],
+        [5225, 3695],
+        [2510, 3695]
+      ])
+    }),
+    Object.freeze({
+      id: "lautenbach-schwanenwirt",
+      src: "assets/buildings/LAUTENBACH SCHWANENWIRTSCHAFT.png",
+      left: 3045,
+      top: 3695,
+      width: 2050,
+      height: 1710,
+      behindZone: Object.freeze([
+        [3045, 3695],
+        [5095, 3695],
+        [5095, 4500],
+        [3045, 4500]
+      ]),
+      blockedZone: Object.freeze([
+        [3045, 4500],
+        [5095, 4500],
+        [5095, 5395],
+        [3045, 5395]
+      ])
+    })
+  ]);
+
+  function playerBehindLautenbachBuilding() {
+    if (MAP.id !== "lautenbach") return false;
+
+    return LAUTENBACH_BUILDINGS.some(
+      config => worldPointInPolygon(
+        playerX,
+        playerY,
+        config.behindZone
+      )
+    );
+  }
+
+  function isLautenbachBuildingBlockedFootPoint(x, y) {
+    if (MAP.id !== "lautenbach") return false;
+
+    return LAUTENBACH_BUILDINGS.some(
+      config => worldPointInPolygon(
+        x,
+        y,
+        config.blockedZone
+      )
+    );
+  }
+
+  function installLautenbachBuildingStyles() {
+    if (document.getElementById("lautenbachBuildingStyles")) return;
+
+    const style = document.createElement("style");
+    style.id = "lautenbachBuildingStyles";
+    style.textContent = `
+      .lautenbach-building {
+        position: absolute;
+        z-index: 6;
+        display: block;
+        object-fit: fill;
+        max-width: none;
+        max-height: none;
+        pointer-events: none;
+        user-select: none;
+        -webkit-user-drag: none;
+      }
+    `;
+    document.head.appendChild(style);
+  }
+
+  function createLautenbachBuildings() {
+    installLautenbachBuildingStyles();
+
+    for (const config of LAUTENBACH_BUILDINGS) {
+      const image = document.createElement("img");
+      image.id = config.id;
+      image.className = "lautenbach-building";
+      image.src = encodeURI(config.src);
+      image.alt = "";
+      image.draggable = false;
+      image.style.left = `${config.left}px`;
+      image.style.top = `${config.top}px`;
+      image.style.width = `${config.width}px`;
+      image.style.height = `${config.height}px`;
+      image.style.display = MAP.id === "lautenbach" ? "" : "none";
+      world.appendChild(image);
+    }
+  }
+
+  function setLautenbachWorldVisibility(visible) {
+    for (const element of world.querySelectorAll(".lautenbach-building")) {
+      element.style.display = visible ? "" : "none";
+    }
+  }
+
+
   // The church collision is read directly from the PNG alpha channel.
   // Transparent pixels are always walkable. Only the lower, physically
   // grounded part of the visible church can block the player's FOOT anchor.
@@ -5183,6 +5386,12 @@
     if (MAP.id === "winterbach-ranglehen") {
       playerEl.style.zIndex =
         playerBehindWinterbachObsthofFront() ? "1" : "100";
+      return;
+    }
+
+    if (MAP.id === "lautenbach") {
+      playerEl.style.zIndex =
+        playerBehindLautenbachBuilding() ? "1" : "100";
       return;
     }
 
@@ -5446,6 +5655,11 @@
       return isWinterbachObsthofBlockedFootPoint(x, y);
     }
 
+    // R29 MAP 3: ONLY the orange marked lower building rectangles block.
+    if (MAP.id === "lautenbach") {
+      return isLautenbachBuildingBlockedFootPoint(x, y);
+    }
+
     if (MAP.id !== "oberkirch-zentrum") return false;
 
     // Precise PNG-alpha collision for the church.
@@ -5703,6 +5917,7 @@
 
     setOberkirchWorldVisibility(MAP.id === "oberkirch-zentrum");
     setWinterbachWorldVisibility(MAP.id === "winterbach-ranglehen");
+    setLautenbachWorldVisibility(MAP.id === "lautenbach");
 
     // Sync map-specific animals while the transition overlay is still covering the map.
     updateRabbits(0, performance.now());
@@ -6593,6 +6808,7 @@
     createOberkirchBuildings();
     createR11Buildings();
     createWinterbachObsthof();
+    createLautenbachBuildings();
     createTrunkenbold();
 
     clampPlayer();
