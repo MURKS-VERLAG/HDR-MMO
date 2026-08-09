@@ -160,15 +160,34 @@
     standLeft: "assets/player/PLAYER STAND LEFT.png",
     standUp: "assets/player/PLAYER STAND UP.png",
 
-    walkRight: "assets/player/PLAYER WALK RIGHT.png",
-    walkLeft: "assets/player/PLAYER WALK LEFT.png",
+    walkRight: Object.freeze([
+      "assets/player/PLAYER WALK RIGHT 1.png",
+      "assets/player/PLAYER WALK RIGHT 2.png",
+      "assets/player/PLAYER WALK RIGHT 3.png",
+      "assets/player/PLAYER WALK RIGHT 4.png"
+    ]),
 
-    walkDown: [
+    walkLeft: Object.freeze([
+      "assets/player/PLAYER WALK LEFT 1.png",
+      "assets/player/PLAYER WALK LEFT 2.png",
+      "assets/player/PLAYER WALK LEFT 3.png",
+      "assets/player/PLAYER WALK LEFT 4.png"
+    ]),
+
+    // S / S+A / S+D: requested cadence = original sheet 1, 2, 3, 2.
+    walkDown: Object.freeze([
       "assets/player/PLAYER WALK DOWN 1.png",
+      "assets/player/PLAYER WALK DOWN 2.png",
+      "assets/player/PLAYER WALK DOWN 3.png",
       "assets/player/PLAYER WALK DOWN 2.png"
-    ],
+    ]),
 
-    walkUp: "assets/player/PLAYER WALK UP 1.png",
+    walkUp: Object.freeze([
+      "assets/player/PLAYER WALK UP 1.png",
+      "assets/player/PLAYER WALK UP 2.png",
+      "assets/player/PLAYER WALK UP 3.png",
+      "assets/player/PLAYER WALK UP 4.png"
+    ]),
 
     combatBase: "assets/player/combat/PLAYER COMBAT BASE.webp",
     combatBaseLeft: "assets/player/combat/PLAYER COMBAT BASE LEFT.webp",
@@ -7054,10 +7073,10 @@
     PLAYER.standRight,
     PLAYER.standLeft,
     PLAYER.standUp,
-    PLAYER.walkRight,
-    PLAYER.walkLeft,
+    ...PLAYER.walkRight,
+    ...PLAYER.walkLeft,
     ...PLAYER.walkDown,
-    PLAYER.walkUp,
+    ...PLAYER.walkUp,
     PLAYER.combatBase,
     PLAYER.combatBaseLeft,
     PLAYER.attackRight1,
@@ -7294,27 +7313,25 @@
   }
 
   function renderMovementFrame(animationName, deltaSeconds) {
-    if (animationName === "down") {
-      walkFrameTimer += deltaSeconds * 1000;
+    const frames =
+      animationName === "down" ? PLAYER.walkDown :
+      animationName === "right" ? PLAYER.walkRight :
+      animationName === "left" ? PLAYER.walkLeft :
+      animationName === "up" ? PLAYER.walkUp : null;
 
-      while (walkFrameTimer >= PLAYER.walkFrameDuration) {
-        walkFrameTimer -= PLAYER.walkFrameDuration;
-        walkFrame = (walkFrame + 1) % 2;
-      }
-
-      setSprite(PLAYER.walkDown[walkFrame]);
+    if (!frames) {
+      setIdleSprite();
       return;
     }
 
-    if (animationName === "right") {
-      setSprite(PLAYER.walkRight);
-    } else if (animationName === "left") {
-      setSprite(PLAYER.walkLeft);
-    } else if (animationName === "up") {
-      setSprite(PLAYER.walkUp);
-    } else {
-      setIdleSprite();
+    walkFrameTimer += deltaSeconds * 1000;
+
+    while (walkFrameTimer >= PLAYER.walkFrameDuration) {
+      walkFrameTimer -= PLAYER.walkFrameDuration;
+      walkFrame = (walkFrame + 1) % frames.length;
     }
+
+    setSprite(frames[walkFrame]);
   }
 
   function chooseAttackSequence() {
