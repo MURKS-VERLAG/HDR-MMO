@@ -135,9 +135,10 @@
       x: 3050,
       y: 6700
     }),
+    // R41: LAUTENBACH upper-right -> HUBACKER red-circle arrival point.
     hubackerSouthRightSpawn: Object.freeze({
-      x: 6050,
-      y: 6700
+      x: 5990,
+      y: 4895
     }),
 
     // R38 MAP 4 -> MAP 3: both lower HUBACKER roads return to the matching LAUTENBACH north road.
@@ -146,19 +147,9 @@
       x2: 3550,
       leavePadding: 18
     }),
-    hubackerSouthRight: Object.freeze({
-      x1: 5550,
-      x2: 6550,
-      leavePadding: 18
-    }),
-
     // Spawn just inside the two MAP 3 north roads when returning from HUBACKER.
     lautenbachNorthLeftReturnSpawn: Object.freeze({
       x: 5325,
-      y: 165
-    }),
-    lautenbachNorthRightReturnSpawn: Object.freeze({
-      x: 7520,
       y: 165
     })
   });
@@ -625,15 +616,6 @@
       direction: "down",
       glow: "#ffffff",
       trigger: { x1: 2400, y1: 5550, x2: 3750, y2: 6827 }
-    },
-    {
-      id: "hubacker-lautenbach-right",
-      mapId: "hubacker",
-      text: "LAUTENBACH",
-      x: 6050, y: 6350,
-      direction: "down",
-      glow: "#ffffff",
-      trigger: { x1: 5350, y1: 5550, x2: 6750, y2: 6827 }
     }
   ]);
 
@@ -4282,6 +4264,7 @@
   let activeHubackerCliffPath = false;
   let hubackerCliffDistance = 0;
   let hubackerCliffSnapping = false;
+  let hubackerCliffReleaseUntil = 0;
 
   function pointInsideHubackerEllipse(x, y, ellipse) {
     const dx = (x - ellipse.cx) / ellipse.rx;
@@ -4327,6 +4310,7 @@
 
   function tryEngageHubackerCliffPath(dx, dy) {
     if (MAP.id !== "hubacker" || activeHubackerCliffPath) return false;
+    if (performance.now() < hubackerCliffReleaseUntil) return false;
 
     // This line is W/S ONLY.
     const verticalDirection = dy < 0 ? -1 : dy > 0 ? 1 : 0;
@@ -4411,9 +4395,11 @@
     ) {
       activeHubackerCliffPath = false;
       hubackerCliffSnapping = false;
+      hubackerCliffReleaseUntil = performance.now() + 520;
 
-      // Tiny outward step so the capture radius does not instantly re-grab.
-      playerY += 18;
+      // Deliberate outward S-release.  This places the foot anchor beyond the
+      // capture tube and the cooldown prevents an immediate next-frame regrab.
+      playerY += 96;
     }
 
     return true;
@@ -4671,16 +4657,8 @@
 
     const inHubackerSouthExit =
       MAP.id === "hubacker" &&
-      (
-        (
-          x >= MAP_EXIT_CONFIG.hubackerSouthLeft.x1 &&
-          x <= MAP_EXIT_CONFIG.hubackerSouthLeft.x2
-        ) ||
-        (
-          x >= MAP_EXIT_CONFIG.hubackerSouthRight.x1 &&
-          x <= MAP_EXIT_CONFIG.hubackerSouthRight.x2
-        )
-      );
+      x >= MAP_EXIT_CONFIG.hubackerSouthLeft.x1 &&
+      x <= MAP_EXIT_CONFIG.hubackerSouthLeft.x2;
 
     if (y < minY) {
       const oberkirchNorthLeaveFloor = Math.min(
@@ -4718,10 +4696,7 @@
 
       const hubackerSouthAllowed =
         inHubackerSouthExit &&
-        y <= MAP.height + Math.max(
-          MAP_EXIT_CONFIG.hubackerSouthLeft.leavePadding,
-          MAP_EXIT_CONFIG.hubackerSouthRight.leavePadding
-        ) + 80;
+        y <= MAP.height + MAP_EXIT_CONFIG.hubackerSouthLeft.leavePadding + 80;
 
       if (!winterbachSouthAllowed && !lautenbachSouthAllowed && !hubackerSouthAllowed) {
         return false;
@@ -5690,6 +5665,164 @@
   }
 
 
+
+  // ------------------------------------------------------------------
+  // R41 MAP 4 — HUBACKER BUILDINGS
+  // Exact image registration against the supplied R32 reference composite.
+  // The source PNGs themselves are unchanged.
+  //
+  // ALT-NEUENSTEIN: NO extra collision — existing left purple plateau owns it.
+  // NEUENSTEIN: existing right purple plateau is the hard terrain hitbox.
+  // HUBACKERHOF: blue polygon is the only walk-behind opening; its lower and
+  // right boundaries are hard stops exactly as requested.
+  // ------------------------------------------------------------------
+  const HUBACKER_BUILDINGS = Object.freeze([
+    Object.freeze({
+      id: "hubacker-alt-neuenstein",
+      src: "assets/buildings/HUBACKER ALT-NEUENSTEIN RUINE.png",
+      left: 362.731,
+      top: -321.456,
+      width: 4511.935,
+      height: 3007.956,
+      zIndex: 110,
+      collision: "none"
+    }),
+    Object.freeze({
+      id: "hubacker-neuenstein",
+      src: "assets/buildings/HUBACKER NEUENSTEIN.png",
+      left: 6602.589,
+      top: -128.403,
+      width: 3155.363,
+      height: 4733.044,
+      zIndex: 110,
+      collision: "plateau"
+    }),
+    Object.freeze({
+      id: "hubacker-hof",
+      src: "assets/buildings/HUBACKER HOF.png",
+      left: 4931.435,
+      top: 4011.639,
+      width: 5603.741,
+      height: 3735.827,
+      zIndex: 6,
+      collision: "hof",
+
+      // Exact BLUE marked walk-behind polygon from R32.
+      behindZone: Object.freeze([
+        Object.freeze([5316.493, 5547.509]),
+        Object.freeze([5316.493, 5894.799]),
+        Object.freeze([8378.133, 5227.636]),
+        Object.freeze([8332.437, 4459.941]),
+        Object.freeze([6952.414, 4469.080])
+      ]),
+
+      // Hard boundary BELOW the blue area.
+      lowerBlockedZone: Object.freeze([
+        Object.freeze([5316.493, 5894.799]),
+        Object.freeze([8378.133, 5227.636]),
+        Object.freeze([10240.000, 5227.636]),
+        Object.freeze([10240.000, 6827.000]),
+        Object.freeze([5316.493, 6827.000])
+      ]),
+
+      // Hard boundary RIGHT of the blue area.
+      rightBlockedZone: Object.freeze([
+        Object.freeze([8332.437, 4459.941]),
+        Object.freeze([10240.000, 4459.941]),
+        Object.freeze([10240.000, 6827.000]),
+        Object.freeze([8378.133, 5227.636])
+      ])
+    })
+  ]);
+
+  const hubackerBuildingElements = new Map();
+
+  function hubackerHofConfig() {
+    return HUBACKER_BUILDINGS.find((config) => config.id === "hubacker-hof");
+  }
+
+  function playerBehindHubackerHof() {
+    if (MAP.id !== "hubacker") return false;
+    const hof = hubackerHofConfig();
+    return !!hof && worldPointInPolygon(playerX, playerY, hof.behindZone);
+  }
+
+  function isHubackerBuildingBlockedFootPoint(x, y) {
+    if (MAP.id !== "hubacker") return false;
+
+    const hof = hubackerHofConfig();
+    if (!hof) return false;
+
+    // BLUE area has absolute priority: walkable, player renders behind the Hof.
+    if (worldPointInPolygon(x, y, hof.behindZone)) return false;
+
+    // Exact requested hard limits: never deeper than the blue lower edge,
+    // never farther right than the blue right edge.
+    if (worldPointInPolygon(x, y, hof.lowerBlockedZone)) return true;
+    if (worldPointInPolygon(x, y, hof.rightBlockedZone)) return true;
+
+    // ALT-NEUENSTEIN deliberately has no additional building collision.
+    // Both castles continue to use the existing purple terrain regions.
+    return false;
+  }
+
+  function installHubackerBuildingStyles() {
+    if (document.getElementById("hubackerBuildingStyles")) return;
+
+    const style = document.createElement("style");
+    style.id = "hubackerBuildingStyles";
+    style.textContent = `
+      .hubacker-building {
+        position: absolute;
+        display: block;
+        object-fit: fill;
+        max-width: none;
+        max-height: none;
+        pointer-events: none;
+        user-select: none;
+        -webkit-user-drag: none;
+      }
+    `;
+    document.head.appendChild(style);
+  }
+
+  function createHubackerBuildings() {
+    installHubackerBuildingStyles();
+
+    for (const config of HUBACKER_BUILDINGS) {
+      const image = document.createElement("img");
+      image.id = config.id;
+      image.className = "hubacker-building";
+      image.src = encodeURI(config.src);
+      image.alt = "";
+      image.draggable = false;
+      image.style.left = `${config.left}px`;
+      image.style.top = `${config.top}px`;
+      image.style.width = `${config.width}px`;
+      image.style.height = `${config.height}px`;
+      image.style.zIndex = String(config.zIndex);
+      image.style.display = MAP.id === "hubacker" ? "" : "none";
+      world.appendChild(image);
+      hubackerBuildingElements.set(config.id, image);
+    }
+  }
+
+  function updateHubackerBuildingDepth() {
+    const onHubacker = MAP.id === "hubacker";
+
+    for (const element of hubackerBuildingElements.values()) {
+      element.style.display = onHubacker ? "" : "none";
+    }
+
+    if (!onHubacker || !playerEl) return;
+
+    // Hof is foreground only while the player occupies the exact BLUE zone.
+    // Outside it the player remains normal foreground; hard collision prevents
+    // him from entering the blocked lower/right Hof footprint.
+    playerEl.style.zIndex = playerBehindHubackerHof() ? "5" : "100";
+  }
+
+
   // ------------------------------------------------------------------
   // R29 MAP 3 — LAUTENBACH BUILDINGS
   // Exact placement follows the supplied marked composite.
@@ -6090,6 +6223,16 @@
       return;
     }
 
+    if (MAP.id === "hubacker") {
+      updateHubackerBuildingDepth();
+      return;
+    }
+
+    // Also hide Hubacker-only building elements immediately on other maps.
+    for (const element of hubackerBuildingElements.values()) {
+      element.style.display = "none";
+    }
+
     if (MAP.id !== "oberkirch-zentrum") {
       playerEl.style.zIndex = "100";
       return;
@@ -6353,6 +6496,10 @@
     // R29 MAP 3: ONLY the orange marked lower building rectangles block.
     if (MAP.id === "lautenbach") {
       return isLautenbachBuildingBlockedFootPoint(x, y);
+    }
+
+    if (MAP.id === "hubacker") {
+      return isHubackerBuildingBlockedFootPoint(x, y);
     }
 
     if (MAP.id !== "oberkirch-zentrum") return false;
@@ -6748,14 +6895,6 @@
     );
   }
 
-  function playerInHubackerSouthRightExitLane() {
-    return (
-      MAP.id === "hubacker" &&
-      playerX >= MAP_EXIT_CONFIG.hubackerSouthRight.x1 &&
-      playerX <= MAP_EXIT_CONFIG.hubackerSouthRight.x2
-    );
-  }
-
   function checkMapExit() {
     if (mapTransitioning) return false;
 
@@ -6857,20 +6996,6 @@
       switchMap(
         MAPS.lautenbach,
         MAP_EXIT_CONFIG.lautenbachNorthLeftReturnSpawn,
-        true
-      );
-      return true;
-    }
-
-    // R38 MAP 4 lower-right road -> corresponding MAP 3 north-right road.
-    if (
-      playerInHubackerSouthRightExitLane() &&
-      movingDown &&
-      playerY >= MAP.height + MAP_EXIT_CONFIG.hubackerSouthRight.leavePadding
-    ) {
-      switchMap(
-        MAPS.lautenbach,
-        MAP_EXIT_CONFIG.lautenbachNorthRightReturnSpawn,
         true
       );
       return true;
@@ -7024,8 +7149,7 @@
         playerInWinterbachSouthExitLane() ||
         playerInLautenbachSouthLeftExitLane() ||
         playerInLautenbachSouthRightExitLane() ||
-        playerInHubackerSouthLeftExitLane() ||
-        playerInHubackerSouthRightExitLane()
+        playerInHubackerSouthLeftExitLane()
       ) &&
       (keys.has("KeyS") || keys.has("ArrowDown"));
 
@@ -7065,10 +7189,7 @@
           MAP_EXIT_CONFIG.lautenbachSouthRight.leavePadding
         );
       } else if (MAP.id === "hubacker") {
-        leavePadding = Math.max(
-          MAP_EXIT_CONFIG.hubackerSouthLeft.leavePadding,
-          MAP_EXIT_CONFIG.hubackerSouthRight.leavePadding
-        );
+        leavePadding = MAP_EXIT_CONFIG.hubackerSouthLeft.leavePadding;
       }
 
       playerY = Math.max(
@@ -7612,6 +7733,7 @@
     createR11Buildings();
     createWinterbachObsthof();
     createLautenbachBuildings();
+    createHubackerBuildings();
     createTrunkenbold();
 
     clampPlayer();
