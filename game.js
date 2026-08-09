@@ -203,33 +203,153 @@
   attackAudio.loop = false;
   attackAudio.volume = 1.0;
 
-  const backgroundMusic = new Audio("assets/audio/THE WEEPING STONE.mp3");
-  backgroundMusic.preload = "auto";
-  backgroundMusic.loop = true;
-  backgroundMusic.volume = 1.0;
+  // ------------------------------------------------------------------
+  // R33 MAP MUSIC — robust crossfade manager
+  // OBERKIRCH keeps the ORIGINAL existing track.
+  // WINTERBACH = Frostbound Ballad (1)
+  // LAUTENBACH = Frostbound Ballad
+  // ------------------------------------------------------------------
+  const MAP_MUSIC = Object.freeze({
+    "oberkirch-zentrum": "assets/audio/THE WEEPING STONE.mp3",
+    "winterbach-ranglehen": "assets/audio/maps/WINTERBACH - FROSTBOUND BALLAD.mp3",
+    "lautenbach": "assets/audio/maps/LAUTENBACH - FROSTBOUND BALLAD.mp3"
+  });
 
-  let backgroundMusicStarted = false;
+  const MAP_MUSIC_VOLUME = 1.0;
+  const MAP_MUSIC_FADE_MS = 1400;
+
+  const mapMusicPlayers = new Map();
+  let musicUnlocked = false;
+  let activeMapMusicId = null;
+  let activeMapMusic = null;
+  let musicFadeToken = 0;
+
+  function getMapMusicPlayer(mapId) {
+    const id = MAP_MUSIC[mapId] ? mapId : "oberkirch-zentrum";
+
+    if (mapMusicPlayers.has(id)) {
+      return mapMusicPlayers.get(id);
+    }
+
+    const audio = new Audio(MAP_MUSIC[id]);
+    audio.preload = "auto";
+    audio.loop = true;
+    audio.volume = 0;
+    mapMusicPlayers.set(id, audio);
+    return audio;
+  }
+
+  function stopAllMapMusicExcept(exceptAudio = null) {
+    for (const audio of mapMusicPlayers.values()) {
+      if (audio === exceptAudio) continue;
+      audio.pause();
+      audio.volume = 0;
+    }
+  }
 
   function startBackgroundMusic() {
-    if (backgroundMusicStarted && !backgroundMusic.paused) return;
+    const mapId = MAP && MAP.id ? MAP.id : "oberkirch-zentrum";
+    const audio = getMapMusicPlayer(mapId);
 
-    backgroundMusic.play()
+    activeMapMusicId = mapId;
+    activeMapMusic = audio;
+    audio.volume = MAP_MUSIC_VOLUME;
+
+    audio.play()
       .then(() => {
-        backgroundMusicStarted = true;
+        musicUnlocked = true;
+        stopAllMapMusicExcept(audio);
       })
       .catch(() => {
-        // Browser autoplay may be blocked until the first user interaction.
+        // Browser waits for a genuine user gesture.
       });
   }
 
   function unlockBackgroundMusic() {
-    startBackgroundMusic();
+    const mapId = MAP && MAP.id ? MAP.id : "oberkirch-zentrum";
+    const audio = getMapMusicPlayer(mapId);
 
-    if (backgroundMusicStarted) {
-      window.removeEventListener("pointerdown", unlockBackgroundMusic);
-      window.removeEventListener("keydown", unlockBackgroundMusic);
-      window.removeEventListener("touchstart", unlockBackgroundMusic);
+    activeMapMusicId = mapId;
+    activeMapMusic = audio;
+    audio.volume = MAP_MUSIC_VOLUME;
+
+    audio.play()
+      .then(() => {
+        musicUnlocked = true;
+        stopAllMapMusicExcept(audio);
+
+        window.removeEventListener("pointerdown", unlockBackgroundMusic);
+        window.removeEventListener("keydown", unlockBackgroundMusic);
+        window.removeEventListener("touchstart", unlockBackgroundMusic);
+      })
+      .catch(() => {});
+  }
+
+  function crossfadeMapMusic(nextMapId, duration = MAP_MUSIC_FADE_MS) {
+    const next = getMapMusicPlayer(nextMapId);
+
+    // If audio is not yet unlocked, simply arm the correct track.
+    if (!musicUnlocked) {
+      activeMapMusicId = nextMapId;
+      activeMapMusic = next;
+      return;
     }
+
+    // Already correct track.
+    if (activeMapMusicId === nextMapId && activeMapMusic === next) {
+      if (next.paused) {
+        next.volume = MAP_MUSIC_VOLUME;
+        next.play().catch(() => {});
+      }
+      return;
+    }
+
+    const old = activeMapMusic;
+    const oldStartVolume = old && !old.paused ? old.volume : 0;
+
+    activeMapMusicId = nextMapId;
+    activeMapMusic = next;
+
+    // New area's music starts fresh on entry, then loops forever.
+    try { next.currentTime = 0; } catch (_) {}
+    next.volume = 0;
+
+    const token = ++musicFadeToken;
+
+    next.play()
+      .then(() => {
+        const startedAt = performance.now();
+
+        function step(now) {
+          if (token !== musicFadeToken) return;
+
+          const t = Math.min(1, (now - startedAt) / duration);
+          const eased = t * t * (3 - 2 * t);
+
+          if (old && old !== next) {
+            old.volume = Math.max(0, oldStartVolume * (1 - eased));
+          }
+          next.volume = Math.min(
+            MAP_MUSIC_VOLUME,
+            MAP_MUSIC_VOLUME * eased
+          );
+
+          if (t < 1) {
+            requestAnimationFrame(step);
+            return;
+          }
+
+          if (old && old !== next) {
+            old.pause();
+            old.volume = 0;
+          }
+
+          next.volume = MAP_MUSIC_VOLUME;
+        }
+
+        requestAnimationFrame(step);
+      })
+      .catch(() => {});
   }
 
   window.addEventListener("pointerdown", unlockBackgroundMusic, { passive: true });
@@ -5180,26 +5300,24 @@
       width: 2660,
       height: 2485,
 
-      // R32: only the genuinely northern/pink church area is walk-behind.
+      // R33: ONLY the upper pink area is walk-behind.
       behindZone: Object.freeze([
         [2510, 1220],
         [5170, 1220],
-        [5170, 2390],
-        [2510, 2390]
+        [5170, 2350],
+        [2510, 2350]
       ]),
 
-      // R32 HARD DEPTH OVERRIDE:
-      // This strip is still walkable, but the PLAYER is ALWAYS in FRONT.
-      // It begins before the orange collision edge so the foot anchor can never
-      // accidentally remain in the church's background layer while approaching it.
+      // R33: explicit foreground apron in front of the lower church.
+      // This is walkable and exists only for depth ordering.
       foregroundZone: Object.freeze([
-        [2440, 2390],
-        [5295, 2390],
-        [5295, 2780],
-        [2440, 2780]
+        [2380, 2350],
+        [5360, 2350],
+        [5360, 2760],
+        [2380, 2760]
       ]),
 
-      // Orange lower church rectangle = hard collision.
+      // ORANGE lower church rectangle = HARD COLLISION.
       blockedZone: Object.freeze([
         [2510, 2760],
         [5225, 2760],
@@ -5232,38 +5350,43 @@
   function playerBehindLautenbachBuilding() {
     if (MAP.id !== "lautenbach") return false;
 
-    // R32: foreground overrides EVERYTHING.
-    // Critical point: collision prevents the player's foot from ever entering the
-    // orange rectangle, therefore testing blockedZone alone was not enough.
+    // R33 HARD PRIORITY:
+    // Any explicit foreground zone wins BEFORE every walk-behind test.
+    for (const config of LAUTENBACH_BUILDINGS) {
+      if (
+        config.foregroundZone &&
+        worldPointInPolygon(playerX, playerY, config.foregroundZone)
+      ) {
+        return false;
+      }
+    }
+
+    // Additional absolute church frontage rule:
+    // in the marked lower/orange church span the player is ALWAYS foreground.
+    const church = LAUTENBACH_BUILDINGS.find(
+      config => config.id === "lautenbach-wallfahrtskirche"
+    );
+    if (
+      church &&
+      playerX >= 2380 &&
+      playerX <= 5360 &&
+      playerY >= 2350
+    ) {
+      return false;
+    }
+
+    // Hard collision zones are foreground as well.
     if (
       LAUTENBACH_BUILDINGS.some(
-        config =>
-          config.foregroundZone &&
-          worldPointInPolygon(playerX, playerY, config.foregroundZone)
+        config => worldPointInPolygon(playerX, playerY, config.blockedZone)
       )
     ) {
       return false;
     }
 
-    // Hard collision zones also always remain foreground.
-    if (
-      LAUTENBACH_BUILDINGS.some(
-        config => worldPointInPolygon(
-          playerX,
-          playerY,
-          config.blockedZone
-        )
-      )
-    ) {
-      return false;
-    }
-
+    // Only genuine pink areas can place the player behind a building.
     return LAUTENBACH_BUILDINGS.some(
-      config => worldPointInPolygon(
-        playerX,
-        playerY,
-        config.behindZone
-      )
+      config => worldPointInPolygon(playerX, playerY, config.behindZone)
     );
   }
 
@@ -5951,6 +6074,10 @@
     overlay.style.webkitMaskImage = "none";
     overlay.style.maskImage = "none";
     overlay.style.opacity = "1";
+
+    // R33: music begins changing at the SAME moment as the visual map fade.
+    crossfadeMapMusic(nextMap.id);
+
     await waitMs(200);
 
     MAP = nextMap;
