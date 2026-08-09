@@ -4695,6 +4695,56 @@
     engageDistance: 225
   });
 
+  // ------------------------------------------------------------------
+  // R39 MAP 4 — HUBACKER WOODEN BRIDGE SNAP
+  // Exact horizontal deck from the supplied white reference line.
+  // On contact the player snaps to the bridge centreline and, while
+  // captured, ONLY A/D (or left/right arrows) moves along the bridge.
+  // At either end the bridge releases and normal controls resume.
+  // ------------------------------------------------------------------
+  const HUBACKER_WOOD_BRIDGE = Object.freeze({
+    path: Object.freeze([
+      Object.freeze([4360, 4255]),
+      Object.freeze([5620, 4255])
+    ]),
+    engageDistance: 165
+  });
+
+  function tryEngageHubackerWoodBridge(dx, dy) {
+    if (MAP.id !== "hubacker") return false;
+
+    const horizontalDirection = dx > 0 ? 1 : dx < 0 ? -1 : 0;
+    if (!horizontalDirection) return false;
+
+    const closest = closestPointOnBridgePath(
+      playerX,
+      playerY,
+      HUBACKER_WOOD_BRIDGE.path
+    );
+
+    if (
+      !closest ||
+      closest.distance > HUBACKER_WOOD_BRIDGE.engageDistance
+    ) {
+      return false;
+    }
+
+    // Leaving outward at either bridge end immediately restores free movement.
+    if (closest.progress <= 0.035 && horizontalDirection < 0) return false;
+    if (closest.progress >= 0.965 && horizontalDirection > 0) return false;
+
+    activeBridge = {
+      id: "hubacker-wood",
+      path: HUBACKER_WOOD_BRIDGE.path,
+      distance: closest.pathDistance,
+      snapping: true
+    };
+
+    clearIceVelocity();
+    updateIceVisual();
+    return true;
+  }
+
   function tryEngageLautenbachWoodBridge(dx, dy) {
     if (MAP.id !== "lautenbach") return false;
 
@@ -4808,6 +4858,19 @@
 
   function movePlayerWithWorldCollision(dx, dy, deltaSeconds) {
     const horizontalDirection = dx > 0 ? 1 : dx < 0 ? -1 : 0;
+
+    // R39 MAP 4: exact white-marked HUBACKER bridge snap.
+    if (
+      MAP.id === "hubacker" &&
+      (
+        (activeBridge && activeBridge.id === "hubacker-wood") ||
+        tryEngageHubackerWoodBridge(dx, dy)
+      )
+    ) {
+      moveAlongActiveBridge(horizontalDirection, deltaSeconds);
+      clampPlayer();
+      return;
+    }
 
     // R29: yellow-arrow wooden bridge gets first priority on MAP 3.
     if (
@@ -6747,7 +6810,9 @@
       (
         playerInWinterbachSouthExitLane() ||
         playerInLautenbachSouthLeftExitLane() ||
-        playerInLautenbachSouthRightExitLane()
+        playerInLautenbachSouthRightExitLane() ||
+        playerInHubackerSouthLeftExitLane() ||
+        playerInHubackerSouthRightExitLane()
       ) &&
       (keys.has("KeyS") || keys.has("ArrowDown"));
 
@@ -6785,6 +6850,11 @@
         leavePadding = Math.max(
           MAP_EXIT_CONFIG.lautenbachSouthLeft.leavePadding,
           MAP_EXIT_CONFIG.lautenbachSouthRight.leavePadding
+        );
+      } else if (MAP.id === "hubacker") {
+        leavePadding = Math.max(
+          MAP_EXIT_CONFIG.hubackerSouthLeft.leavePadding,
+          MAP_EXIT_CONFIG.hubackerSouthRight.leavePadding
         );
       }
 
