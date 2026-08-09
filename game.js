@@ -204,25 +204,25 @@
     combatBaseLeft: "assets/player/combat/PLAYER COMBAT BASE LEFT.webp",
 
     // R45 COMBAT IMAGE SWAP — four dedicated attack poses per direction.
-    attackRight1: "assets/player/combat/PLAYER ATTACK RIGHT 1.png",
-    attackRight2: "assets/player/combat/PLAYER ATTACK RIGHT 2.png",
-    attackRight3: "assets/player/combat/PLAYER ATTACK RIGHT 3.png",
-    attackRight4: "assets/player/combat/PLAYER ATTACK RIGHT 4.png",
+    attackRight1: "assets/player/combat/PLAYER ATTACK V3 RIGHT 1.webp",
+    attackRight2: "assets/player/combat/PLAYER ATTACK V3 RIGHT 2.webp",
+    attackRight3: "assets/player/combat/PLAYER ATTACK V3 RIGHT 3.webp",
+    attackRight4: "assets/player/combat/PLAYER ATTACK V3 RIGHT 4.webp",
 
-    attackLeft1: "assets/player/combat/PLAYER ATTACK LEFT 1.png",
-    attackLeft2: "assets/player/combat/PLAYER ATTACK LEFT 2.png",
-    attackLeft3: "assets/player/combat/PLAYER ATTACK LEFT 3.png",
-    attackLeft4: "assets/player/combat/PLAYER ATTACK LEFT 4.png",
+    attackLeft1: "assets/player/combat/PLAYER ATTACK V3 LEFT 1.webp",
+    attackLeft2: "assets/player/combat/PLAYER ATTACK V3 LEFT 2.webp",
+    attackLeft3: "assets/player/combat/PLAYER ATTACK V3 LEFT 3.webp",
+    attackLeft4: "assets/player/combat/PLAYER ATTACK V3 LEFT 4.webp",
 
-    attackDown1: "assets/player/combat/PLAYER ATTACK DOWN 1.png",
-    attackDown2: "assets/player/combat/PLAYER ATTACK DOWN 2.png",
-    attackDown3: "assets/player/combat/PLAYER ATTACK DOWN 3.png",
-    attackDown4: "assets/player/combat/PLAYER ATTACK DOWN 4.png",
+    attackDown1: "assets/player/combat/PLAYER ATTACK V3 DOWN 1.webp",
+    attackDown2: "assets/player/combat/PLAYER ATTACK V3 DOWN 2.webp",
+    attackDown3: "assets/player/combat/PLAYER ATTACK V3 DOWN 3.webp",
+    attackDown4: "assets/player/combat/PLAYER ATTACK V3 DOWN 4.webp",
 
-    attackUp1: "assets/player/combat/PLAYER ATTACK UP 1.png",
-    attackUp2: "assets/player/combat/PLAYER ATTACK UP 2.png",
-    attackUp3: "assets/player/combat/PLAYER ATTACK UP 3.png",
-    attackUp4: "assets/player/combat/PLAYER ATTACK UP 4.png",
+    attackUp1: "assets/player/combat/PLAYER ATTACK V3 UP 1.webp",
+    attackUp2: "assets/player/combat/PLAYER ATTACK V3 UP 2.webp",
+    attackUp3: "assets/player/combat/PLAYER ATTACK V3 UP 3.webp",
+    attackUp4: "assets/player/combat/PLAYER ATTACK V3 UP 4.webp",
 
     // Existing block/base artwork remains untouched.
     attackFinish: "assets/player/combat/PLAYER ATTACK FINISH.webp",
