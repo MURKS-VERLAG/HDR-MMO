@@ -15,6 +15,13 @@
       image: "assets/maps/MAP 2 WINTERBACH.png",
       width: 10000,
       height: 6006
+    }),
+    lautenbach: Object.freeze({
+      id: "lautenbach",
+      name: "LAUTENBACH",
+      image: "assets/maps/MAP 3 LAUTENBACH.jpg",
+      width: 10000,
+      height: 6656
     })
   });
 
@@ -58,6 +65,50 @@
       // Existing R18 YELLOW ARROW return point remains untouched.
       x: 6225,
       y: 760
+    }),
+
+    // R26 MAP 2 -> MAP 3: two marked north exits.
+    winterbachNorthLeft: Object.freeze({
+      x1: 4900,
+      x2: 6150,
+      leaveY: -18
+    }),
+    winterbachNorthRight: Object.freeze({
+      x1: 6700,
+      x2: 7950,
+      leaveY: -18
+    }),
+
+    // R26 MAP 3 spawns: exact bottom roads from the cyan arrows.
+    lautenbachSouthLeftSpawn: Object.freeze({
+      x: 4845,
+      y: 6535
+    }),
+    lautenbachSouthRightSpawn: Object.freeze({
+      x: 7980,
+      y: 6535
+    }),
+
+    // R26 MAP 3 -> MAP 2: both cyan bottom exits.
+    lautenbachSouthLeft: Object.freeze({
+      x1: 4420,
+      x2: 5260,
+      leavePadding: 18
+    }),
+    lautenbachSouthRight: Object.freeze({
+      x1: 7560,
+      x2: 8400,
+      leavePadding: 18
+    }),
+
+    // Spawn just inside the two MAP 2 north roads when returning.
+    winterbachNorthLeftReturnSpawn: Object.freeze({
+      x: 5520,
+      y: 165
+    }),
+    winterbachNorthRightReturnSpawn: Object.freeze({
+      x: 7330,
+      y: 165
     })
   });
 
@@ -316,6 +367,62 @@
       direction: "right",
       glow: "#ffffff",
       trigger: { x1: 8950, y1: 2050, x2: 10000, y2: 3420 }
+    },
+
+    // R26 MAP 3 — LAUTENBACH route labels from the marked arrows.
+    {
+      id: "lautenbach-winterbach-left",
+      mapId: "lautenbach",
+      text: "WINTERBACH",
+      x: 4845, y: 6200,
+      direction: "down",
+      glow: "#ffffff",
+      trigger: { x1: 4200, y1: 5450, x2: 5550, y2: 6656 }
+    },
+    {
+      id: "lautenbach-winterbach-right",
+      mapId: "lautenbach",
+      text: "WINTERBACH",
+      x: 7980, y: 6200,
+      direction: "down",
+      glow: "#ffffff",
+      trigger: { x1: 7300, y1: 5450, x2: 8650, y2: 6656 }
+    },
+    {
+      id: "lautenbach-ottenhoefen",
+      mapId: "lautenbach",
+      text: "OTTENHÖFEN",
+      x: 530, y: 430,
+      direction: "up",
+      glow: "#ffffff",
+      trigger: { x1: 0, y1: 0, x2: 1250, y2: 1200 }
+    },
+    {
+      id: "lautenbach-hubacker-left",
+      mapId: "lautenbach",
+      text: "HUBACKER",
+      x: 5325, y: 430,
+      direction: "up",
+      glow: "#ffffff",
+      trigger: { x1: 4650, y1: 0, x2: 6050, y2: 1200 }
+    },
+    {
+      id: "lautenbach-hubacker-right",
+      mapId: "lautenbach",
+      text: "HUBACKER",
+      x: 7520, y: 430,
+      direction: "up",
+      glow: "#ffffff",
+      trigger: { x1: 6850, y1: 0, x2: 8200, y2: 1200 }
+    },
+    {
+      id: "lautenbach-sendelbach",
+      mapId: "lautenbach",
+      text: "SENDELBACH",
+      x: 9550, y: 6000,
+      direction: "right",
+      glow: "#ffffff",
+      trigger: { x1: 8850, y1: 5150, x2: 10000, y2: 6656 }
     }
   ]);
 
@@ -3959,19 +4066,62 @@
       x >= MAP_EXIT_CONFIG.winterbachSouth.x1 &&
       x <= MAP_EXIT_CONFIG.winterbachSouth.x2;
 
+    const inWinterbachNorthExit =
+      MAP.id === "winterbach-ranglehen" &&
+      (
+        (
+          x >= MAP_EXIT_CONFIG.winterbachNorthLeft.x1 &&
+          x <= MAP_EXIT_CONFIG.winterbachNorthLeft.x2
+        ) ||
+        (
+          x >= MAP_EXIT_CONFIG.winterbachNorthRight.x1 &&
+          x <= MAP_EXIT_CONFIG.winterbachNorthRight.x2
+        )
+      );
+
+    const inLautenbachSouthExit =
+      MAP.id === "lautenbach" &&
+      (
+        (
+          x >= MAP_EXIT_CONFIG.lautenbachSouthLeft.x1 &&
+          x <= MAP_EXIT_CONFIG.lautenbachSouthLeft.x2
+        ) ||
+        (
+          x >= MAP_EXIT_CONFIG.lautenbachSouthRight.x1 &&
+          x <= MAP_EXIT_CONFIG.lautenbachSouthRight.x2
+        )
+      );
+
     if (y < minY) {
-      const northLeaveFloor = Math.min(
+      const oberkirchNorthLeaveFloor = Math.min(
         MAP_EXIT_CONFIG.oberkirchNorth.leaveY,
         MAP_EXIT_CONFIG.oberkirchGreenNorth.leaveY
       ) - 80;
+      const winterbachNorthLeaveFloor = Math.min(
+        MAP_EXIT_CONFIG.winterbachNorthLeft.leaveY,
+        MAP_EXIT_CONFIG.winterbachNorthRight.leaveY
+      ) - 80;
 
-      if (!inOberkirchNorthExit || y < northLeaveFloor) {
-        return false;
-      }
+      const allowedNorth =
+        (inOberkirchNorthExit && y >= oberkirchNorthLeaveFloor) ||
+        (inWinterbachNorthExit && y >= winterbachNorthLeaveFloor);
+
+      if (!allowedNorth) return false;
     }
 
     if (y > maxY) {
-      if (!inWinterbachSouthExit || y > MAP.height + MAP_EXIT_CONFIG.winterbachSouth.leavePadding + 80) {
+      const winterbachSouthAllowed =
+        inWinterbachSouthExit &&
+        y <= MAP.height + MAP_EXIT_CONFIG.winterbachSouth.leavePadding + 80;
+
+      const lautenbachSouthAllowed =
+        inLautenbachSouthExit &&
+        y <= MAP.height + Math.max(
+          MAP_EXIT_CONFIG.lautenbachSouthLeft.leavePadding,
+          MAP_EXIT_CONFIG.lautenbachSouthRight.leavePadding
+        ) + 80;
+
+      if (!winterbachSouthAllowed && !lautenbachSouthAllowed) {
         return false;
       }
     }
@@ -5165,6 +5315,18 @@
         transform: translate(-50%, -50%) scale(1);
       }
 
+      /* R26 LAUTENBACH title: same existing title mechanic/font,
+         specifically black lettering with strong white glow. */
+      #mapRegionTitle.mapRegionTitle--lautenbach {
+        color: #000000;
+        text-shadow:
+          0 0 3px #ffffff,
+          0 0 8px #ffffff,
+          0 0 16px #ffffff,
+          0 0 28px #ffffff,
+          0 5px 4px rgba(0,0,0,.78);
+      }
+
       #mapRegionTitle .main {
         display: block;
         font-size: clamp(54px, 7vw, 138px);
@@ -5253,11 +5415,22 @@
     mapImage.style.height = `${MAP.height}px`;
   }
 
-  function showWinterbachTitle() {
+  function showMapRegionTitle(map) {
     const title = regionTitle();
-    if (!title) return;
+    if (!title || !map) return;
 
-    title.classList.remove("visible");
+    title.classList.remove("visible", "mapRegionTitle--lautenbach");
+
+    if (map.id === "lautenbach") {
+      title.innerHTML = '<span class="main">LAUTENBACH</span>';
+      title.classList.add("mapRegionTitle--lautenbach");
+    } else {
+      // Existing MAP 2 title remains exactly as before.
+      title.innerHTML =
+        '<span class="main">WINTERBACH</span>' +
+        '<span class="sub">RANGLEHEN</span>';
+    }
+
     void title.offsetWidth;
     title.classList.add("visible");
 
@@ -5266,7 +5439,11 @@
     }, 2000);
   }
 
-  async function switchMap(nextMap, spawn, showWinterTitle = false) {
+  function showWinterbachTitle() {
+    showMapRegionTitle(MAPS.winterbach);
+  }
+
+  async function switchMap(nextMap, spawn, showRegionTitle = false) {
     if (mapTransitioning) return;
     mapTransitioning = true;
     keys.clear();
@@ -5337,8 +5514,8 @@
     overlay.style.transition = "--iris-radius 2700ms cubic-bezier(.2,.72,.2,1)";
     overlay.style.setProperty("--iris-radius", "150%");
 
-    if (showWinterTitle) {
-      window.setTimeout(showWinterbachTitle, 220);
+    if (showRegionTitle) {
+      window.setTimeout(() => showMapRegionTitle(nextMap), 220);
     }
 
     await waitMs(2740);
@@ -5377,6 +5554,38 @@
     );
   }
 
+  function playerInWinterbachNorthLeftExitLane() {
+    return (
+      MAP.id === "winterbach-ranglehen" &&
+      playerX >= MAP_EXIT_CONFIG.winterbachNorthLeft.x1 &&
+      playerX <= MAP_EXIT_CONFIG.winterbachNorthLeft.x2
+    );
+  }
+
+  function playerInWinterbachNorthRightExitLane() {
+    return (
+      MAP.id === "winterbach-ranglehen" &&
+      playerX >= MAP_EXIT_CONFIG.winterbachNorthRight.x1 &&
+      playerX <= MAP_EXIT_CONFIG.winterbachNorthRight.x2
+    );
+  }
+
+  function playerInLautenbachSouthLeftExitLane() {
+    return (
+      MAP.id === "lautenbach" &&
+      playerX >= MAP_EXIT_CONFIG.lautenbachSouthLeft.x1 &&
+      playerX <= MAP_EXIT_CONFIG.lautenbachSouthLeft.x2
+    );
+  }
+
+  function playerInLautenbachSouthRightExitLane() {
+    return (
+      MAP.id === "lautenbach" &&
+      playerX >= MAP_EXIT_CONFIG.lautenbachSouthRight.x1 &&
+      playerX <= MAP_EXIT_CONFIG.lautenbachSouthRight.x2
+    );
+  }
+
   function checkMapExit() {
     if (mapTransitioning) return false;
 
@@ -5412,7 +5621,64 @@
       return true;
     }
 
-    // R10: return only through the exact lower OBERKIRCH exit lane.
+    // R26 MAP 2 upper-left LAUTENBACH road -> MAP 3 lower-left road.
+    if (
+      playerInWinterbachNorthLeftExitLane() &&
+      movingUp &&
+      playerY <= MAP_EXIT_CONFIG.winterbachNorthLeft.leaveY
+    ) {
+      switchMap(
+        MAPS.lautenbach,
+        MAP_EXIT_CONFIG.lautenbachSouthLeftSpawn,
+        true
+      );
+      return true;
+    }
+
+    // R26 MAP 2 upper-right SENDELBACH-side road -> same MAP 3,
+    // but spawn on the right-hand road exactly as marked.
+    if (
+      playerInWinterbachNorthRightExitLane() &&
+      movingUp &&
+      playerY <= MAP_EXIT_CONFIG.winterbachNorthRight.leaveY
+    ) {
+      switchMap(
+        MAPS.lautenbach,
+        MAP_EXIT_CONFIG.lautenbachSouthRightSpawn,
+        true
+      );
+      return true;
+    }
+
+    // R26 MAP 3 lower-left road -> corresponding MAP 2 north-left road.
+    if (
+      playerInLautenbachSouthLeftExitLane() &&
+      movingDown &&
+      playerY >= MAP.height + MAP_EXIT_CONFIG.lautenbachSouthLeft.leavePadding
+    ) {
+      switchMap(
+        MAPS.winterbach,
+        MAP_EXIT_CONFIG.winterbachNorthLeftReturnSpawn,
+        true
+      );
+      return true;
+    }
+
+    // R26 MAP 3 lower-right road -> corresponding MAP 2 north-right road.
+    if (
+      playerInLautenbachSouthRightExitLane() &&
+      movingDown &&
+      playerY >= MAP.height + MAP_EXIT_CONFIG.lautenbachSouthRight.leavePadding
+    ) {
+      switchMap(
+        MAPS.winterbach,
+        MAP_EXIT_CONFIG.winterbachNorthRightReturnSpawn,
+        true
+      );
+      return true;
+    }
+
+    // Existing MAP 2 lower OBERKIRCH return remains untouched.
     if (
       playerInWinterbachSouthExitLane() &&
       movingDown &&
@@ -5519,30 +5785,56 @@
     const northExitOpen =
       (
         playerInOberkirchNorthExitLane() ||
-        playerInOberkirchGreenNorthExitLane()
+        playerInOberkirchGreenNorthExitLane() ||
+        playerInWinterbachNorthLeftExitLane() ||
+        playerInWinterbachNorthRightExitLane()
       ) &&
       (keys.has("KeyW") || keys.has("ArrowUp"));
 
     const southExitOpen =
-      playerInWinterbachSouthExitLane() &&
+      (
+        playerInWinterbachSouthExitLane() ||
+        playerInLautenbachSouthLeftExitLane() ||
+        playerInLautenbachSouthRightExitLane()
+      ) &&
       (keys.has("KeyS") || keys.has("ArrowDown"));
 
     if (northExitOpen) {
-      playerY = Math.max(
-        Math.min(
+      let leaveFloor = -98;
+
+      if (MAP.id === "oberkirch-zentrum") {
+        leaveFloor = Math.min(
           MAP_EXIT_CONFIG.oberkirchNorth.leaveY,
           MAP_EXIT_CONFIG.oberkirchGreenNorth.leaveY
-        ) - 80,
+        ) - 80;
+      } else if (MAP.id === "winterbach-ranglehen") {
+        leaveFloor = Math.min(
+          MAP_EXIT_CONFIG.winterbachNorthLeft.leaveY,
+          MAP_EXIT_CONFIG.winterbachNorthRight.leaveY
+        ) - 80;
+      }
+
+      playerY = Math.max(
+        leaveFloor,
         Math.min(MAP.height - bottomClearance, playerY)
       );
       return;
     }
 
     if (southExitOpen) {
+      let leavePadding = MAP_EXIT_CONFIG.winterbachSouth.leavePadding;
+
+      if (MAP.id === "lautenbach") {
+        leavePadding = Math.max(
+          MAP_EXIT_CONFIG.lautenbachSouthLeft.leavePadding,
+          MAP_EXIT_CONFIG.lautenbachSouthRight.leavePadding
+        );
+      }
+
       playerY = Math.max(
         topClearance,
         Math.min(
-          MAP.height + MAP_EXIT_CONFIG.winterbachSouth.leavePadding + 80,
+          MAP.height + leavePadding + 80,
           playerY
         )
       );
