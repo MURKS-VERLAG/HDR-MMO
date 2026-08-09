@@ -7344,13 +7344,9 @@
 
     walkFrameTimer += deltaSeconds * 1000;
 
-    // R43: side walk has twice as many frames now, so each side frame is half
-    // the old duration. Total gait cycle remains exactly as fast as before.
-    // UP/DOWN timing remains completely untouched.
-    const frameDuration =
-      (animationName === "left" || animationName === "right")
-        ? PLAYER.walkFrameDuration / 2
-        : PLAYER.walkFrameDuration;
+    // R44: every movement frame uses the exact same interval.
+    // A/D therefore runs at the same 120 ms per image as W/S.
+    const frameDuration = PLAYER.walkFrameDuration;
 
     while (walkFrameTimer >= frameDuration) {
       walkFrameTimer -= frameDuration;
