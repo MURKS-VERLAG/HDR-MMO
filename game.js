@@ -4094,17 +4094,31 @@
 
     alphaThreshold: 28,
 
-    // Upper tree / roofs are visual only; grounded visible pixels below this
-    // line participate in player collision.
+    // Upper tree / decorative canopy is visual only; grounded visible pixels
+    // below this line participate in PLAYER collision unless they are inside
+    // one of the two explicitly marked BLUE walkable zones from R22.
     groundedFromY: 0.345,
 
-    // The very front / foot-height foreground may be crossed again.
-    // While crossing it, the player is drawn BEHIND the asset.
-    walkBehindFront: Object.freeze([
-      [0.00, 0.535],
-      [1.00, 0.535],
-      [1.00, 0.615],
-      [0.00, 0.615]
+    // R22 BLUE + GREEN STRIPES:
+    // walkable and PLAYER stays in FRONT of the Obsthof.
+    // Coordinates are normalized to the original Obsthof PNG placement.
+    walkableFront: Object.freeze([
+      [0.339, 0.349],
+      [0.679, 0.392],
+      [0.848, 0.304],
+      [0.900, 0.329],
+      [0.781, 0.399],
+      [0.473, 0.502],
+      [0.132, 0.431]
+    ]),
+
+    // R22 BLUE + PURPLE STRIPES:
+    // walkable, but PLAYER is rendered BEHIND the roof.
+    walkBehindRoof: Object.freeze([
+      [0.487, 0.292],
+      [0.869, 0.378],
+      [0.786, 0.446],
+      [0.425, 0.360]
     ])
   });
 
@@ -4167,10 +4181,12 @@
       return false;
     }
 
+    // R22: ONLY the blue/purple roof zone sends the player behind the asset.
+    // The blue/green front zone remains fully walkable with player in foreground.
     return pointInNormalizedPolygon(
       localX01,
       localY01,
-      WINTERBACH_OBSTHOF.walkBehindFront
+      WINTERBACH_OBSTHOF.walkBehindRoof
     );
   }
 
@@ -4194,12 +4210,21 @@
     // Roof / tree canopy / decorative upper pixels never become invisible walls.
     if (localY01 < c.groundedFromY) return false;
 
-    // Requested front strip at foot height stays traversable.
-    if (pointInNormalizedPolygon(
-      localX01,
-      localY01,
-      c.walkBehindFront
-    )) {
+    // R22: both BLUE-marked polygons are intentionally walkable.
+    // GREEN interior => player foreground.
+    // PURPLE interior => player behind roof (handled by depth function).
+    if (
+      pointInNormalizedPolygon(
+        localX01,
+        localY01,
+        c.walkableFront
+      ) ||
+      pointInNormalizedPolygon(
+        localX01,
+        localY01,
+        c.walkBehindRoof
+      )
+    ) {
       return false;
     }
 
@@ -4378,8 +4403,9 @@
   function updateChurchPlayerDepth() {
     if (!playerEl) return;
 
-    // R20 MAP 2: only the front foot-height strip of the Obsthof is
-    // walk-behind. All existing Oberkirch depth rules below stay untouched.
+    // R22 MAP 2 Obsthof:
+    // only the blue/purple roof zone is walk-behind.
+    // blue/green stays foreground; all Oberkirch depth rules remain untouched.
     if (MAP.id === "winterbach-ranglehen") {
       playerEl.style.zIndex =
         playerBehindWinterbachObsthofFront() ? "1" : "100";
