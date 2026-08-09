@@ -160,18 +160,29 @@
     standLeft: "assets/player/PLAYER STAND LEFT.png",
     standUp: "assets/player/PLAYER STAND UP.png",
 
+    // R43 SIDE WALK: existing frame, new in-between frame, repeated 4x.
+    // Existing 4-frame order stays untouched; supplied new sheet stays 1 -> 4.
     walkRight: Object.freeze([
       "assets/player/PLAYER WALK RIGHT 1.png",
+      "assets/player/PLAYER WALK RIGHT BETWEEN 1.png",
       "assets/player/PLAYER WALK RIGHT 2.png",
+      "assets/player/PLAYER WALK RIGHT BETWEEN 2.png",
       "assets/player/PLAYER WALK RIGHT 3.png",
-      "assets/player/PLAYER WALK RIGHT 4.png"
+      "assets/player/PLAYER WALK RIGHT BETWEEN 3.png",
+      "assets/player/PLAYER WALK RIGHT 4.png",
+      "assets/player/PLAYER WALK RIGHT BETWEEN 4.png"
     ]),
 
+    // LEFT uses the exact mirrored versions of the four new RIGHT in-between poses.
     walkLeft: Object.freeze([
       "assets/player/PLAYER WALK LEFT 1.png",
+      "assets/player/PLAYER WALK LEFT BETWEEN 1.png",
       "assets/player/PLAYER WALK LEFT 2.png",
+      "assets/player/PLAYER WALK LEFT BETWEEN 2.png",
       "assets/player/PLAYER WALK LEFT 3.png",
-      "assets/player/PLAYER WALK LEFT 4.png"
+      "assets/player/PLAYER WALK LEFT BETWEEN 3.png",
+      "assets/player/PLAYER WALK LEFT 4.png",
+      "assets/player/PLAYER WALK LEFT BETWEEN 4.png"
     ]),
 
     // S / S+A / S+D: requested cadence = original sheet 1, 2, 3, 2.
@@ -7260,6 +7271,13 @@
   }
 
   function setSprite(src) {
+    // R43: ONLY the W/up idle stand is enlarged.
+    // Bottom-center origin keeps the feet fixed on the player's world anchor.
+    const standUpScale = src === PLAYER.standUp ? 1.16 : 1;
+    playerSprite.style.transformOrigin = "50% 100%";
+    playerSprite.style.transform =
+      standUpScale === 1 ? "" : `scale(${standUpScale})`;
+
     if (activeSprite === src) return;
     activeSprite = src;
     playerSprite.src = encodeURI(src);
@@ -7326,8 +7344,16 @@
 
     walkFrameTimer += deltaSeconds * 1000;
 
-    while (walkFrameTimer >= PLAYER.walkFrameDuration) {
-      walkFrameTimer -= PLAYER.walkFrameDuration;
+    // R43: side walk has twice as many frames now, so each side frame is half
+    // the old duration. Total gait cycle remains exactly as fast as before.
+    // UP/DOWN timing remains completely untouched.
+    const frameDuration =
+      (animationName === "left" || animationName === "right")
+        ? PLAYER.walkFrameDuration / 2
+        : PLAYER.walkFrameDuration;
+
+    while (walkFrameTimer >= frameDuration) {
+      walkFrameTimer -= frameDuration;
       walkFrame = (walkFrame + 1) % frames.length;
     }
 
