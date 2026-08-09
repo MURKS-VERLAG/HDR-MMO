@@ -5341,62 +5341,173 @@
     })
   ]);
 
-  function playerBehindLautenbachBuilding() {
-    if (MAP.id !== "lautenbach") return false;
+  // R37 — runtime references only. Building data/positions stay untouched.
+  const lautenbachBuildingElements = new Map();
+  const lautenbachBuildingAlphaMasks = new Map();
 
-    // R36 — Kirche wird als zwei EXAKT getrennte Quadrate behandelt.
-    // ROSA oben: immer hinter der Kirche.
+  function prepareLautenbachBuildingAlphaMask(config, image) {
+    if (!config || !image || !image.naturalWidth || !image.naturalHeight) return;
+
+    try {
+      const canvas = document.createElement("canvas");
+      canvas.width = image.naturalWidth;
+      canvas.height = image.naturalHeight;
+
+      const ctx = canvas.getContext("2d", { willReadFrequently: true });
+      if (!ctx) return;
+
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(image, 0, 0);
+
+      const pixels = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+      const alpha = new Uint8Array(canvas.width * canvas.height);
+
+      for (let src = 3, dst = 0; src < pixels.length; src += 4, dst += 1) {
+        alpha[dst] = pixels[src];
+      }
+
+      lautenbachBuildingAlphaMasks.set(config.id, {
+        width: canvas.width,
+        height: canvas.height,
+        alpha
+      });
+    } catch (error) {
+      console.warn("Lautenbach building alpha mask unavailable:", config.id, error);
+    }
+  }
+
+  function lautenbachBuildingOpaqueAtWorldPoint(config, x, y, threshold = 28) {
+    const mask = lautenbachBuildingAlphaMasks.get(config.id);
+    if (!mask) return null;
+
+    const localX01 = (x - config.left) / config.width;
+    const localY01 = (y - config.top) / config.height;
+
+    if (
+      localX01 < 0 || localX01 > 1 ||
+      localY01 < 0 || localY01 > 1
+    ) {
+      return false;
+    }
+
+    const px = Math.max(
+      0,
+      Math.min(mask.width - 1, Math.round(localX01 * (mask.width - 1)))
+    );
+    const py = Math.max(
+      0,
+      Math.min(mask.height - 1, Math.round(localY01 * (mask.height - 1)))
+    );
+
+    // Small foot-radius sample: still follows the actual motif edge,
+    // but prevents slipping through 1px anti-aliased holes.
+    const radius = 2;
+    for (let oy = -radius; oy <= radius; oy += 1) {
+      for (let ox = -radius; ox <= radius; ox += 1) {
+        const sx = Math.max(0, Math.min(mask.width - 1, px + ox));
+        const sy = Math.max(0, Math.min(mask.height - 1, py + oy));
+        if (mask.alpha[sy * mask.width + sx] >= threshold) return true;
+      }
+    }
+
+    return false;
+  }
+
+
+  function getLautenbachPlayerDepthState() {
+    if (MAP.id !== "lautenbach") {
+      return { behindChurch: false, behindSchwanen: false };
+    }
+
     const church = LAUTENBACH_BUILDINGS.find(
       config => config.id === "lautenbach-wallfahrtskirche"
     );
+    const schwanen = LAUTENBACH_BUILDINGS.find(
+      config => config.id === "lautenbach-schwanenwirt"
+    );
 
-    if (
-      church &&
+    // UPPER church area stays EXACTLY as before:
+    // pink rectangle = player behind church.
+    const behindChurch =
+      !!church &&
       playerX >= 2520 &&
       playerX <= 5110 &&
       playerY >= 1225 &&
-      playerY < 2785
-    ) {
-      return true;
+      playerY < 2785;
+
+    // Schwanenwirt data itself is untouched.
+    const behindSchwanen =
+      !!schwanen &&
+      worldPointInPolygon(playerX, playerY, schwanen.behindZone) &&
+      !worldPointInPolygon(playerX, playerY, schwanen.blockedZone);
+
+    return { behindChurch, behindSchwanen };
+  }
+
+  function playerBehindLautenbachBuilding() {
+    const state = getLautenbachPlayerDepthState();
+    return state.behindChurch || state.behindSchwanen;
+  }
+
+  function updateLautenbachBuildingDepth() {
+    if (MAP.id !== "lautenbach" || !playerEl) return;
+
+    const state = getLautenbachPlayerDepthState();
+    const churchEl = lautenbachBuildingElements.get("lautenbach-wallfahrtskirche");
+    const schwanenEl = lautenbachBuildingElements.get("lautenbach-schwanenwirt");
+
+    // Default building layer.
+    if (churchEl) churchEl.style.zIndex = "6";
+    if (schwanenEl) schwanenEl.style.zIndex = "6";
+
+    if (state.behindChurch) {
+      // Upper pink church area: unchanged — player behind church.
+      playerEl.style.zIndex = "5";
+      return;
     }
 
-    // ORANGE unten: immer Vordergrund / harte Kollisionshälfte.
-    if (
-      church &&
-      playerX >= 2515 &&
-      playerX <= 5175 &&
-      playerY >= 2785 &&
-      playerY <= 3730
-    ) {
-      return false;
+    if (state.behindSchwanen) {
+      // CRITICAL R37 FIX:
+      // player remains behind Schwanen, BUT in front of the church.
+      // This is exactly the strip directly below the church where the old
+      // single global z-index made him disappear behind both buildings.
+      if (churchEl) churchEl.style.zIndex = "4";
+      playerEl.style.zIndex = "5";
+      return;
     }
 
-    // Alle übrigen Lautenbach-Gebäude behalten ihre bestehende Logik.
-    if (
-      LAUTENBACH_BUILDINGS.some(
-        config => worldPointInPolygon(playerX, playerY, config.blockedZone)
-      )
-    ) {
-      return false;
-    }
-
-    return LAUTENBACH_BUILDINGS.some(
-      config => worldPointInPolygon(playerX, playerY, config.behindZone)
-    );
+    // Everywhere else, including the church's lower third/front:
+    // player is fully foreground.
+    playerEl.style.zIndex = "100";
   }
 
   function isLautenbachBuildingBlockedFootPoint(x, y) {
     if (MAP.id !== "lautenbach") return false;
 
-    return LAUTENBACH_BUILDINGS.some((config) => {
-      if (worldPointInPolygon(x, y, config.blockedZone)) {
-        return true;
+    for (const config of LAUTENBACH_BUILDINGS) {
+      if (config.id === "lautenbach-wallfahrtskirche") {
+        // UPPER church area is deliberately walk-behind and remains untouched.
+        if (y < 2785) continue;
+
+        // LOWER THIRD ONLY:
+        // collide with the visible motif pixels, NOT transparent PNG space.
+        const opaque = lautenbachBuildingOpaqueAtWorldPoint(config, x, y);
+
+        if (opaque === true) return true;
+        if (opaque === false) continue;
+
+        // Safe fallback before image alpha is ready:
+        // preserve the already-working R36 orange collision.
+        if (worldPointInPolygon(x, y, config.blockedZone)) return true;
+        continue;
       }
 
-      // R36: KEIN Zusatz-Padding mehr an der Kirche.
-      // Kollisionskante = exakt das orange Quadrat aus der Referenz.
-      return false;
-    });
+      // Schwanenwirtschaft and every other Lautenbach building:
+      // absolutely unchanged.
+      if (worldPointInPolygon(x, y, config.blockedZone)) return true;
+    }
+
+    return false;
   }
 
   function installLautenbachBuildingStyles() {
@@ -5434,8 +5545,27 @@
       image.style.top = `${config.top}px`;
       image.style.width = `${config.width}px`;
       image.style.height = `${config.height}px`;
+      image.style.zIndex = "6";
       image.style.display = MAP.id === "lautenbach" ? "" : "none";
+
+      // R37: only used to make the church's LOWER THIRD collision
+      // follow visible pixels instead of transparent PNG padding.
+      if (config.id === "lautenbach-wallfahrtskirche") {
+        image.addEventListener("load", () => {
+          prepareLautenbachBuildingAlphaMask(config, image);
+        }, { once: true });
+      }
+
       world.appendChild(image);
+      lautenbachBuildingElements.set(config.id, image);
+
+      if (
+        config.id === "lautenbach-wallfahrtskirche" &&
+        image.complete &&
+        image.naturalWidth > 0
+      ) {
+        prepareLautenbachBuildingAlphaMask(config, image);
+      }
     }
   }
 
@@ -5551,8 +5681,7 @@
     }
 
     if (MAP.id === "lautenbach") {
-      playerEl.style.zIndex =
-        playerBehindLautenbachBuilding() ? "1" : "100";
+      updateLautenbachBuildingDepth();
       return;
     }
 
