@@ -203,17 +203,28 @@
     combatBase: "assets/player/combat/PLAYER COMBAT BASE.webp",
     combatBaseLeft: "assets/player/combat/PLAYER COMBAT BASE LEFT.webp",
 
-    attackRight1: "assets/player/combat/PLAYER ATTACK RIGHT 1.webp",
-    attackRight2: "assets/player/combat/PLAYER ATTACK RIGHT 2.webp",
-    attackRight3: "assets/player/combat/PLAYER ATTACK RIGHT 3.webp",
+    // R45 COMBAT IMAGE SWAP — four dedicated attack poses per direction.
+    attackRight1: "assets/player/combat/PLAYER ATTACK RIGHT 1.png",
+    attackRight2: "assets/player/combat/PLAYER ATTACK RIGHT 2.png",
+    attackRight3: "assets/player/combat/PLAYER ATTACK RIGHT 3.png",
+    attackRight4: "assets/player/combat/PLAYER ATTACK RIGHT 4.png",
 
-    attackLeft1: "assets/player/combat/PLAYER ATTACK LEFT 1.webp",
-    attackLeft2: "assets/player/combat/PLAYER ATTACK LEFT 2.webp",
-    attackLeft3: "assets/player/combat/PLAYER ATTACK LEFT 3.webp",
+    attackLeft1: "assets/player/combat/PLAYER ATTACK LEFT 1.png",
+    attackLeft2: "assets/player/combat/PLAYER ATTACK LEFT 2.png",
+    attackLeft3: "assets/player/combat/PLAYER ATTACK LEFT 3.png",
+    attackLeft4: "assets/player/combat/PLAYER ATTACK LEFT 4.png",
 
-    attackDown1: "assets/player/combat/PLAYER ATTACK DOWN 1.webp",
-    attackDown2: "assets/player/combat/PLAYER ATTACK DOWN 2.webp",
+    attackDown1: "assets/player/combat/PLAYER ATTACK DOWN 1.png",
+    attackDown2: "assets/player/combat/PLAYER ATTACK DOWN 2.png",
+    attackDown3: "assets/player/combat/PLAYER ATTACK DOWN 3.png",
+    attackDown4: "assets/player/combat/PLAYER ATTACK DOWN 4.png",
 
+    attackUp1: "assets/player/combat/PLAYER ATTACK UP 1.png",
+    attackUp2: "assets/player/combat/PLAYER ATTACK UP 2.png",
+    attackUp3: "assets/player/combat/PLAYER ATTACK UP 3.png",
+    attackUp4: "assets/player/combat/PLAYER ATTACK UP 4.png",
+
+    // Existing block/base artwork remains untouched.
     attackFinish: "assets/player/combat/PLAYER ATTACK FINISH.webp",
     attackFinishLeft: "assets/player/combat/PLAYER ATTACK FINISH LEFT.webp",
     blockRight: "assets/player/combat/PLAYER BLOCK.webp",
@@ -229,13 +240,13 @@
     { sprite: PLAYER.attackRight1, duration: 400, hit: true, damage: 20, strike: 1 },
     { sprite: PLAYER.combatBase, duration: 100 },
 
-    { sprite: PLAYER.attackRight3, duration: 500, hit: true, damage: 20, strike: 2 },
+    { sprite: PLAYER.attackRight2, duration: 500, hit: true, damage: 20, strike: 2 },
     { sprite: PLAYER.combatBase, duration: 100 },
 
-    { sprite: PLAYER.attackFinish, duration: 400, hit: true, damage: 20, strike: 4 },
+    { sprite: PLAYER.attackRight3, duration: 400, hit: true, damage: 20, strike: 4 },
     { sprite: PLAYER.combatBase, duration: 100 },
 
-    { sprite: PLAYER.attackRight1, duration: 500, hit: true, damage: 40, strike: 3, critical: true },
+    { sprite: PLAYER.attackRight4, duration: 500, hit: true, damage: 40, strike: 3, critical: true },
     { sprite: PLAYER.combatBase, duration: 400 }
   ]);
 
@@ -243,13 +254,13 @@
     { sprite: PLAYER.attackLeft1, duration: 400, hit: true, damage: 20, strike: 1 },
     { sprite: PLAYER.combatBaseLeft, duration: 100 },
 
-    { sprite: PLAYER.attackLeft3, duration: 500, hit: true, damage: 20, strike: 2 },
+    { sprite: PLAYER.attackLeft2, duration: 500, hit: true, damage: 20, strike: 2 },
     { sprite: PLAYER.combatBaseLeft, duration: 100 },
 
-    { sprite: PLAYER.attackFinishLeft, duration: 400, hit: true, damage: 20, strike: 4 },
+    { sprite: PLAYER.attackLeft3, duration: 400, hit: true, damage: 20, strike: 4 },
     { sprite: PLAYER.combatBaseLeft, duration: 100 },
 
-    { sprite: PLAYER.attackLeft1, duration: 500, hit: true, damage: 40, strike: 3, critical: true },
+    { sprite: PLAYER.attackLeft4, duration: 500, hit: true, damage: 40, strike: 3, critical: true },
     { sprite: PLAYER.combatBaseLeft, duration: 400 }
   ]);
 
@@ -262,10 +273,24 @@
     { sprite: PLAYER.attackDown2, duration: 500, hit: true, damage: 20, strike: 2 },
     { sprite: PLAYER.combatBase, duration: 100 },
 
-    { sprite: PLAYER.attackFinish, duration: 400, hit: true, damage: 20, strike: 4 },
+    { sprite: PLAYER.attackDown3, duration: 400, hit: true, damage: 20, strike: 4 },
     { sprite: PLAYER.combatBase, duration: 100 },
 
-    { sprite: PLAYER.attackDown1, duration: 500, hit: true, damage: 40, strike: 3, critical: true },
+    { sprite: PLAYER.attackDown4, duration: 500, hit: true, damage: 40, strike: 3, critical: true },
+    { sprite: PLAYER.combatBase, duration: 400 }
+  ]);
+
+  const ATTACK_UP = Object.freeze([
+    { sprite: PLAYER.attackUp1, duration: 400, hit: true, damage: 20, strike: 1 },
+    { sprite: PLAYER.combatBase, duration: 100 },
+
+    { sprite: PLAYER.attackUp2, duration: 500, hit: true, damage: 20, strike: 2 },
+    { sprite: PLAYER.combatBase, duration: 100 },
+
+    { sprite: PLAYER.attackUp3, duration: 400, hit: true, damage: 20, strike: 4 },
+    { sprite: PLAYER.combatBase, duration: 100 },
+
+    { sprite: PLAYER.attackUp4, duration: 500, hit: true, damage: 40, strike: 3, critical: true },
     { sprite: PLAYER.combatBase, duration: 400 }
   ]);
 
@@ -7358,10 +7383,10 @@
 
   function chooseAttackSequence() {
     if (facing === "down") return ATTACK_DOWN;
+    if (facing === "up") return ATTACK_UP;
     if (facing === "left") return ATTACK_LEFT;
     if (facing === "right") return ATTACK_RIGHT;
 
-    // No dedicated UP attack exists. Use the last horizontal orientation.
     return lastHorizontalFacing === "left" ? ATTACK_LEFT : ATTACK_RIGHT;
   }
 
