@@ -4228,6 +4228,197 @@
   let lautenbachHillDistance = 0;
   let lautenbachHillSnapping = false;
 
+  // ------------------------------------------------------------------
+  // R40 MAP 4 — HUBACKER TERRAIN / RED RIVER / PURPLE PLATEAUS
+  // Coordinates are mapped directly from the supplied R31 overlay.
+  // Only the player's FOOT anchor is tested.
+  // ------------------------------------------------------------------
+  const HUBACKER_TERRAIN = Object.freeze({
+    boundaryPadding: 18,
+
+    // RED painted river: completely non-walkable.
+    // The bridge itself is handled separately by the forced A/D snap.
+    riverBlocked: Object.freeze([
+      Object.freeze([
+        [4533,4],[4782,1030],[4642,1789],[4770,3177],
+        [4640,4012],[5428,4030],[5291,2529],[5367,4]
+      ]),
+      Object.freeze([
+        [5493,4475],[4472,4485],[4601,4819],
+        [4526,5496],[3967,6834],[4915,6834]
+      ])
+    ]),
+
+    // PURPLE marked regions: inaccessible plateaus/terrain.
+    blockedEllipses: Object.freeze([
+      Object.freeze({ cx: 2676, cy: 2007, rx: 1298, ry: 1041 }),
+      Object.freeze({ cx: 8139, cy: 2472, rx: 2646, ry: 2473 })
+    ]),
+
+    // The visible bridge gap may not be free-walked.
+    // Only HUBACKER_WOOD_BRIDGE snap movement may cross it.
+    bridgeLockedZone: Object.freeze({
+      x1: 4440, y1: 4050, x2: 5585, y2: 4465
+    }),
+
+    // WHITE curved line beside the river.
+    // Stored TOP -> BOTTOM: W moves toward index 0, S moves downward.
+    cliffPath: Object.freeze([
+      Object.freeze([5505,1020]),
+      Object.freeze([5468,1298]),
+      Object.freeze([5449,1622]),
+      Object.freeze([5430,1946]),
+      Object.freeze([5430,2270]),
+      Object.freeze([5458,2594]),
+      Object.freeze([5513,2918]),
+      Object.freeze([5568,3242]),
+      Object.freeze([5624,3566]),
+      Object.freeze([5661,3752])
+    ]),
+    cliffSnapDistance: 175,
+    cliffTravelSpeed: PLAYER.speed * 0.92
+  });
+
+  let activeHubackerCliffPath = false;
+  let hubackerCliffDistance = 0;
+  let hubackerCliffSnapping = false;
+
+  function pointInsideHubackerEllipse(x, y, ellipse) {
+    const dx = (x - ellipse.cx) / ellipse.rx;
+    const dy = (y - ellipse.cy) / ellipse.ry;
+    return dx * dx + dy * dy <= 1;
+  }
+
+  function isHubackerBlockedFootPoint(x, y) {
+    if (MAP.id !== "hubacker") return false;
+
+    for (const polygon of HUBACKER_TERRAIN.riverBlocked) {
+      if (
+        worldPointInPolygon(x, y, polygon) ||
+        pointNearPolygonBoundaryR21(
+          x, y, polygon, HUBACKER_TERRAIN.boundaryPadding
+        )
+      ) {
+        return true;
+      }
+    }
+
+    for (const ellipse of HUBACKER_TERRAIN.blockedEllipses) {
+      if (pointInsideHubackerEllipse(x, y, ellipse)) return true;
+    }
+
+    // The bridge deck/gap is NEVER freely walkable.
+    // Crossing is possible only while the existing bridge snap owns movement.
+    const b = HUBACKER_TERRAIN.bridgeLockedZone;
+    if (
+      x >= b.x1 && x <= b.x2 &&
+      y >= b.y1 && y <= b.y2 &&
+      !(activeBridge && activeBridge.id === "hubacker-wood")
+    ) {
+      return true;
+    }
+
+    return false;
+  }
+
+  function hubackerCliffPathMetrics() {
+    return getPathMetrics(HUBACKER_TERRAIN.cliffPath);
+  }
+
+  function tryEngageHubackerCliffPath(dx, dy) {
+    if (MAP.id !== "hubacker" || activeHubackerCliffPath) return false;
+
+    // This line is W/S ONLY.
+    const verticalDirection = dy < 0 ? -1 : dy > 0 ? 1 : 0;
+    if (!verticalDirection) return false;
+
+    const closest = closestPointOnBridgePath(
+      playerX,
+      playerY,
+      HUBACKER_TERRAIN.cliffPath
+    );
+
+    if (
+      !closest ||
+      closest.distance > HUBACKER_TERRAIN.cliffSnapDistance
+    ) {
+      return false;
+    }
+
+    // At the TOP end W must not release into the blocked plateau.
+    // Touching the line still captures the player; only S can take him back.
+    activeHubackerCliffPath = true;
+    hubackerCliffDistance = closest.pathDistance;
+    hubackerCliffSnapping = true;
+
+    clearIceVelocity();
+    updateIceVisual();
+    return true;
+  }
+
+  function moveAlongHubackerCliffPath(dx, dy, deltaSeconds) {
+    if (!activeHubackerCliffPath) return false;
+
+    const path = HUBACKER_TERRAIN.cliffPath;
+    const closest = closestPointOnBridgePath(playerX, playerY, path);
+
+    if (hubackerCliffSnapping && closest) {
+      const pull = Math.min(1, 10 * deltaSeconds);
+      playerX += (closest.x - playerX) * pull;
+      playerY += (closest.y - playerY) * pull;
+
+      if (closest.distance <= 7) {
+        playerX = closest.x;
+        playerY = closest.y;
+        hubackerCliffDistance = closest.pathDistance;
+        hubackerCliffSnapping = false;
+      }
+      return true;
+    }
+
+    // While captured, A/D does absolutely nothing.
+    // W = upward along the white line, S = downward.
+    const verticalDirection = dy < 0 ? -1 : dy > 0 ? 1 : 0;
+    if (!verticalDirection) return true;
+
+    const metrics = hubackerCliffPathMetrics();
+    const nextDistance = Math.max(
+      0,
+      Math.min(
+        metrics.total,
+        hubackerCliffDistance +
+          verticalDirection *
+          HUBACKER_TERRAIN.cliffTravelSpeed *
+          deltaSeconds
+      )
+    );
+
+    const p = pointAtBridgeDistance(path, nextDistance);
+    playerX = p.x;
+    playerY = p.y;
+    hubackerCliffDistance = nextDistance;
+
+    // TOP: stay locked. W cannot push farther; only S can return.
+    if (nextDistance <= 0.001 && verticalDirection < 0) {
+      hubackerCliffDistance = 0;
+      return true;
+    }
+
+    // BOTTOM: S leaves the forced route and immediately restores free movement.
+    if (
+      nextDistance >= metrics.total - 0.001 &&
+      verticalDirection > 0
+    ) {
+      activeHubackerCliffPath = false;
+      hubackerCliffSnapping = false;
+
+      // Tiny outward step so the capture radius does not instantly re-grab.
+      playerY += 18;
+    }
+
+    return true;
+  }
+
   let iceVelocityX=0, iceVelocityY=0, iceVisualActive=false;
 
   function pointToSegmentDistanceR21(px,py,ax,ay,bx,by){
@@ -4546,6 +4737,9 @@
     // R28 MAP 3: every RED marked Lautenbach region is hard-blocked.
     if (isLautenbachBlockedFootPoint(x, y)) return false;
 
+    // R40 MAP 4: RED river + both PURPLE regions + locked bridge gap.
+    if (isHubackerBlockedFootPoint(x, y)) return false;
+
     // New hard collision for church body + tavern.
     // Only the player's foot anchor participates.
     if (isBuildingBlockedFootPoint(x, y)) return false;
@@ -4859,6 +5053,11 @@
   function movePlayerWithWorldCollision(dx, dy, deltaSeconds) {
     const horizontalDirection = dx > 0 ? 1 : dx < 0 ? -1 : 0;
 
+    if (MAP.id !== "hubacker" && activeHubackerCliffPath) {
+      activeHubackerCliffPath = false;
+      hubackerCliffSnapping = false;
+    }
+
     // R39 MAP 4: exact white-marked HUBACKER bridge snap.
     if (
       MAP.id === "hubacker" &&
@@ -4868,6 +5067,20 @@
       )
     ) {
       moveAlongActiveBridge(horizontalDirection, deltaSeconds);
+      clampPlayer();
+      return;
+    }
+
+    // R40 MAP 4: WHITE curved riverside line.
+    // Once captured, only W/S can move the player along it.
+    if (
+      MAP.id === "hubacker" &&
+      (
+        activeHubackerCliffPath ||
+        tryEngageHubackerCliffPath(dx, dy)
+      )
+    ) {
+      moveAlongHubackerCliffPath(dx, dy, deltaSeconds);
       clampPlayer();
       return;
     }
