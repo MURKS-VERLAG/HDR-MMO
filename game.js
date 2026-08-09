@@ -5300,24 +5300,17 @@
       width: 2660,
       height: 2485,
 
-      // R33: ONLY the upper pink area is walk-behind.
+      // R34 FINAL SPLIT:
+      // PINK upper church area is fully walkable and the PLAYER stays BEHIND
+      // the church all the way down to the orange collision boundary.
       behindZone: Object.freeze([
         [2510, 1220],
         [5170, 1220],
-        [5170, 2350],
-        [2510, 2350]
+        [5170, 2760],
+        [2510, 2760]
       ]),
 
-      // R33: explicit foreground apron in front of the lower church.
-      // This is walkable and exists only for depth ordering.
-      foregroundZone: Object.freeze([
-        [2380, 2350],
-        [5360, 2350],
-        [5360, 2760],
-        [2380, 2760]
-      ]),
-
-      // ORANGE lower church rectangle = HARD COLLISION.
+      // ORANGE lower church rectangle remains EXACTLY the working hard collision.
       blockedZone: Object.freeze([
         [2510, 2760],
         [5225, 2760],
@@ -5350,32 +5343,8 @@
   function playerBehindLautenbachBuilding() {
     if (MAP.id !== "lautenbach") return false;
 
-    // R33 HARD PRIORITY:
-    // Any explicit foreground zone wins BEFORE every walk-behind test.
-    for (const config of LAUTENBACH_BUILDINGS) {
-      if (
-        config.foregroundZone &&
-        worldPointInPolygon(playerX, playerY, config.foregroundZone)
-      ) {
-        return false;
-      }
-    }
-
-    // Additional absolute church frontage rule:
-    // in the marked lower/orange church span the player is ALWAYS foreground.
-    const church = LAUTENBACH_BUILDINGS.find(
-      config => config.id === "lautenbach-wallfahrtskirche"
-    );
-    if (
-      church &&
-      playerX >= 2380 &&
-      playerX <= 5360 &&
-      playerY >= 2350
-    ) {
-      return false;
-    }
-
-    // Hard collision zones are foreground as well.
+    // R34 FINAL CHURCH SPLIT:
+    // Orange / blocked zones are NEVER a walk-behind zone.
     if (
       LAUTENBACH_BUILDINGS.some(
         config => worldPointInPolygon(playerX, playerY, config.blockedZone)
@@ -5384,7 +5353,8 @@
       return false;
     }
 
-    // Only genuine pink areas can place the player behind a building.
+    // Pink zones are the ONLY places where the player is drawn behind a building.
+    // For the church this reaches exactly to y=2760, the top edge of the orange box.
     return LAUTENBACH_BUILDINGS.some(
       config => worldPointInPolygon(playerX, playerY, config.behindZone)
     );
