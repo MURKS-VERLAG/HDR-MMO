@@ -1047,6 +1047,16 @@
     })
   });
 
+  const LAUTENBACH_WOLF_HABITAT = Object.freeze({
+    mapId: "lautenbach",
+    count: 5,
+    canExitTop: false,
+    cx: 520,
+    cy: 4700,
+    rx: 930,
+    ry: 1900
+  });
+
   let wolfActors = [];
   let nextWolfHowlAt = 0;
   const wolfHowlAudio = new Audio(WOLF_CONFIG.howlSound);
@@ -1104,15 +1114,15 @@
     document.head.appendChild(style);
   }
 
-  function wolfPointInsideHabitat(x, y) {
-    const h = WOLF_CONFIG.habitat;
+  function wolfPointInsideHabitat(x, y, habitat = WOLF_CONFIG.habitat) {
+    const h = habitat;
     const dx = (x - h.cx) / h.rx;
     const dy = (y - h.cy) / h.ry;
     return dx * dx + dy * dy <= 1;
   }
 
-  function wolfRandomPoint(inset = 90) {
-    const h = WOLF_CONFIG.habitat;
+  function wolfRandomPoint(inset = 90, habitat = WOLF_CONFIG.habitat, mapId = WOLF_CONFIG.mapId) {
+    const h = habitat;
 
     for (let i = 0; i < 120; i += 1) {
       const angle = Math.random() * Math.PI * 2;
@@ -1120,7 +1130,11 @@
       const x = h.cx + Math.cos(angle) * Math.max(100, h.rx - inset) * r;
       const y = h.cy + Math.sin(angle) * Math.max(100, h.ry - inset) * r;
 
-      if (y >= 90 && wolfPointInsideHabitat(x, y)) {
+      if (
+        y >= 90 &&
+        wolfPointInsideHabitat(x, y, habitat) &&
+        !(mapId === "lautenbach" && isLautenbachBlockedWorldPoint(x, y))
+      ) {
         return { x, y };
       }
     }
@@ -1157,7 +1171,7 @@
   }
 
   function wolfChooseTarget(actor, now) {
-    const target = wolfRandomPoint(120);
+    const target = wolfRandomPoint(120, actor.habitat, actor.mapId);
     actor.targetX = target.x;
     actor.targetY = target.y;
     actor.speed =
@@ -1177,9 +1191,9 @@
   function wolfStartTopExit(actor, now) {
     actor.targetX =
       Math.max(
-        WOLF_CONFIG.habitat.cx - WOLF_CONFIG.habitat.rx * 0.72,
+        actor.habitat.cx - actor.habitat.rx * 0.72,
         Math.min(
-          WOLF_CONFIG.habitat.cx + WOLF_CONFIG.habitat.rx * 0.72,
+          actor.habitat.cx + actor.habitat.rx * 0.72,
           actor.x + (Math.random() - 0.5) * 650
         )
       );
@@ -1205,7 +1219,7 @@
   }
 
   function wolfReturn(actor, now) {
-    const h = WOLF_CONFIG.habitat;
+    const h = actor.habitat;
     actor.x =
       h.cx - h.rx * 0.62 +
       Math.random() * h.rx * 1.24;
@@ -1215,7 +1229,7 @@
     actor.moving = true;
     actor.element.classList.remove("map-wolf--away");
 
-    const target = wolfRandomPoint(180);
+    const target = wolfRandomPoint(180, actor.habitat, actor.mapId);
     actor.targetX = target.x;
     actor.targetY = target.y;
     actor.speed = 210 + Math.random() * 110;
@@ -1230,7 +1244,7 @@
 
   function wolfSetHowl(actor, now, delay) {
     window.setTimeout(() => {
-      if (!actor || !actor.ready || actor.away || MAP.id !== WOLF_CONFIG.mapId) return;
+      if (!actor || !actor.ready || actor.away || MAP.id !== actor.mapId) return;
 
       actor.howling = true;
       actor.moving = false;
@@ -1255,13 +1269,14 @@
 
     let accumulatedDelay = 0;
     for (const actor of wolfActors) {
+      if (actor.mapId !== MAP.id) continue;
       accumulatedDelay += 100 + Math.random() * 100;
       wolfSetHowl(actor, now, accumulatedDelay);
     }
   }
 
-  function createWolfActor(index) {
-    const start = wolfRandomPoint(180);
+  function createWolfActor(index, mapId = WOLF_CONFIG.mapId, habitat = WOLF_CONFIG.habitat, canExitTop = true) {
+    const start = wolfRandomPoint(180, habitat, mapId);
 
     const element = document.createElement("div");
     element.className = "map-wolf";
@@ -1294,6 +1309,9 @@
 
     const actor = {
       element,
+      mapId,
+      habitat,
+      canExitTop,
       images: [imageA, imageB, imageHowl],
       visibleLayer: 0,
       frameIndex: 0,
@@ -1319,7 +1337,7 @@
     element.style.left = `${actor.x}px`;
     element.style.top = `${actor.y}px`;
     element.style.setProperty("--wolf-facing", actor.facing);
-    element.style.display = MAP.id === WOLF_CONFIG.mapId ? "" : "none";
+    element.style.display = MAP.id === mapId ? "" : "none";
 
     const waitForWolfImage = (img) => {
       if (img.complete && img.naturalWidth > 0) {
@@ -1372,26 +1390,36 @@
 
     wolfActors = [];
     for (let i = 0; i < WOLF_CONFIG.count; i += 1) {
-      wolfActors.push(createWolfActor(i));
+      wolfActors.push(createWolfActor(i, WOLF_CONFIG.mapId, WOLF_CONFIG.habitat, true));
+    }
+    for (let i = 0; i < LAUTENBACH_WOLF_HABITAT.count; i += 1) {
+      wolfActors.push(
+        createWolfActor(
+          i,
+          LAUTENBACH_WOLF_HABITAT.mapId,
+          LAUTENBACH_WOLF_HABITAT,
+          LAUTENBACH_WOLF_HABITAT.canExitTop
+        )
+      );
     }
 
     nextWolfHowlAt = performance.now() + WOLF_CONFIG.howlInterval;
   }
 
   function updateWolves(deltaSeconds, now) {
-    const active = MAP.id === WOLF_CONFIG.mapId;
+    const activeActors = wolfActors.filter(actor => actor.mapId === MAP.id);
 
     for (const actor of wolfActors) {
-      actor.element.style.display = active ? "" : "none";
+      actor.element.style.display = actor.mapId === MAP.id ? "" : "none";
     }
 
-    if (!active) return;
+    if (!activeActors.length) return;
 
     if (now >= nextWolfHowlAt) {
       startWolfHowlEvent(now);
     }
 
-    for (const actor of wolfActors) {
+    for (const actor of activeActors) {
       if (!actor.ready) continue;
 
       if (actor.away) {
@@ -1448,7 +1476,7 @@
       if (now < actor.pauseUntil || now < actor.nextDecision) continue;
 
       // Black circle touches/open at top: wolves may leave only there.
-      if (Math.random() < 0.13) {
+      if (actor.canExitTop && Math.random() < 0.13) {
         wolfStartTopExit(actor, now);
       } else {
         wolfChooseTarget(actor, now);
@@ -1861,6 +1889,16 @@
           [10000, 6006],
           [9410, 6006]
         ]
+      },
+      {
+        id: "lautenbach-boar-east",
+        mapId: "lautenbach",
+        count: 3,
+        exits: ["right"],
+        polygon: [
+          [8550,3500],[9100,3300],[9700,3380],[10000,3700],
+          [10000,5200],[9570,5400],[8950,5250],[8500,4850]
+        ]
       }
     ])
   });
@@ -2018,6 +2056,7 @@
       const y = b.minY + Math.random() * (b.maxY - b.minY);
 
       if (!boarPointInPolygon(x, y, zone.polygon)) continue;
+      if (zone.mapId === "lautenbach" && isLautenbachBlockedWorldPoint(x, y)) continue;
 
       const clearance = boarFenceClearanceAt(zone, x, y);
 
@@ -2202,7 +2241,8 @@
     element.style.left = `${actor.x}px`;
     element.style.top = `${actor.y}px`;
     element.style.setProperty("--boar-facing", actor.facing);
-    element.style.display = MAP.id === BOAR_CONFIG.mapId ? "" : "none";
+    element.style.display =
+      MAP.id === (zone.mapId || BOAR_CONFIG.mapId) ? "" : "none";
 
     const waitForImage = (img) => {
       if (img.complete && img.naturalWidth > 0) {
@@ -2260,6 +2300,8 @@
     if (now < nextBoarNearbySoundAt) return;
 
     const nearby = boarActors.filter((actor) => {
+      const actorMapId = actor.zone.mapId || BOAR_CONFIG.mapId;
+      if (actorMapId !== MAP.id) return false;
       if (!actor.ready || actor.away) return false;
       return (
         Math.hypot(playerX - actor.x, playerY - actor.y) <=
@@ -2293,17 +2335,22 @@
   }
 
   function updateBoars(deltaSeconds, now) {
-    const active = MAP.id === BOAR_CONFIG.mapId;
+    let anyActive = false;
 
     for (const actor of boarActors) {
+      const actorMapId = actor.zone.mapId || BOAR_CONFIG.mapId;
+      const active = actorMapId === MAP.id;
       actor.element.style.display = active ? "" : "none";
+      if (active) anyActive = true;
     }
 
-    if (!active) return;
+    if (!anyActive) return;
 
     playRandomBoarNearbySound(now);
 
     for (const actor of boarActors) {
+      const actorMapId = actor.zone.mapId || BOAR_CONFIG.mapId;
+      if (actorMapId !== MAP.id) continue;
       if (!actor.ready) continue;
 
       if (actor.away) {
@@ -2495,6 +2542,16 @@
       ],
       exits: ["left", "bottom"],
       count: 4
+    },
+    {
+      id: "lautenbach-rabbits-west",
+      mapId: "lautenbach",
+      polygon: [
+        [0,1050],[430,1150],[850,1550],[1040,2300],
+        [1030,3150],[810,3900],[420,4420],[0,4520]
+      ],
+      exits: ["left"],
+      count: 6
     }
   ]);
 
@@ -2700,7 +2757,10 @@
       const x = minX + Math.random() * Math.max(1, maxX - minX);
       const y = minY + Math.random() * Math.max(1, maxY - minY);
 
-      if (rabbitPointInPolygon(x, y, zone.polygon)) {
+      if (
+        rabbitPointInPolygon(x, y, zone.polygon) &&
+        !(zone.mapId === "lautenbach" && isLautenbachBlockedWorldPoint(x, y))
+      ) {
         return { x, y };
       }
     }
@@ -3892,6 +3952,60 @@
     swayAngle: 4.6,
     swayX: 8
   });
+
+  // ------------------------------------------------------------------
+  // R28 MAP 3 — LAUTENBACH TERRAIN / ICE / HILLSIDE PATH
+  // RED = blocked for player + ambient animals.
+  // BLUE = same ice physics as WINTERBACH.
+  // WHITE dashed line = forced hillside route.
+  // ------------------------------------------------------------------
+  const LAUTENBACH_TERRAIN = Object.freeze({
+    boundaryPadding: 18,
+    blocked: Object.freeze([
+      Object.freeze([
+        [0,0],[980,0],[1080,470],[1410,820],[1480,1260],[1260,1640],
+        [1450,2140],[1320,2600],[1510,3020],[1360,3480],[1480,3990],
+        [1220,4520],[1050,5230],[760,5630],[0,5630]
+      ]),
+      Object.freeze([
+        [1030,0],[1750,0],[1870,430],[2060,750],[2050,1230],[1870,1600],
+        [2190,2070],[2170,2450],[1960,2790],[2300,3230],[2370,3630],
+        [2240,4090],[1960,4420],[1880,4890],[1670,5330],[1450,5330],
+        [1460,4620],[1650,4210],[1630,3680],[1750,3270],[1600,2820],
+        [1730,2320],[1580,1860],[1690,1360],[1510,900]
+      ]),
+      Object.freeze([
+        [1820,0],[2620,0],[2630,590],[2470,1000],[2510,1430],[2380,1810],
+        [2570,2220],[2550,2670],[2700,3140],[2700,3550],[2470,3740],
+        [2240,3500],[2160,3050],[2040,2650],[2150,2200],[2010,1780],
+        [2130,1290],[2010,820]
+      ]),
+      Object.freeze([
+        [6500,0],[7270,0],[7350,620],[7190,900],[7420,1210],[7430,1840],
+        [7350,2450],[7310,3080],[7220,3730],[7290,4250],[7180,4620],
+        [6590,4620],[6500,4190],[6490,3670],[6550,3120],[6470,2610],
+        [6500,2070],[6420,1500],[6460,900]
+      ])
+    ]),
+    ice: Object.freeze([
+      Object.freeze([
+        [6587,4612],[7317,4637],[7358,6656],[5693,6656],
+        [5710,6016],[6079,5326],[6481,4900]
+      ])
+    ]),
+    hillPath: Object.freeze([
+      [361,0],[574,369],[812,796],[1107,1190],[1058,1559],[1255,1871],
+      [1526,2109],[1698,2479],[1870,2905],[1936,3349],[2108,3513],
+      [2428,3611],[2863,3800]
+    ]),
+    hillSnapDistance: 330,
+    hillTravelSpeed: PLAYER.speed * 0.92
+  });
+
+  let activeLautenbachHillPath = false;
+  let lautenbachHillDistance = 0;
+  let lautenbachHillSnapping = false;
+
   let iceVelocityX=0, iceVelocityY=0, iceVisualActive=false;
 
   function pointToSegmentDistanceR21(px,py,ax,ay,bx,by){
@@ -3909,8 +4023,25 @@
     return WINTERBACH_TERRAIN.blocked.some(p=>worldPointInPolygon(x,y,p)||pointNearPolygonBoundaryR21(x,y,p,WINTERBACH_TERRAIN.boundaryPadding));
   }
   function isWinterbachIceFootPoint(x,y){
-    if(MAP.id!=="winterbach-ranglehen") return false;
-    return WINTERBACH_TERRAIN.ice.some(p=>worldPointInPolygon(x,y,p));
+    if(MAP.id==="winterbach-ranglehen") {
+      return WINTERBACH_TERRAIN.ice.some(p=>worldPointInPolygon(x,y,p));
+    }
+    if(MAP.id==="lautenbach") {
+      return LAUTENBACH_TERRAIN.ice.some(p=>worldPointInPolygon(x,y,p));
+    }
+    return false;
+  }
+
+  function isLautenbachBlockedFootPoint(x,y){
+    if(MAP.id!=="lautenbach") return false;
+    return LAUTENBACH_TERRAIN.blocked.some(
+      p=>worldPointInPolygon(x,y,p) ||
+         pointNearPolygonBoundaryR21(x,y,p,LAUTENBACH_TERRAIN.boundaryPadding)
+    );
+  }
+
+  function isLautenbachBlockedWorldPoint(x,y){
+    return LAUTENBACH_TERRAIN.blocked.some(p=>worldPointInPolygon(x,y,p));
   }
   function clearIceVelocity(){ iceVelocityX=0; iceVelocityY=0; }
   function installIcePlayerStyles(){
@@ -3921,7 +4052,7 @@
   }
   function updateIceVisual(){
     if(!playerEl) return;
-    const sliding=MAP.id==="winterbach-ranglehen"&&isWinterbachIceFootPoint(playerX,playerY)&&Math.hypot(iceVelocityX,iceVelocityY)>ICE_PHYSICS.minSpeed;
+    const sliding=(MAP.id==="winterbach-ranglehen"||MAP.id==="lautenbach")&&isWinterbachIceFootPoint(playerX,playerY)&&Math.hypot(iceVelocityX,iceVelocityY)>ICE_PHYSICS.minSpeed;
     if(sliding===iceVisualActive) return; iceVisualActive=sliding; playerEl.classList.toggle("player--ice-sliding",sliding);
   }
   function movePlayerOnIce(inputX,inputY,deltaSeconds){
@@ -4141,6 +4272,9 @@
     // R21 MAP 2: red terrain is hard-blocked for the player's FOOT anchor.
     if (isWinterbachBlockedFootPoint(x, y)) return false;
 
+    // R28 MAP 3: every RED marked Lautenbach region is hard-blocked.
+    if (isLautenbachBlockedFootPoint(x, y)) return false;
+
     // New hard collision for church body + tavern.
     // Only the player's foot anchor participates.
     if (isBuildingBlockedFootPoint(x, y)) return false;
@@ -4277,8 +4411,93 @@
     return true;
   }
 
+
+  function lautenbachHillPathMetrics() {
+    return getPathMetrics(LAUTENBACH_TERRAIN.hillPath);
+  }
+
+  function tryEngageLautenbachHillPath(dx, dy) {
+    if (MAP.id !== "lautenbach" || activeLautenbachHillPath) return false;
+
+    const upDiagonal = dy < 0 && dx !== 0;
+    const downDiagonal = dy > 0 && dx !== 0;
+    if (!upDiagonal && !downDiagonal) return false;
+
+    const path = LAUTENBACH_TERRAIN.hillPath;
+    const closest = closestPointOnBridgePath(playerX, playerY, path);
+    if (!closest || closest.distance > LAUTENBACH_TERRAIN.hillSnapDistance) return false;
+
+    // Climb from the lower clearing; descend from the upper hill end.
+    if (upDiagonal && closest.progress < 0.58) return false;
+    if (downDiagonal && closest.progress > 0.42) return false;
+
+    activeLautenbachHillPath = true;
+    lautenbachHillDistance = closest.pathDistance;
+    lautenbachHillSnapping = true;
+    clearIceVelocity();
+    updateIceVisual();
+    return true;
+  }
+
+  function moveAlongLautenbachHillPath(dx, dy, deltaSeconds) {
+    if (!activeLautenbachHillPath) return false;
+
+    const path = LAUTENBACH_TERRAIN.hillPath;
+    const closest = closestPointOnBridgePath(playerX, playerY, path);
+
+    if (lautenbachHillSnapping && closest) {
+      const pull = Math.min(1, 10 * deltaSeconds);
+      playerX += (closest.x - playerX) * pull;
+      playerY += (closest.y - playerY) * pull;
+      if (closest.distance <= 7) {
+        playerX = closest.x;
+        playerY = closest.y;
+        lautenbachHillDistance = closest.pathDistance;
+        lautenbachHillSnapping = false;
+      }
+      return true;
+    }
+
+    const movingUpDiagonal = dy < 0 && dx !== 0;
+    const movingDownDiagonal = dy > 0 && dx !== 0;
+    if (!movingUpDiagonal && !movingDownDiagonal) return true;
+
+    const metrics = lautenbachHillPathMetrics();
+    const direction = movingUpDiagonal ? -1 : 1;
+    const nextDistance = Math.max(
+      0,
+      Math.min(
+        metrics.total,
+        lautenbachHillDistance +
+          direction * LAUTENBACH_TERRAIN.hillTravelSpeed * deltaSeconds
+      )
+    );
+    const p = pointAtBridgeDistance(path, nextDistance);
+    playerX = p.x;
+    playerY = p.y;
+    lautenbachHillDistance = nextDistance;
+
+    if (
+      (nextDistance <= 0.001 && direction < 0) ||
+      (nextDistance >= metrics.total - 0.001 && direction > 0)
+    ) {
+      activeLautenbachHillPath = false;
+      lautenbachHillSnapping = false;
+    }
+    return true;
+  }
+
   function movePlayerWithWorldCollision(dx, dy, deltaSeconds) {
     const horizontalDirection = dx > 0 ? 1 : dx < 0 ? -1 : 0;
+
+    if (
+      MAP.id === "lautenbach" &&
+      (activeLautenbachHillPath || tryEngageLautenbachHillPath(dx, dy))
+    ) {
+      moveAlongLautenbachHillPath(dx, dy, deltaSeconds);
+      clampPlayer();
+      return;
+    }
 
     if (
       MAP.id === "oberkirch-zentrum" &&
@@ -5462,6 +5681,8 @@
     await waitMs(200);
 
     MAP = nextMap;
+    activeLautenbachHillPath = false;
+    lautenbachHillSnapping = false;
     clearIceVelocity();
     updateIceVisual();
     resizeWorldForCurrentMap();
