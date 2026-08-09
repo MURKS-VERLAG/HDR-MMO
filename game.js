@@ -22,6 +22,13 @@
       image: "assets/maps/MAP 3 LAUTENBACH.jpg",
       width: 10000,
       height: 6656
+    }),
+    hubacker: Object.freeze({
+      id: "hubacker",
+      name: "HUBACKER",
+      image: "assets/maps/MAP 4 HUBACKER.jpg",
+      width: 10240,
+      height: 6827
     })
   });
 
@@ -108,6 +115,50 @@
     }),
     winterbachNorthRightReturnSpawn: Object.freeze({
       x: 7330,
+      y: 165
+    }),
+
+    // R38 MAP 3 -> MAP 4: the two existing HUBACKER north roads.
+    lautenbachNorthLeft: Object.freeze({
+      x1: 4650,
+      x2: 6050,
+      leaveY: -18
+    }),
+    lautenbachNorthRight: Object.freeze({
+      x1: 6850,
+      x2: 8200,
+      leaveY: -18
+    }),
+
+    // R38 MAP 4 arrival points: two separate lower roads, LEFT stays LEFT / RIGHT stays RIGHT.
+    hubackerSouthLeftSpawn: Object.freeze({
+      x: 3050,
+      y: 6700
+    }),
+    hubackerSouthRightSpawn: Object.freeze({
+      x: 6050,
+      y: 6700
+    }),
+
+    // R38 MAP 4 -> MAP 3: both lower HUBACKER roads return to the matching LAUTENBACH north road.
+    hubackerSouthLeft: Object.freeze({
+      x1: 2550,
+      x2: 3550,
+      leavePadding: 18
+    }),
+    hubackerSouthRight: Object.freeze({
+      x1: 5550,
+      x2: 6550,
+      leavePadding: 18
+    }),
+
+    // Spawn just inside the two MAP 3 north roads when returning from HUBACKER.
+    lautenbachNorthLeftReturnSpawn: Object.freeze({
+      x: 5325,
+      y: 165
+    }),
+    lautenbachNorthRightReturnSpawn: Object.freeze({
+      x: 7520,
       y: 165
     })
   });
@@ -212,7 +263,9 @@
   const MAP_MUSIC = Object.freeze({
     "oberkirch-zentrum": "assets/audio/THE WEEPING STONE.mp3",
     "winterbach-ranglehen": "assets/audio/maps/WINTERBACH - FROSTBOUND BALLAD.mp3",
-    "lautenbach": "assets/audio/maps/LAUTENBACH - FROSTBOUND BALLAD.mp3"
+    "lautenbach": "assets/audio/maps/LAUTENBACH - FROSTBOUND BALLAD.mp3",
+    // R38: no new Hubacker music was requested; keep the Lautenbach regional track.
+    "hubacker": "assets/audio/maps/LAUTENBACH - FROSTBOUND BALLAD.mp3"
   });
 
   const MAP_MUSIC_VOLUME = 1.0;
@@ -543,6 +596,44 @@
       direction: "right",
       glow: "#ffffff",
       trigger: { x1: 8850, y1: 5150, x2: 10000, y2: 6656 }
+    },
+
+    // R38 MAP 4 — HUBACKER route labels from the supplied final-map reference.
+    {
+      id: "hubacker-sulzbach",
+      mapId: "hubacker",
+      text: "SULZBACH",
+      x: 620, y: 2450,
+      direction: "left",
+      glow: "#ffffff",
+      trigger: { x1: 0, y1: 1750, x2: 1500, y2: 3250 }
+    },
+    {
+      id: "hubacker-ramsbach",
+      mapId: "hubacker",
+      text: "RAMSBACH",
+      x: 4050, y: 430,
+      direction: "up",
+      glow: "#ffffff",
+      trigger: { x1: 3350, y1: 0, x2: 4750, y2: 1250 }
+    },
+    {
+      id: "hubacker-lautenbach-left",
+      mapId: "hubacker",
+      text: "LAUTENBACH",
+      x: 3050, y: 6350,
+      direction: "down",
+      glow: "#ffffff",
+      trigger: { x1: 2400, y1: 5550, x2: 3750, y2: 6827 }
+    },
+    {
+      id: "hubacker-lautenbach-right",
+      mapId: "hubacker",
+      text: "LAUTENBACH",
+      x: 6050, y: 6350,
+      direction: "down",
+      glow: "#ffffff",
+      trigger: { x1: 5350, y1: 5550, x2: 6750, y2: 6827 }
     }
   ]);
 
@@ -4374,6 +4465,32 @@
         )
       );
 
+    const inLautenbachNorthExit =
+      MAP.id === "lautenbach" &&
+      (
+        (
+          x >= MAP_EXIT_CONFIG.lautenbachNorthLeft.x1 &&
+          x <= MAP_EXIT_CONFIG.lautenbachNorthLeft.x2
+        ) ||
+        (
+          x >= MAP_EXIT_CONFIG.lautenbachNorthRight.x1 &&
+          x <= MAP_EXIT_CONFIG.lautenbachNorthRight.x2
+        )
+      );
+
+    const inHubackerSouthExit =
+      MAP.id === "hubacker" &&
+      (
+        (
+          x >= MAP_EXIT_CONFIG.hubackerSouthLeft.x1 &&
+          x <= MAP_EXIT_CONFIG.hubackerSouthLeft.x2
+        ) ||
+        (
+          x >= MAP_EXIT_CONFIG.hubackerSouthRight.x1 &&
+          x <= MAP_EXIT_CONFIG.hubackerSouthRight.x2
+        )
+      );
+
     if (y < minY) {
       const oberkirchNorthLeaveFloor = Math.min(
         MAP_EXIT_CONFIG.oberkirchNorth.leaveY,
@@ -4383,10 +4500,15 @@
         MAP_EXIT_CONFIG.winterbachNorthLeft.leaveY,
         MAP_EXIT_CONFIG.winterbachNorthRight.leaveY
       ) - 80;
+      const lautenbachNorthLeaveFloor = Math.min(
+        MAP_EXIT_CONFIG.lautenbachNorthLeft.leaveY,
+        MAP_EXIT_CONFIG.lautenbachNorthRight.leaveY
+      ) - 80;
 
       const allowedNorth =
         (inOberkirchNorthExit && y >= oberkirchNorthLeaveFloor) ||
-        (inWinterbachNorthExit && y >= winterbachNorthLeaveFloor);
+        (inWinterbachNorthExit && y >= winterbachNorthLeaveFloor) ||
+        (inLautenbachNorthExit && y >= lautenbachNorthLeaveFloor);
 
       if (!allowedNorth) return false;
     }
@@ -4403,7 +4525,14 @@
           MAP_EXIT_CONFIG.lautenbachSouthRight.leavePadding
         ) + 80;
 
-      if (!winterbachSouthAllowed && !lautenbachSouthAllowed) {
+      const hubackerSouthAllowed =
+        inHubackerSouthExit &&
+        y <= MAP.height + Math.max(
+          MAP_EXIT_CONFIG.hubackerSouthLeft.leavePadding,
+          MAP_EXIT_CONFIG.hubackerSouthRight.leavePadding
+        ) + 80;
+
+      if (!winterbachSouthAllowed && !lautenbachSouthAllowed && !hubackerSouthAllowed) {
         return false;
       }
     }
@@ -6147,6 +6276,8 @@
       label = "WINTERBACH";
     } else if (map.id === "lautenbach") {
       label = "LAUTENBACH";
+    } else if (map.id === "hubacker") {
+      label = "HUBACKER";
     } else if (map.id === "oberkirch-zentrum") {
       label = "OBERKIRCH";
     } else {
@@ -6317,6 +6448,38 @@
     );
   }
 
+  function playerInLautenbachNorthLeftExitLane() {
+    return (
+      MAP.id === "lautenbach" &&
+      playerX >= MAP_EXIT_CONFIG.lautenbachNorthLeft.x1 &&
+      playerX <= MAP_EXIT_CONFIG.lautenbachNorthLeft.x2
+    );
+  }
+
+  function playerInLautenbachNorthRightExitLane() {
+    return (
+      MAP.id === "lautenbach" &&
+      playerX >= MAP_EXIT_CONFIG.lautenbachNorthRight.x1 &&
+      playerX <= MAP_EXIT_CONFIG.lautenbachNorthRight.x2
+    );
+  }
+
+  function playerInHubackerSouthLeftExitLane() {
+    return (
+      MAP.id === "hubacker" &&
+      playerX >= MAP_EXIT_CONFIG.hubackerSouthLeft.x1 &&
+      playerX <= MAP_EXIT_CONFIG.hubackerSouthLeft.x2
+    );
+  }
+
+  function playerInHubackerSouthRightExitLane() {
+    return (
+      MAP.id === "hubacker" &&
+      playerX >= MAP_EXIT_CONFIG.hubackerSouthRight.x1 &&
+      playerX <= MAP_EXIT_CONFIG.hubackerSouthRight.x2
+    );
+  }
+
   function checkMapExit() {
     if (mapTransitioning) return false;
 
@@ -6376,6 +6539,62 @@
       switchMap(
         MAPS.lautenbach,
         MAP_EXIT_CONFIG.lautenbachSouthRightSpawn,
+        true
+      );
+      return true;
+    }
+
+    // R38 MAP 3 upper-left HUBACKER road -> MAP 4 lower-left road.
+    if (
+      playerInLautenbachNorthLeftExitLane() &&
+      movingUp &&
+      playerY <= MAP_EXIT_CONFIG.lautenbachNorthLeft.leaveY
+    ) {
+      switchMap(
+        MAPS.hubacker,
+        MAP_EXIT_CONFIG.hubackerSouthLeftSpawn,
+        true
+      );
+      return true;
+    }
+
+    // R38 MAP 3 upper-right HUBACKER road -> MAP 4 lower-right road.
+    if (
+      playerInLautenbachNorthRightExitLane() &&
+      movingUp &&
+      playerY <= MAP_EXIT_CONFIG.lautenbachNorthRight.leaveY
+    ) {
+      switchMap(
+        MAPS.hubacker,
+        MAP_EXIT_CONFIG.hubackerSouthRightSpawn,
+        true
+      );
+      return true;
+    }
+
+    // R38 MAP 4 lower-left road -> corresponding MAP 3 north-left road.
+    if (
+      playerInHubackerSouthLeftExitLane() &&
+      movingDown &&
+      playerY >= MAP.height + MAP_EXIT_CONFIG.hubackerSouthLeft.leavePadding
+    ) {
+      switchMap(
+        MAPS.lautenbach,
+        MAP_EXIT_CONFIG.lautenbachNorthLeftReturnSpawn,
+        true
+      );
+      return true;
+    }
+
+    // R38 MAP 4 lower-right road -> corresponding MAP 3 north-right road.
+    if (
+      playerInHubackerSouthRightExitLane() &&
+      movingDown &&
+      playerY >= MAP.height + MAP_EXIT_CONFIG.hubackerSouthRight.leavePadding
+    ) {
+      switchMap(
+        MAPS.lautenbach,
+        MAP_EXIT_CONFIG.lautenbachNorthRightReturnSpawn,
         true
       );
       return true;

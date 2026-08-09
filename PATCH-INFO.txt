@@ -1,0 +1,14 @@
+R38 HUBACKER MAP 4 INTEGRATION
+
+Changed files:
+- game.js
+- assets/maps/MAP 4 HUBACKER.png
+
+Existing index.html and all other assets stay untouched.
+Map links:
+- LAUTENBACH north-left <-> HUBACKER south-left
+- LAUTENBACH north-right <-> HUBACKER south-right
+Hubacker signs:
+- SULZBACH (left)
+- RAMSBACH (top)
+- LAUTENBACH (both bottom roads)
