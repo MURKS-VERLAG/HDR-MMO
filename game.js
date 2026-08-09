@@ -203,23 +203,142 @@
   attackAudio.loop = false;
   attackAudio.volume = 1.0;
 
-  const backgroundMusic = new Audio("assets/audio/THE WEEPING STONE.mp3");
-  backgroundMusic.preload = "auto";
-  backgroundMusic.loop = true;
-  backgroundMusic.volume = 1.0;
+  // ------------------------------------------------------------------
+  // R31 MAP MUSIC
+  // OBERKIRCH keeps the original existing track.
+  // WINTERBACH and LAUTENBACH use their own endless-loop tracks.
+  // Map changes crossfade smoothly instead of cutting the music.
+  // ------------------------------------------------------------------
+  const MAP_MUSIC = Object.freeze({
+    "oberkirch-zentrum": "assets/audio/THE WEEPING STONE.mp3",
+    "winterbach-ranglehen": "assets/audio/maps/WINTERBACH - FROSTBOUND BALLAD.mp3",
+    "lautenbach": "assets/audio/maps/LAUTENBACH - FROSTBOUND BALLAD.mp3"
+  });
+
+  const MAP_MUSIC_FADE_MS = 1500;
+  const MAP_MUSIC_VOLUME = 1.0;
+
+  const mapMusicPlayers = new Map();
+
+  function getMapMusicPlayer(mapId) {
+    const src = MAP_MUSIC[mapId] || MAP_MUSIC["oberkirch-zentrum"];
+
+    if (mapMusicPlayers.has(mapId)) {
+      return mapMusicPlayers.get(mapId);
+    }
+
+    const audio = new Audio(src);
+    audio.preload = "auto";
+    audio.loop = true;
+    audio.volume = 0;
+    mapMusicPlayers.set(mapId, audio);
+    return audio;
+  }
+
+  // Keep the original Oberkirch music object available as backgroundMusic.
+  const backgroundMusic = getMapMusicPlayer("oberkirch-zentrum");
+  backgroundMusic.volume = MAP_MUSIC_VOLUME;
 
   let backgroundMusicStarted = false;
+  let activeMapMusicId = "oberkirch-zentrum";
+  let activeMapMusic = backgroundMusic;
+  let musicFadeToken = 0;
+
+  function easeMusicFade(t) {
+    // Smoothstep: no hard volume corner at either end.
+    return t * t * (3 - 2 * t);
+  }
 
   function startBackgroundMusic() {
-    if (backgroundMusicStarted && !backgroundMusic.paused) return;
+    const wantedId = MAP.id;
+    const wanted = getMapMusicPlayer(wantedId);
 
-    backgroundMusic.play()
+    if (activeMapMusic !== wanted) {
+      if (activeMapMusic && !activeMapMusic.paused) {
+        activeMapMusic.pause();
+      }
+      activeMapMusicId = wantedId;
+      activeMapMusic = wanted;
+      activeMapMusic.volume = MAP_MUSIC_VOLUME;
+    }
+
+    if (backgroundMusicStarted && !activeMapMusic.paused) return;
+
+    activeMapMusic.play()
       .then(() => {
         backgroundMusicStarted = true;
       })
       .catch(() => {
         // Browser autoplay may be blocked until the first user interaction.
       });
+  }
+
+  function crossfadeMapMusic(nextMapId, duration = MAP_MUSIC_FADE_MS) {
+    if (!MAP_MUSIC[nextMapId]) return;
+
+    const next = getMapMusicPlayer(nextMapId);
+
+    // Already on the correct map track: leave it untouched.
+    if (activeMapMusicId === nextMapId && activeMapMusic === next) {
+      if (backgroundMusicStarted && next.paused) {
+        next.play().catch(() => {});
+      }
+      return;
+    }
+
+    const old = activeMapMusic;
+    const oldStartVolume = old ? old.volume : 0;
+
+    activeMapMusicId = nextMapId;
+    activeMapMusic = next;
+
+    // Restart a map's score when entering that map.
+    try {
+      next.currentTime = 0;
+    } catch (_) {}
+
+    next.volume = 0;
+
+    // If music has not been unlocked yet, simply arm the correct track.
+    if (!backgroundMusicStarted) {
+      if (old && old !== next) {
+        old.pause();
+        old.volume = MAP_MUSIC_VOLUME;
+      }
+      next.volume = MAP_MUSIC_VOLUME;
+      return;
+    }
+
+    next.play().catch(() => {});
+
+    const token = ++musicFadeToken;
+    const startedAt = performance.now();
+
+    function step(now) {
+      if (token !== musicFadeToken) return;
+
+      const raw = Math.min(1, (now - startedAt) / duration);
+      const eased = easeMusicFade(raw);
+
+      if (old && old !== next) {
+        old.volume = Math.max(0, oldStartVolume * (1 - eased));
+      }
+      next.volume = Math.min(MAP_MUSIC_VOLUME, MAP_MUSIC_VOLUME * eased);
+
+      if (raw < 1) {
+        requestAnimationFrame(step);
+        return;
+      }
+
+      if (old && old !== next) {
+        old.pause();
+        old.volume = MAP_MUSIC_VOLUME;
+      }
+
+      next.volume = MAP_MUSIC_VOLUME;
+    }
+
+    requestAnimationFrame(step);
   }
 
   function unlockBackgroundMusic() {
@@ -5932,6 +6051,13 @@
     overlay.style.webkitMaskImage = "none";
     overlay.style.maskImage = "none";
     overlay.style.opacity = "1";
+
+    // R31: start the soundtrack crossfade at the SAME moment as the map fade.
+    // OBERKIRCH -> original music
+    // WINTERBACH -> Anhang 1
+    // LAUTENBACH -> Anhang 2
+    crossfadeMapMusic(nextMap.id);
+
     await waitMs(200);
 
     MAP = nextMap;
