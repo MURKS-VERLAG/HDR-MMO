@@ -1351,6 +1351,337 @@
 
 
 
+
+  // ------------------------------------------------------------------
+  // R24 MAP 2 — ZIEGE IM OBSTHOF-GEHEGE
+  // One goat only. Strictly confined to the exact RED pen polygon.
+  // A1 = stand, A2 = one small step. Left uses mirrored versions.
+  // ------------------------------------------------------------------
+  const GOAT_CONFIG = Object.freeze({
+    mapId: "winterbach-ranglehen",
+    idleFrame: "assets/animals/goats/ZIEGE STAND.png",
+    stepFrame: "assets/animals/goats/ZIEGE SCHRITT.png",
+
+    width: 470,
+    height: 400,
+
+    pen: Object.freeze([
+      [265, 4130],
+      [965, 3760],
+      [1500, 3945],
+      [1535, 4175],
+      [1315, 4300],
+      [775, 4415]
+    ]),
+
+    boundaryClearance: 105,
+    speed: 105,
+    stepDistanceMin: 70,
+    stepDistanceMax: 155,
+    pauseMin: 1400,
+    pauseMax: 4200,
+    stepFrameMs: 480
+  });
+
+  let goatActor = null;
+
+  function goatPointToSegmentDistance(px, py, ax, ay, bx, by) {
+    const abx = bx - ax;
+    const aby = by - ay;
+    const apx = px - ax;
+    const apy = py - ay;
+    const denom = abx * abx + aby * aby;
+
+    if (denom <= 0.000001) return Math.hypot(px - ax, py - ay);
+
+    const t = Math.max(0, Math.min(1, (apx * abx + apy * aby) / denom));
+    const qx = ax + abx * t;
+    const qy = ay + aby * t;
+    return Math.hypot(px - qx, py - qy);
+  }
+
+  function goatClearanceAt(x, y) {
+    const polygon = GOAT_CONFIG.pen;
+    let clearance = Infinity;
+
+    for (let i = 0; i < polygon.length; i += 1) {
+      const a = polygon[i];
+      const b = polygon[(i + 1) % polygon.length];
+      clearance = Math.min(
+        clearance,
+        goatPointToSegmentDistance(x, y, a[0], a[1], b[0], b[1])
+      );
+    }
+
+    return clearance;
+  }
+
+  function goatPointAllowed(x, y) {
+    return (
+      worldPointInPolygon(x, y, GOAT_CONFIG.pen) &&
+      goatClearanceAt(x, y) >= GOAT_CONFIG.boundaryClearance
+    );
+  }
+
+  function goatRandomSafePoint() {
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+
+    for (const [x, y] of GOAT_CONFIG.pen) {
+      minX = Math.min(minX, x);
+      minY = Math.min(minY, y);
+      maxX = Math.max(maxX, x);
+      maxY = Math.max(maxY, y);
+    }
+
+    let best = { x: 970, y: 4070 };
+    let bestClearance = -1;
+
+    for (let i = 0; i < 700; i += 1) {
+      const x = minX + Math.random() * (maxX - minX);
+      const y = minY + Math.random() * (maxY - minY);
+
+      if (!worldPointInPolygon(x, y, GOAT_CONFIG.pen)) continue;
+
+      const clearance = goatClearanceAt(x, y);
+      if (clearance > bestClearance) {
+        bestClearance = clearance;
+        best = { x, y };
+      }
+
+      if (clearance >= GOAT_CONFIG.boundaryClearance) return { x, y };
+    }
+
+    return best;
+  }
+
+  function installGoatStyles() {
+    if (document.getElementById("goatStyles")) return;
+
+    const style = document.createElement("style");
+    style.id = "goatStyles";
+    style.textContent = `
+      .map-goat {
+        position: absolute;
+        z-index: 5;
+        width: ${GOAT_CONFIG.width}px;
+        height: ${GOAT_CONFIG.height}px;
+        transform: translate(-50%, -88%);
+        pointer-events: none;
+        user-select: none;
+        will-change: left, top;
+      }
+
+      .map-goat__sprite {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+        object-position: 50% 100%;
+        transform: scaleX(var(--goat-facing, 1));
+        transform-origin: 50% 100%;
+        opacity: 0;
+        visibility: hidden;
+        transition: none !important;
+        backface-visibility: hidden;
+        -webkit-backface-visibility: hidden;
+        filter: drop-shadow(0 7px 4px rgba(0,0,0,.20));
+      }
+
+      .map-goat__sprite--visible {
+        opacity: 1;
+        visibility: visible;
+      }
+    `;
+
+    document.head.appendChild(style);
+  }
+
+  function goatShowLayer(index) {
+    if (!goatActor || !goatActor.ready || goatActor.visibleLayer === index) return;
+
+    goatActor.images.forEach((image, i) => {
+      image.classList.toggle("map-goat__sprite--visible", i === index);
+    });
+
+    goatActor.visibleLayer = index;
+  }
+
+  function goatSetFacing(direction) {
+    if (!goatActor) return;
+    goatActor.facing = direction < 0 ? -1 : 1;
+    goatActor.element.style.setProperty("--goat-facing", goatActor.facing);
+  }
+
+  function goatChooseOneStep(now) {
+    if (!goatActor) return;
+
+    const distance =
+      GOAT_CONFIG.stepDistanceMin +
+      Math.random() * (GOAT_CONFIG.stepDistanceMax - GOAT_CONFIG.stepDistanceMin);
+
+    // Try small one-step targets only. Never teleport and never cross the red line.
+    for (let i = 0; i < 80; i += 1) {
+      const angle = Math.random() * Math.PI * 2;
+      const x = goatActor.x + Math.cos(angle) * distance;
+      const y = goatActor.y + Math.sin(angle) * distance;
+
+      if (!goatPointAllowed(x, y)) continue;
+
+      goatActor.targetX = x;
+      goatActor.targetY = y;
+      goatActor.moving = true;
+      goatActor.stepStartedAt = now;
+      goatActor.stepEndsAt = now + GOAT_CONFIG.stepFrameMs;
+
+      const dx = x - goatActor.x;
+      if (Math.abs(dx) > 4) goatSetFacing(dx < 0 ? -1 : 1);
+
+      // A2 / mirrored A2 for the one movement step.
+      goatShowLayer(1);
+      return;
+    }
+
+    goatActor.pauseUntil = now + 700;
+  }
+
+  function goatStartPause(now) {
+    if (!goatActor) return;
+
+    goatActor.moving = false;
+    goatActor.targetX = goatActor.x;
+    goatActor.targetY = goatActor.y;
+
+    // A1 / mirrored A1 while standing.
+    goatShowLayer(0);
+
+    goatActor.pauseUntil =
+      now +
+      GOAT_CONFIG.pauseMin +
+      Math.random() * (GOAT_CONFIG.pauseMax - GOAT_CONFIG.pauseMin);
+
+    // Sometimes simply turn while standing so both A1 variants appear naturally.
+    if (Math.random() < 0.30) goatSetFacing(goatActor.facing * -1);
+  }
+
+  function createGoat() {
+    installGoatStyles();
+
+    const root = document.createElement("div");
+    root.className = "map-goat";
+
+    const idle = document.createElement("img");
+    idle.className = "map-goat__sprite map-goat__sprite--visible";
+    idle.src = encodeURI(GOAT_CONFIG.idleFrame);
+    idle.alt = "";
+    idle.draggable = false;
+    idle.decoding = "async";
+
+    const step = document.createElement("img");
+    step.className = "map-goat__sprite";
+    step.src = encodeURI(GOAT_CONFIG.stepFrame);
+    step.alt = "";
+    step.draggable = false;
+    step.decoding = "async";
+
+    root.append(idle, step);
+    world.appendChild(root);
+
+    const start = goatRandomSafePoint();
+
+    goatActor = {
+      element: root,
+      images: [idle, step],
+      visibleLayer: 0,
+      ready: false,
+      x: start.x,
+      y: start.y,
+      targetX: start.x,
+      targetY: start.y,
+      moving: false,
+      facing: Math.random() < 0.5 ? -1 : 1,
+      pauseUntil: performance.now() + 800 + Math.random() * 1800,
+      stepStartedAt: 0,
+      stepEndsAt: 0
+    };
+
+    root.style.left = `${goatActor.x}px`;
+    root.style.top = `${goatActor.y}px`;
+    root.style.setProperty("--goat-facing", goatActor.facing);
+    root.style.display = MAP.id === GOAT_CONFIG.mapId ? "" : "none";
+
+    const waitFor = (img) => {
+      if (img.complete && img.naturalWidth > 0) {
+        return typeof img.decode === "function"
+          ? img.decode().catch(() => {})
+          : Promise.resolve();
+      }
+
+      return new Promise((resolve) => {
+        const done = () => resolve();
+        img.addEventListener("load", done, { once: true });
+        img.addEventListener("error", done, { once: true });
+      }).then(() => {
+        if (typeof img.decode === "function") return img.decode().catch(() => {});
+      });
+    };
+
+    Promise.all(goatActor.images.map(waitFor)).then(() => {
+      goatActor.ready = true;
+      goatActor.images[0].classList.add("map-goat__sprite--visible");
+      goatActor.images[1].classList.remove("map-goat__sprite--visible");
+      goatActor.visibleLayer = 0;
+    });
+  }
+
+  function updateGoat(deltaSeconds, now) {
+    if (!goatActor) return;
+
+    const active = MAP.id === GOAT_CONFIG.mapId;
+    goatActor.element.style.display = active ? "" : "none";
+
+    if (!active || !goatActor.ready) return;
+
+    if (goatActor.moving) {
+      const dx = goatActor.targetX - goatActor.x;
+      const dy = goatActor.targetY - goatActor.y;
+      const distance = Math.hypot(dx, dy);
+
+      if (distance <= 5 || now >= goatActor.stepEndsAt) {
+        // Snap only if target is still legal — it always should be.
+        if (goatPointAllowed(goatActor.targetX, goatActor.targetY)) {
+          goatActor.x = goatActor.targetX;
+          goatActor.y = goatActor.targetY;
+        }
+
+        goatActor.element.style.left = `${goatActor.x}px`;
+        goatActor.element.style.top = `${goatActor.y}px`;
+        goatStartPause(now);
+        return;
+      }
+
+      const stepDistance = Math.min(distance, GOAT_CONFIG.speed * deltaSeconds);
+      const nx = goatActor.x + (dx / distance) * stepDistance;
+      const ny = goatActor.y + (dy / distance) * stepDistance;
+
+      if (goatPointAllowed(nx, ny)) {
+        goatActor.x = nx;
+        goatActor.y = ny;
+        goatActor.element.style.left = `${goatActor.x}px`;
+        goatActor.element.style.top = `${goatActor.y}px`;
+      } else {
+        goatStartPause(now);
+      }
+
+      return;
+    }
+
+    if (now >= goatActor.pauseUntil) {
+      goatChooseOneStep(now);
+    }
+  }
+
+
   // ------------------------------------------------------------------
   // R19 MAP 2 — WILDSCHWEINE
   // Exactly the three red fenced field regions from the supplied reference.
@@ -4128,6 +4459,30 @@
       [0.869, 0.378],
       [0.786, 0.446],
       [0.425, 0.360]
+    ]),
+
+    // R24 RED PEN from the supplied markup:
+    // fully walkable for PLAYER and PLAYER ALWAYS stays in foreground.
+    // World-space coordinates traced from the exact map screenshot.
+    goatPenFrontWorld: Object.freeze([
+      [265, 4130],
+      [965, 3760],
+      [1500, 3945],
+      [1535, 4175],
+      [1315, 4300],
+      [775, 4415]
+    ]),
+
+    // R24 BLUE ROOF extension:
+    // fully walkable, but PLAYER is rendered behind the house/roof.
+    // This EXTENDS the existing R22 purple walk-behind zone; it does not replace it.
+    walkBehindRoofWorld: Object.freeze([
+      [1515, 3745],
+      [2355, 3700],
+      [2520, 3845],
+      [2525, 4195],
+      [2025, 4180],
+      [1415, 4080]
     ])
   });
 
@@ -4180,6 +4535,26 @@
   function playerBehindWinterbachObsthofFront() {
     if (MAP.id !== "winterbach-ranglehen") return false;
 
+    const c = WINTERBACH_OBSTHOF;
+
+    // R24 RED PEN has absolute foreground priority.
+    if (worldPointInPolygon(
+      playerX,
+      playerY,
+      c.goatPenFrontWorld
+    )) {
+      return false;
+    }
+
+    // R24 BLUE extension: player walks behind house/roof.
+    if (worldPointInPolygon(
+      playerX,
+      playerY,
+      c.walkBehindRoofWorld
+    )) {
+      return true;
+    }
+
     const { localX01, localY01 } =
       winterbachObsthofLocalPoint(playerX, playerY);
 
@@ -4190,12 +4565,11 @@
       return false;
     }
 
-    // R22: ONLY the blue/purple roof zone sends the player behind the asset.
-    // The blue/green front zone remains fully walkable with player in foreground.
+    // Existing R22 purple roof zone remains valid too.
     return pointInNormalizedPolygon(
       localX01,
       localY01,
-      WINTERBACH_OBSTHOF.walkBehindRoof
+      c.walkBehindRoof
     );
   }
 
@@ -4209,6 +4583,16 @@
       x > c.left + c.width ||
       y < c.top ||
       y > c.top + c.height
+    ) {
+      return false;
+    }
+
+    // R24 exact world-space exceptions from the screenshot.
+    // RED goat pen = walkable + player foreground.
+    // BLUE roof extension = walkable + player behind house.
+    if (
+      worldPointInPolygon(x, y, c.goatPenFrontWorld) ||
+      worldPointInPolygon(x, y, c.walkBehindRoofWorld)
     ) {
       return false;
     }
@@ -5539,6 +5923,7 @@
       updateTrunkenbold(deltaSeconds, now);
       updateRabbits(deltaSeconds, now);
       updateWolves(deltaSeconds, now);
+      updateGoat(deltaSeconds, now);
       updateBoars(deltaSeconds, now);
       updateMole(now);
     }
@@ -5685,6 +6070,7 @@
     installIcePlayerStyles();
     createRabbits();
     createWolves();
+    createGoat();
     createBoars();
     createMoleSystem();
     createOberkirchBuildings();
