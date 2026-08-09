@@ -5300,22 +5300,23 @@
       width: 2660,
       height: 2485,
 
-      // R34 FINAL SPLIT:
-      // PINK upper church area is fully walkable and the PLAYER stays BEHIND
-      // the church all the way down to the orange collision boundary.
+      // R36 — EXAKT AUS DER REFERENZ R27 GEMESSEN.
+      // ROSA QUADRAT = begehbar, Spieler HINTER der Kirche.
+      // Unterkante ist EXAKT dieselbe Linie wie die Oberkante des orangefarbenen Quadrats.
       behindZone: Object.freeze([
-        [2510, 1220],
-        [5170, 1220],
-        [5170, 2760],
-        [2510, 2760]
+        [2520, 1225],
+        [5110, 1225],
+        [5110, 2785],
+        [2520, 2785]
       ]),
 
-      // ORANGE lower church rectangle remains EXACTLY the working hard collision.
+      // ORANGES QUADRAT = harte Fuß-Kollision, Spieler VOR der Kirche.
+      // KEIN Spalt zwischen Rosa und Orange: gemeinsame Linie y = 2785.
       blockedZone: Object.freeze([
-        [2510, 2760],
-        [5225, 2760],
-        [5225, 3695],
-        [2510, 3695]
+        [2515, 2785],
+        [5175, 2785],
+        [5175, 3730],
+        [2515, 3730]
       ])
     }),
     Object.freeze({
@@ -5343,8 +5344,34 @@
   function playerBehindLautenbachBuilding() {
     if (MAP.id !== "lautenbach") return false;
 
-    // R34 FINAL CHURCH SPLIT:
-    // Orange / blocked zones are NEVER a walk-behind zone.
+    // R36 — Kirche wird als zwei EXAKT getrennte Quadrate behandelt.
+    // ROSA oben: immer hinter der Kirche.
+    const church = LAUTENBACH_BUILDINGS.find(
+      config => config.id === "lautenbach-wallfahrtskirche"
+    );
+
+    if (
+      church &&
+      playerX >= 2520 &&
+      playerX <= 5110 &&
+      playerY >= 1225 &&
+      playerY < 2785
+    ) {
+      return true;
+    }
+
+    // ORANGE unten: immer Vordergrund / harte Kollisionshälfte.
+    if (
+      church &&
+      playerX >= 2515 &&
+      playerX <= 5175 &&
+      playerY >= 2785 &&
+      playerY <= 3730
+    ) {
+      return false;
+    }
+
+    // Alle übrigen Lautenbach-Gebäude behalten ihre bestehende Logik.
     if (
       LAUTENBACH_BUILDINGS.some(
         config => worldPointInPolygon(playerX, playerY, config.blockedZone)
@@ -5353,8 +5380,6 @@
       return false;
     }
 
-    // Pink zones are the ONLY places where the player is drawn behind a building.
-    // For the church this reaches exactly to y=2760, the top edge of the orange box.
     return LAUTENBACH_BUILDINGS.some(
       config => worldPointInPolygon(playerX, playerY, config.behindZone)
     );
@@ -5368,24 +5393,8 @@
         return true;
       }
 
-      // R30: tiny safety border ONLY around the church's lower orange box,
-      // so the player's foot anchor stops cleanly AT the marked edge.
-      if (config.id === "lautenbach-wallfahrtskirche") {
-        const p = config.blockedZone;
-        const minX = Math.min(...p.map(v => v[0]));
-        const maxX = Math.max(...p.map(v => v[0]));
-        const minY = Math.min(...p.map(v => v[1]));
-        const maxY = Math.max(...p.map(v => v[1]));
-        const pad = 10;
-
-        return (
-          x >= minX - pad &&
-          x <= maxX + pad &&
-          y >= minY - pad &&
-          y <= maxY + pad
-        );
-      }
-
+      // R36: KEIN Zusatz-Padding mehr an der Kirche.
+      // Kollisionskante = exakt das orange Quadrat aus der Referenz.
       return false;
     });
   }
