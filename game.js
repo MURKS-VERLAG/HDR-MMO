@@ -238,60 +238,60 @@
 
   const ATTACK_RIGHT = Object.freeze([
     { sprite: PLAYER.attackRight1, duration: 400, hit: true, damage: 20, strike: 1 },
-    { sprite: PLAYER.combatBase, duration: 100 },
+    { sprite: PLAYER.standRight, duration: 100 },
 
     { sprite: PLAYER.attackRight2, duration: 500, hit: true, damage: 20, strike: 2 },
-    { sprite: PLAYER.combatBase, duration: 100 },
+    { sprite: PLAYER.standRight, duration: 100 },
 
     { sprite: PLAYER.attackRight3, duration: 400, hit: true, damage: 20, strike: 4 },
-    { sprite: PLAYER.combatBase, duration: 100 },
+    { sprite: PLAYER.standRight, duration: 100 },
 
     { sprite: PLAYER.attackRight4, duration: 500, hit: true, damage: 40, strike: 3, critical: true },
-    { sprite: PLAYER.combatBase, duration: 400 }
+    { sprite: PLAYER.standRight, duration: 400 }
   ]);
 
   const ATTACK_LEFT = Object.freeze([
     { sprite: PLAYER.attackLeft1, duration: 400, hit: true, damage: 20, strike: 1 },
-    { sprite: PLAYER.combatBaseLeft, duration: 100 },
+    { sprite: PLAYER.standLeft, duration: 100 },
 
     { sprite: PLAYER.attackLeft2, duration: 500, hit: true, damage: 20, strike: 2 },
-    { sprite: PLAYER.combatBaseLeft, duration: 100 },
+    { sprite: PLAYER.standLeft, duration: 100 },
 
     { sprite: PLAYER.attackLeft3, duration: 400, hit: true, damage: 20, strike: 4 },
-    { sprite: PLAYER.combatBaseLeft, duration: 100 },
+    { sprite: PLAYER.standLeft, duration: 100 },
 
     { sprite: PLAYER.attackLeft4, duration: 500, hit: true, damage: 40, strike: 3, critical: true },
-    { sprite: PLAYER.combatBaseLeft, duration: 400 }
+    { sprite: PLAYER.standLeft, duration: 400 }
   ]);
 
   const ATTACK_DOWN = Object.freeze([
-    { sprite: PLAYER.combatBase, duration: 100 },
+    { sprite: PLAYER.standDown, duration: 100 },
 
     { sprite: PLAYER.attackDown1, duration: 400, hit: true, damage: 20, strike: 1 },
-    { sprite: PLAYER.combatBase, duration: 100 },
+    { sprite: PLAYER.standDown, duration: 100 },
 
     { sprite: PLAYER.attackDown2, duration: 500, hit: true, damage: 20, strike: 2 },
-    { sprite: PLAYER.combatBase, duration: 100 },
+    { sprite: PLAYER.standDown, duration: 100 },
 
     { sprite: PLAYER.attackDown3, duration: 400, hit: true, damage: 20, strike: 4 },
-    { sprite: PLAYER.combatBase, duration: 100 },
+    { sprite: PLAYER.standDown, duration: 100 },
 
     { sprite: PLAYER.attackDown4, duration: 500, hit: true, damage: 40, strike: 3, critical: true },
-    { sprite: PLAYER.combatBase, duration: 400 }
+    { sprite: PLAYER.standDown, duration: 400 }
   ]);
 
   const ATTACK_UP = Object.freeze([
     { sprite: PLAYER.attackUp1, duration: 400, hit: true, damage: 20, strike: 1 },
-    { sprite: PLAYER.combatBase, duration: 100 },
+    { sprite: PLAYER.standUp, duration: 100 },
 
     { sprite: PLAYER.attackUp2, duration: 500, hit: true, damage: 20, strike: 2 },
-    { sprite: PLAYER.combatBase, duration: 100 },
+    { sprite: PLAYER.standUp, duration: 100 },
 
     { sprite: PLAYER.attackUp3, duration: 400, hit: true, damage: 20, strike: 4 },
-    { sprite: PLAYER.combatBase, duration: 100 },
+    { sprite: PLAYER.standUp, duration: 100 },
 
     { sprite: PLAYER.attackUp4, duration: 500, hit: true, damage: 40, strike: 3, critical: true },
-    { sprite: PLAYER.combatBase, duration: 400 }
+    { sprite: PLAYER.standUp, duration: 400 }
   ]);
 
   const ZOOM_MULTIPLIERS = [1, 1.75, 3, 4.5];
@@ -7296,12 +7296,40 @@
   }
 
   function setSprite(src) {
-    // R43: ONLY the W/up idle stand is enlarged.
-    // Bottom-center origin keeps the feet fixed on the player's world anchor.
-    const standUpScale = src === PLAYER.standUp ? 1.16 : 1;
+    // R46 COMBAT SIZE FIX:
+    // DOWN attack already matches perfectly and stays 1:1.
+    // LEFT/RIGHT attack poses were visibly too small -> +20%.
+    // UP attack poses follow the same +16% scale family as the W stand.
+    // Every scale is anchored bottom-center so the player's feet/world anchor never move.
+    const isRightAttack =
+      src === PLAYER.attackRight1 ||
+      src === PLAYER.attackRight2 ||
+      src === PLAYER.attackRight3 ||
+      src === PLAYER.attackRight4;
+
+    const isLeftAttack =
+      src === PLAYER.attackLeft1 ||
+      src === PLAYER.attackLeft2 ||
+      src === PLAYER.attackLeft3 ||
+      src === PLAYER.attackLeft4;
+
+    const isUpAttack =
+      src === PLAYER.attackUp1 ||
+      src === PLAYER.attackUp2 ||
+      src === PLAYER.attackUp3 ||
+      src === PLAYER.attackUp4;
+
+    let spriteScale = 1;
+
+    if (src === PLAYER.standUp || isUpAttack) {
+      spriteScale = 1.16;
+    } else if (isRightAttack || isLeftAttack) {
+      spriteScale = 1.20;
+    }
+
     playerSprite.style.transformOrigin = "50% 100%";
     playerSprite.style.transform =
-      standUpScale === 1 ? "" : `scale(${standUpScale})`;
+      spriteScale === 1 ? "" : `scale(${spriteScale})`;
 
     if (activeSprite === src) return;
     activeSprite = src;
