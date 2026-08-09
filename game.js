@@ -155,8 +155,10 @@
   });
 
   const PLAYER = Object.freeze({
-    standRight: "assets/player/PLAYER STAND.png",
+    standDown: "assets/player/PLAYER STAND DOWN.png",
+    standRight: "assets/player/PLAYER STAND RIGHT.png",
     standLeft: "assets/player/PLAYER STAND LEFT.png",
+    standUp: "assets/player/PLAYER STAND UP.png",
 
     walkRight: "assets/player/PLAYER WALK RIGHT.png",
     walkLeft: "assets/player/PLAYER WALK LEFT.png",
@@ -7048,8 +7050,10 @@
 
 
   const allSprites = [
+    PLAYER.standDown,
     PLAYER.standRight,
     PLAYER.standLeft,
+    PLAYER.standUp,
     PLAYER.walkRight,
     PLAYER.walkLeft,
     ...PLAYER.walkDown,
@@ -7244,7 +7248,9 @@
 
   function setIdleSprite() {
     if (facing === "down") {
-      setSprite(PLAYER.combatBase);
+      setSprite(PLAYER.standDown);
+    } else if (facing === "up") {
+      setSprite(PLAYER.standUp);
     } else if (facing === "left") {
       setSprite(PLAYER.standLeft);
     } else {
@@ -7458,7 +7464,7 @@
     // Restore the actual resting pose immediately and FORCE the image swap.
     if (blockFacing === "down") {
       facing = "down";
-      forceSprite(PLAYER.combatBase);
+      forceSprite(PLAYER.standDown);
     } else if (blockFacing === "left") {
       facing = "left";
       lastHorizontalFacing = "left";

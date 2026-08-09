@@ -1,0 +1,5 @@
+Nach Einspielen können die bisherigen Standbilder entfernt werden, sofern sie nicht anderweitig verwendet werden:
+- assets/player/PLAYER STAND.png
+- bisheriges assets/player/PLAYER STAND LEFT.png wird durch die neue Datei ersetzt.
+
+Lauf- und Kampfassets bleiben unverändert.
