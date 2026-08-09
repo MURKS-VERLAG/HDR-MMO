@@ -3434,7 +3434,16 @@
     ])
   });
 
-  const ICE_PHYSICS = Object.freeze({ acceleration:620,maxSpeed:760,dragMoving:0.86,dragNoInput:0.975,minSpeed:14,swayAngle:4.6,swayX:8 });
+  const ICE_PHYSICS = Object.freeze({
+    // R23: ice speed = exactly 2x normal PLAYER speed.
+    acceleration: 5200,
+    maxSpeed: PLAYER.speed * 2,
+    dragMoving: 0.985,
+    dragNoInput: 0.975,
+    minSpeed: 14,
+    swayAngle: 4.6,
+    swayX: 8
+  });
   let iceVelocityX=0, iceVelocityY=0, iceVisualActive=false;
 
   function pointToSegmentDistanceR21(px,py,ax,ay,bx,by){
@@ -5433,9 +5442,10 @@
 
     const hasInput = dx !== 0 || dy !== 0;
     const onIce = isWinterbachIceFootPoint(playerX, playerY);
-    const hasIceMomentum = Math.hypot(iceVelocityX, iceVelocityY) > ICE_PHYSICS.minSpeed;
 
-    if (onIce || hasIceMomentum) {
+    // R23: ice state exists ONLY while the player's FOOT anchor is on ice.
+    // The first frame after leaving ice resets all momentum + sway immediately.
+    if (onIce) {
       if (hasInput) {
         if (!moving) { moving = true; playerEl.classList.add("player--moving"); playerEl.classList.remove("player--idle"); }
         const nextAnimation = getMovementAnimation(dx, dy); setAnimation(nextAnimation); renderMovementFrame(currentAnimation, deltaSeconds);
@@ -5447,7 +5457,8 @@
       return;
     }
 
-    clearIceVelocity(); updateIceVisual();
+    clearIceVelocity();
+    updateIceVisual();
     if (!hasInput) {
       if (moving) { moving = false; playerEl.classList.remove("player--moving"); playerEl.classList.add("player--idle"); }
       setAnimation("idle"); setIdleSprite(); return;
