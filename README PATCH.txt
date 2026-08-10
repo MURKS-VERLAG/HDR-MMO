@@ -1,22 +1,75 @@
-HDR R66 – INVENTAR RASTER PIXELFIX
+HDR R67 – TIERBANNSTEIN LEVEL 1
 
-Nur das Inventarraster wurde korrigiert.
+PATCH-INHALT
+- game.js
+- assets/events/TIERBANNSTEIN LEVEL 1.png
 
-PIXELABGLEICH MIT DEM ORIGINAL-INVENTARBILD (507x1241):
-Vertikale Rasterlinien:
-41 / 110 / 180 / 250 / 320 / 389 / 459
+BETROFFENE KARTEN
+- MAP 2 WINTERBACH · RANGLEHEN
+- MAP 3 LAUTENBACH
+Keine andere Map erhält Tierbannsteine.
 
-Horizontale Rasterlinien:
-782 / 846 / 913 / 979 / 1047 / 1114 / 1182
+SPAWN
+- Pro Karte eigener Timer.
+- Alle 120 Sekunden eigener unabhängiger 25%-Wurf.
+- Bei Erfolg wird EIN freier blauer Spawnpunkt der betreffenden Karte gewählt.
+- Ein bereits belegter Punkt kann niemals einen zweiten Stein bekommen.
+- Ein nicht zerstörter Stein blockiert nur seinen eigenen Spawnpunkt.
+- Nach zwei weiteren Minuten kann deshalb theoretisch ein weiterer Stein
+  an einem ANDEREN freien Punkt erscheinen.
+- Nach Zerstörung wird sein Spawnpunkt wieder frei.
 
-FIX:
-- 36 Slots bleiben 6 x 6.
-- Jeder Slot besitzt jetzt exakt dieselbe logische Hitbox: 64 x 60.
-- Jede Hitbox sitzt mittig im tatsächlich gemalten Rasterfeld.
-- Der erste Slot beginnt NICHT mehr im linken Ornamentrahmen.
-- Alle normalen Item-Symbole bleiben exakt bei 68 % und sitzen 50/50 zentriert.
-- Auch der schwarze Pfennig benutzt jetzt exakt dieselbe Zentrierung.
-- Mengenangabe sitzt direkt unten rechts in der jeweiligen Slot-Hitbox.
-- Lootchancen, Tiere, Kampf, Sounds, Maps, Musik, Startscreen und Pickup bleiben unverändert.
+EXAKTE BLAUE PUNKTE
+WINTERBACH:
+(2502,656), (8368,1349), (4274,2097), (2085,2666), (4781,3530), (3121,4169)
 
-Der Patch enthält absichtlich nur game.js.
+LAUTENBACH:
+(8822,1026), (8599,2412), (8614,5049)
+
+STEIN
+- 2000 HP.
+- Spieler verursacht exakt seine vorhandenen 20/20/20/40 Treffer.
+- Kritischer 4. Schlag bleibt kritisch + Staub, aber KEIN Knockback am Stein.
+- Jeder Treffer lässt den starren Stein kurz wackeln.
+- Spawn: kleine Fallbewegung von oben, Aufprallstaub, zweimaliges Hin-/Herwackeln.
+- 0 HP: großer Staub-/Fade-Abgang; Spawnpunkt wird wieder frei.
+
+WELLEN
+1900 HP -> 10 Hasen
+1700 HP -> 1 Wildschwein
+1500 HP -> 10 Hasen
+1300 HP -> 3 Wildschweine
+1000 HP -> 10 Hasen
+ 800 HP -> 3 Wildschweine
+ 500 HP -> 15 Hasen
+ 300 HP -> 2 Wildschweine
+ 100 HP -> 1 Wolf
+
+HASEN
+- Spawnen direkt aus der Steinmitte.
+- Fliehen sofort radial in unterschiedliche Richtungen.
+- Nach einigen Metern stoppen sie und gehen in freie normale Bewegung über.
+- Für ihre Sonderbewegung wird die vorhandene Landschaft-/Fluss-/Gebäudekollision benutzt.
+- HP, Treffer, Sounds und vorhandener Hasenloot bleiben gleich.
+- Eventhasen respawnen nach Tod nicht erneut, damit sich die Welt nicht endlos vervielfacht.
+
+WILDSCHWEINE / WOLF
+- Spawnen verteilt in einem größeren Kreis um den Stein, nicht auf einem Fleck.
+- Gültige Spawnpunkte werden gegen bestehende Landschaftskollision geprüft.
+- Kandidaten weiter vom Spieler werden bevorzugt, damit nichts direkt auf ihm erscheint.
+- Danach verfolgen sie den Spieler unmittelbar.
+- Bestehende HP, Treffer, Death-Bilder, Sounds und Lootsysteme bleiben erhalten.
+- Eventtiere respawnen nach Tod nicht erneut.
+
+NICHT VERÄNDERT
+- vorhandene Tierpopulationen/Habitate
+- Maps und Mapwechsel
+- Spieleranimationen
+- Schaden
+- Inventar
+- Lootchancen
+- Musik
+- Startscreen
+- Gebäude
+
+node --check: OK

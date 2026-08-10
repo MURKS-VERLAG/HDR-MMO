@@ -1655,7 +1655,14 @@
 
   function wolfSetHowl(actor, now, delay) {
     window.setTimeout(() => {
-      if (!actor || !actor.ready || actor.away || actor.dead || MAP.id !== actor.mapId) return;
+      if (
+        !actor ||
+        !actor.ready ||
+        actor.away ||
+        actor.dead ||
+        actor.tierbannAggressive ||
+        MAP.id !== actor.mapId
+      ) return;
 
       actor.howling = true;
       actor.moving = false;
@@ -1686,8 +1693,14 @@
     }
   }
 
-  function createWolfActor(index, mapId = WOLF_CONFIG.mapId, habitat = WOLF_CONFIG.habitat, canExitTop = true) {
-    const start = wolfRandomPoint(180, habitat, mapId);
+  function createWolfActor(
+    index,
+    mapId = WOLF_CONFIG.mapId,
+    habitat = WOLF_CONFIG.habitat,
+    canExitTop = true,
+    options = {}
+  ) {
+    const start = options.start || wolfRandomPoint(180, habitat, mapId);
 
     const element = document.createElement("div");
     element.className = "map-wolf";
@@ -1756,7 +1769,12 @@
       nextFrameAt: performance.now() + WOLF_CONFIG.frameDuration,
       howling: false,
       howlEndAt: 0,
-      ready: false
+      ready: false,
+
+      // R67 optional Tierbann event metadata.
+      tierbannSummon: Boolean(options.tierbannSummon),
+      tierbannAggressive: Boolean(options.tierbannAggressive),
+      noRespawn: Boolean(options.noRespawn)
     };
 
     element.style.left = `${actor.x}px`;
@@ -1883,6 +1901,11 @@
 
       if (actor.away) {
         if (now >= actor.returnAt) wolfReturn(actor, now);
+        continue;
+      }
+
+      if (actor.tierbannAggressive) {
+        updateTierbannAggressiveWolf(actor, deltaSeconds, now);
         continue;
       }
 
@@ -2677,8 +2700,8 @@
     actor.element.style.top = `${actor.y}px`;
   }
 
-  function createBoarActor(zone, index) {
-    const start = boarRandomPoint(zone, 130);
+  function createBoarActor(zone, index, options = {}) {
+    const start = options.start || boarRandomPoint(zone, 130);
 
     const element = document.createElement("div");
     element.className = "map-boar";
@@ -2734,7 +2757,12 @@
       returnAt: 0,
       pauseUntil: performance.now() + 500 + Math.random() * 2500,
       moveEndAt: 0,
-      ready: false
+      ready: false,
+
+      // R67 optional Tierbann event metadata.
+      tierbannSummon: Boolean(options.tierbannSummon),
+      tierbannAggressive: Boolean(options.tierbannAggressive),
+      noRespawn: Boolean(options.noRespawn)
     };
 
     element.style.left = `${actor.x}px`;
@@ -2865,6 +2893,11 @@
         if (now >= actor.returnAt) {
           boarReturnFromRight(actor, now);
         }
+        continue;
+      }
+
+      if (actor.tierbannAggressive) {
+        updateTierbannAggressiveBoar(actor, deltaSeconds, now);
         continue;
       }
 
@@ -3606,6 +3639,11 @@
   function rabbitForceEscape(actor, now) {
     if (actor.dead || actor.away) return;
 
+    if (actor.tierbannSummon) {
+      tierbannRabbitFleeFromPlayer(actor, now);
+      return;
+    }
+
     // Hit rabbits immediately try to flee toward a valid map-edge exit.
     if (actor.zone.exits.length) {
       actor.pauseUntil = 0;
@@ -3760,6 +3798,14 @@
       actor.lootSpawned = true;
     }
 
+    // R67 Tierbann summons do not create an infinite respawn population.
+    // They behave normally until killed, drop normal rabbit loot, then are gone.
+    if (actor.noRespawn) {
+      actor.element.remove();
+      rabbitActors = rabbitActors.filter((entry) => entry !== actor);
+      return;
+    }
+
     const start = rabbitRandomPoint(actor.zone, 160);
 
     actor.hp = RABBIT_MAX_HP;
@@ -3863,6 +3909,13 @@
     }
     actor.lootSpawned = true;
     actor.pendingLoot = [];
+
+    if (actor.noRespawn) {
+      actor.element.remove();
+      wolfActors = wolfActors.filter((entry) => entry !== actor);
+      return;
+    }
+
     const start = wolfRandomPoint(180, actor.habitat, actor.mapId);
     actor.hp = WOLF_CONFIG.maxHp;
     actor.dead = false;
@@ -3944,6 +3997,13 @@
     }
     actor.lootSpawned = true;
     actor.pendingLoot = [];
+
+    if (actor.noRespawn) {
+      actor.element.remove();
+      boarActors = boarActors.filter((entry) => entry !== actor);
+      return;
+    }
+
     const start = boarRandomPoint(actor.zone, 130);
     actor.hp = BOAR_CONFIG.maxHp;
     actor.dead = false;
@@ -4014,8 +4074,8 @@
     }
   }
 
-  function createRabbitActor(zone, index) {
-    const start = rabbitRandomPoint(zone, 150);
+  function createRabbitActor(zone, index, options = {}) {
+    const start = options.start || rabbitRandomPoint(zone, 150);
 
     const element = document.createElement("div");
     element.className = "map-rabbit";
@@ -4072,7 +4132,14 @@
       pauseUntil: performance.now() + 500 + Math.random() * 2000,
       nextDecision: performance.now() + 1000 + Math.random() * 3000,
       nextFrameChange: performance.now() + 350 + Math.random() * 1000,
-      returnAt: 0
+      returnAt: 0,
+
+      // R67 optional event metadata; normal rabbits keep all values false.
+      tierbannSummon: Boolean(options.tierbannSummon),
+      noRespawn: Boolean(options.noRespawn),
+      tierbannMode: options.tierbannSummon ? "escape" : null,
+      tierbannEscapeAngle: 0,
+      tierbannEscapeUntil: 0
     };
 
     element.style.left = `${actor.x}px`;
@@ -4125,6 +4192,11 @@
         continue;
       }
 
+      if (actor.tierbannSummon) {
+        updateTierbannRabbit(actor, deltaSeconds, now);
+        continue;
+      }
+
       if (now >= actor.nextFrameChange) {
         rabbitPickFrame(actor);
       }
@@ -4169,6 +4241,814 @@
       } else {
         rabbitChooseInteriorTarget(actor, now);
       }
+    }
+  }
+
+
+  // ------------------------------------------------------------------
+  // R67 TIERBANNSTEIN LEVEL 1
+  // ONLY MAP 2 WINTERBACH + MAP 3 LAUTENBACH
+  // Independent 2-minute / 25% spawn checks per map.
+  // ------------------------------------------------------------------
+  const TIERBANNSTEIN_CONFIG = Object.freeze({
+    image: "assets/events/TIERBANNSTEIN LEVEL 1.png",
+    maxHp: 2000,
+    checkInterval: 120000,
+    spawnChance: 0.25,
+
+    // Tall world-size container. The supplied transparent stone artwork
+    // is bottom-centered so its ground anchor stays fixed.
+    width: 650,
+    height: 900,
+
+    // About a small visual drop from above before impact.
+    landingDrop: 185,
+    landingDuration: 720,
+
+    // Enemy summons appear clearly away from the stone/player.
+    enemyRadiusMin: 900,
+    enemyRadiusMax: 1450,
+
+    maps: Object.freeze({
+      "winterbach-ranglehen": Object.freeze({
+        // Exact blue-circle centers converted from the supplied MAP 2 screenshot
+        // using the map's own 10000 x 6006 coordinate system.
+        spawns: Object.freeze([
+          Object.freeze({ x: 2502, y: 656 }),
+          Object.freeze({ x: 8368, y: 1349 }),
+          Object.freeze({ x: 4274, y: 2097 }),
+          Object.freeze({ x: 2085, y: 2666 }),
+          Object.freeze({ x: 4781, y: 3530 }),
+          Object.freeze({ x: 3121, y: 4169 })
+        ])
+      }),
+      "lautenbach": Object.freeze({
+        // Exact blue-circle centers converted from the supplied MAP 3 screenshot
+        // using the map's own 10000 x 6656 coordinate system.
+        spawns: Object.freeze([
+          Object.freeze({ x: 8822, y: 1026 }),
+          Object.freeze({ x: 8599, y: 2412 }),
+          Object.freeze({ x: 8614, y: 5049 })
+        ])
+      })
+    }),
+
+    thresholds: Object.freeze([
+      Object.freeze({ hp: 1900, type: "rabbit", count: 10 }),
+      Object.freeze({ hp: 1700, type: "boar",   count: 1  }),
+      Object.freeze({ hp: 1500, type: "rabbit", count: 10 }),
+      Object.freeze({ hp: 1300, type: "boar",   count: 3  }),
+      Object.freeze({ hp: 1000, type: "rabbit", count: 10 }),
+      Object.freeze({ hp: 800,  type: "boar",   count: 3  }),
+      Object.freeze({ hp: 500,  type: "rabbit", count: 15 }),
+      Object.freeze({ hp: 300,  type: "boar",   count: 2  }),
+      Object.freeze({ hp: 100,  type: "wolf",   count: 1  })
+    ])
+  });
+
+  let tierbannSteine = [];
+  const tierbannMapTimers = new Map();
+
+  function installTierbannsteinStyles() {
+    if (document.getElementById("tierbannsteinStyles")) return;
+
+    const style = document.createElement("style");
+    style.id = "tierbannsteinStyles";
+    style.textContent = `
+      .tierbannstein {
+        position: absolute;
+        z-index: 6;
+        width: ${TIERBANNSTEIN_CONFIG.width}px;
+        height: ${TIERBANNSTEIN_CONFIG.height}px;
+        transform: translate(-50%, -100%);
+        transform-origin: 50% 100%;
+        pointer-events: none;
+        user-select: none;
+        opacity: 1;
+        will-change: left, top, opacity, transform;
+      }
+
+      .tierbannstein__body {
+        position: absolute;
+        inset: 0;
+        transform-origin: 50% 100%;
+        will-change: transform;
+      }
+
+      .tierbannstein__sprite {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+        object-position: 50% 100%;
+        filter: drop-shadow(0 16px 8px rgba(0,0,0,.34));
+        -webkit-user-drag: none;
+      }
+
+      .tierbannstein--landing .tierbannstein__body {
+        animation: tierbannsteinLanding ${TIERBANNSTEIN_CONFIG.landingDuration}ms
+          cubic-bezier(.19,.82,.2,1) both;
+      }
+
+      /* Every ordinary hit gives one short rigid-rock wobble. */
+      .tierbannstein__body--hit {
+        animation: tierbannsteinHit 185ms ease-out both;
+      }
+
+      .tierbannstein--destroying {
+        animation: tierbannsteinDestroy 520ms ease-out forwards;
+      }
+
+      @keyframes tierbannsteinLanding {
+        0%   { transform: translateY(-${TIERBANNSTEIN_CONFIG.landingDrop}px) rotate(0deg); }
+        49%  { transform: translateY(-8px) rotate(0deg); }
+        58%  { transform: translateY(0) rotate(-4.2deg); }
+        68%  { transform: translateY(0) rotate(4deg); }
+        78%  { transform: translateY(0) rotate(-2.8deg); }
+        88%  { transform: translateY(0) rotate(2.1deg); }
+        100% { transform: translateY(0) rotate(0deg); }
+      }
+
+      @keyframes tierbannsteinHit {
+        0%   { transform: rotate(0deg); }
+        22%  { transform: rotate(-2.7deg); }
+        47%  { transform: rotate(2.5deg); }
+        72%  { transform: rotate(-1.5deg); }
+        100% { transform: rotate(0deg); }
+      }
+
+      @keyframes tierbannsteinDestroy {
+        0%   { opacity: 1; transform: translate(-50%, -100%) scale(1); }
+        40%  { opacity: 1; transform: translate(-50%, -100%) scale(.96); }
+        100% { opacity: 0; transform: translate(-50%, -100%) scale(.74); }
+      }
+
+      .tierbannstein-impact-dust {
+        position: absolute;
+        z-index: 5;
+        width: 780px;
+        height: 250px;
+        transform: translate(-50%, -50%);
+        pointer-events: none;
+        opacity: 0;
+        animation: tierbannsteinDust 900ms ease-out forwards;
+      }
+
+      .tierbannstein-impact-dust::before,
+      .tierbannstein-impact-dust::after {
+        content: "";
+        position: absolute;
+        left: 50%;
+        bottom: 0;
+        width: 310px;
+        height: 135px;
+        border-radius: 50%;
+        background:
+          radial-gradient(ellipse at center,
+            rgba(205,190,162,.88) 0%,
+            rgba(169,145,111,.68) 38%,
+            rgba(120,97,69,0) 77%);
+        filter: blur(7px);
+      }
+
+      .tierbannstein-impact-dust::before {
+        transform: translateX(-285px) scale(1.4);
+      }
+
+      .tierbannstein-impact-dust::after {
+        transform: translateX(-25px) scale(1.7);
+      }
+
+      @keyframes tierbannsteinDust {
+        0%   { opacity: 0; transform: translate(-50%, -30%) scale(.4); }
+        15%  { opacity: 1; transform: translate(-50%, -42%) scale(.95); }
+        100% { opacity: 0; transform: translate(-50%, -82%) scale(1.75); }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .tierbannstein--landing .tierbannstein__body,
+        .tierbannstein__body--hit,
+        .tierbannstein--destroying,
+        .tierbannstein-impact-dust {
+          animation-duration: 1ms !important;
+        }
+      }
+    `;
+
+    document.head.appendChild(style);
+  }
+
+  function tierbannMapDimensions(mapId) {
+    if (mapId === "winterbach-ranglehen") return { width: 10000, height: 6006 };
+    return { width: 10000, height: 6656 };
+  }
+
+  function tierbannOpenRabbitZone(mapId) {
+    const d = tierbannMapDimensions(mapId);
+    return {
+      id: `tierbann-rabbit-${mapId}-${Math.random().toString(36).slice(2)}`,
+      mapId,
+      polygon: [
+        [240, 650],
+        [d.width - 240, 650],
+        [d.width - 240, d.height - 160],
+        [240, d.height - 160]
+      ],
+      exits: [],
+      count: 0,
+      tierbannFreeRoam: true
+    };
+  }
+
+  function tierbannOpenBoarZone(mapId) {
+    const d = tierbannMapDimensions(mapId);
+    return {
+      id: `tierbann-boar-${mapId}-${Math.random().toString(36).slice(2)}`,
+      mapId,
+      polygon: [
+        [650, 700],
+        [d.width - 650, 700],
+        [d.width - 650, d.height - 300],
+        [650, d.height - 300]
+      ],
+      exits: [],
+      count: 0,
+      tierbannFreeRoam: true
+    };
+  }
+
+  function tierbannOpenWolfHabitat(mapId) {
+    const d = tierbannMapDimensions(mapId);
+    return {
+      mapId,
+      count: 0,
+      canExitTop: false,
+      cx: d.width / 2,
+      cy: d.height / 2,
+      rx: d.width / 2 - 500,
+      ry: d.height / 2 - 500,
+      tierbannFreeRoam: true
+    };
+  }
+
+  function tierbannPointAllowed(x, y) {
+    // Reuse the game's existing hard landscape/river/building collision.
+    // Tierbann summons are only updated on their active map, therefore MAP is correct.
+    return canMoveFootTo(x, y);
+  }
+
+  function tierbannStepWithCollision(actor, vx, vy, amount) {
+    const len = Math.hypot(vx, vy) || 1;
+    const nx = vx / len;
+    const ny = vy / len;
+
+    let moved = false;
+    const nextX = actor.x + nx * amount;
+    if (tierbannPointAllowed(nextX, actor.y)) {
+      actor.x = nextX;
+      moved = true;
+    }
+
+    const nextY = actor.y + ny * amount;
+    if (tierbannPointAllowed(actor.x, nextY)) {
+      actor.y = nextY;
+      moved = true;
+    }
+
+    actor.element.style.left = `${actor.x}px`;
+    actor.element.style.top = `${actor.y}px`;
+    return moved;
+  }
+
+  function createTierbannImpactDust(x, y) {
+    const dust = document.createElement("div");
+    dust.className = "tierbannstein-impact-dust";
+    dust.style.left = `${x}px`;
+    dust.style.top = `${y + 30}px`;
+    world.appendChild(dust);
+    window.setTimeout(() => dust.remove(), 980);
+  }
+
+  function tierbannStoneWobble(stone) {
+    if (!stone || stone.dead) return;
+    const body = stone.body;
+    body.classList.remove("tierbannstein__body--hit");
+    void body.offsetWidth;
+    body.classList.add("tierbannstein__body--hit");
+    window.setTimeout(() => {
+      if (body) body.classList.remove("tierbannstein__body--hit");
+    }, 210);
+  }
+
+  function spawnTierbannstein(mapId, spawnIndex, now) {
+    const mapConfig = TIERBANNSTEIN_CONFIG.maps[mapId];
+    if (!mapConfig) return null;
+
+    // Hard occupancy guarantee: NEVER put a second stone on the same blue point.
+    if (
+      tierbannSteine.some(
+        (stone) =>
+          !stone.removed &&
+          stone.mapId === mapId &&
+          stone.spawnIndex === spawnIndex
+      )
+    ) {
+      return null;
+    }
+
+    const point = mapConfig.spawns[spawnIndex];
+    if (!point) return null;
+
+    const element = document.createElement("div");
+    element.className = "tierbannstein tierbannstein--landing";
+    element.dataset.mapId = mapId;
+    element.dataset.spawnIndex = String(spawnIndex);
+    element.style.left = `${point.x}px`;
+    element.style.top = `${point.y}px`;
+    element.style.display = MAP.id === mapId ? "" : "none";
+
+    const body = document.createElement("div");
+    body.className = "tierbannstein__body";
+
+    const image = document.createElement("img");
+    image.className = "tierbannstein__sprite";
+    image.src = encodeURI(TIERBANNSTEIN_CONFIG.image);
+    image.alt = "";
+    image.draggable = false;
+    image.decoding = "async";
+
+    body.appendChild(image);
+    element.appendChild(body);
+    world.appendChild(element);
+
+    const stone = {
+      element,
+      body,
+      image,
+      mapId,
+      spawnIndex,
+      x: point.x,
+      y: point.y,
+      hp: TIERBANNSTEIN_CONFIG.maxHp,
+      dead: false,
+      removed: false,
+      triggered: new Set()
+    };
+
+    tierbannSteine.push(stone);
+
+    // Only show the impact effect when the player can actually see this map.
+    if (MAP.id === mapId) {
+      window.setTimeout(() => {
+        if (!stone.removed && MAP.id === mapId) {
+          createTierbannImpactDust(stone.x, stone.y);
+        }
+      }, 350);
+    }
+
+    window.setTimeout(() => {
+      if (!stone.removed) element.classList.remove("tierbannstein--landing");
+    }, TIERBANNSTEIN_CONFIG.landingDuration + 30);
+
+    return stone;
+  }
+
+  function tryTierbannsteinMapSpawn(mapId, now) {
+    const config = TIERBANNSTEIN_CONFIG.maps[mapId];
+    if (!config) return;
+
+    const free = [];
+    for (let i = 0; i < config.spawns.length; i += 1) {
+      const occupied = tierbannSteine.some(
+        (stone) =>
+          !stone.removed &&
+          stone.mapId === mapId &&
+          stone.spawnIndex === i
+      );
+      if (!occupied) free.push(i);
+    }
+
+    if (!free.length) return;
+    if (Math.random() >= TIERBANNSTEIN_CONFIG.spawnChance) return;
+
+    const spawnIndex = free[Math.floor(Math.random() * free.length)];
+    spawnTierbannstein(mapId, spawnIndex, now);
+  }
+
+  function tierbannFindEnemySpawn(stone, ordinal, count) {
+    const d = tierbannMapDimensions(stone.mapId);
+    let best = null;
+    let bestPlayerDistance = -Infinity;
+
+    const evenlySpacedAngle =
+      (Math.PI * 2 * ordinal) / Math.max(1, count) +
+      Math.random() * 0.45;
+
+    for (let attempt = 0; attempt < 90; attempt += 1) {
+      const angle =
+        attempt < 12
+          ? evenlySpacedAngle + (Math.random() - 0.5) * 0.38
+          : Math.random() * Math.PI * 2;
+
+      const radius =
+        TIERBANNSTEIN_CONFIG.enemyRadiusMin +
+        Math.random() *
+          (TIERBANNSTEIN_CONFIG.enemyRadiusMax -
+           TIERBANNSTEIN_CONFIG.enemyRadiusMin);
+
+      const x = stone.x + Math.cos(angle) * radius;
+      const y = stone.y + Math.sin(angle) * radius;
+
+      if (x < 650 || x > d.width - 650 || y < 700 || y > d.height - 250) {
+        continue;
+      }
+      if (!tierbannPointAllowed(x, y)) continue;
+
+      // Prefer the valid candidate furthest from the player so summons never
+      // pop directly on top of the character.
+      const playerDistance = Math.hypot(x - playerX, y - playerY);
+      if (playerDistance > bestPlayerDistance) {
+        bestPlayerDistance = playerDistance;
+        best = { x, y };
+      }
+
+      if (playerDistance >= 1150 && attempt >= 8) break;
+    }
+
+    if (best) return best;
+
+    // Conservative fallback on open ground near the stone.
+    return {
+      x: Math.max(650, Math.min(d.width - 650, stone.x + 1050)),
+      y: Math.max(700, Math.min(d.height - 250, stone.y + 850))
+    };
+  }
+
+  function spawnTierbannRabbits(stone, count, now) {
+    const zone = tierbannOpenRabbitZone(stone.mapId);
+
+    for (let i = 0; i < count; i += 1) {
+      const angle =
+        (Math.PI * 2 * i) / Math.max(1, count) +
+        (Math.random() - 0.5) * 0.22;
+
+      // They visibly originate at the stone, with only a tiny separation
+      // so ten/fifteen sprites do not occupy one exact pixel.
+      const start = {
+        x: stone.x + Math.cos(angle) * (28 + Math.random() * 35),
+        y: stone.y + Math.sin(angle) * (20 + Math.random() * 28)
+      };
+
+      const actor = createRabbitActor(zone, rabbitActors.length, {
+        start,
+        tierbannSummon: true,
+        noRespawn: true
+      });
+
+      actor.tierbannMode = "escape";
+      actor.tierbannEscapeAngle = angle;
+      actor.tierbannEscapeUntil = now + 2400 + Math.random() * 1100;
+      actor.speed = 410 + Math.random() * 125;
+      actor.moving = true;
+      actor.pauseUntil = 0;
+      actor.nextDecision = 0;
+      actor.element.classList.add("map-rabbit--moving");
+      actor.facing = Math.cos(angle) < 0 ? -1 : 1;
+      actor.element.style.setProperty("--rabbit-facing", actor.facing);
+
+      rabbitActors.push(actor);
+    }
+  }
+
+  function spawnTierbannBoars(stone, count, now) {
+    const zone = tierbannOpenBoarZone(stone.mapId);
+
+    for (let i = 0; i < count; i += 1) {
+      const start = tierbannFindEnemySpawn(stone, i, count);
+      const actor = createBoarActor(zone, boarActors.length, {
+        start,
+        tierbannSummon: true,
+        tierbannAggressive: true,
+        noRespawn: true
+      });
+
+      actor.tierbannAggressive = true;
+      actor.tierbannSummon = true;
+      actor.noRespawn = true;
+      actor.speed = 285 + Math.random() * 55;
+      actor.pauseUntil = 0;
+      actor.moving = true;
+      boarShowLayer(actor, 1);
+
+      boarActors.push(actor);
+    }
+  }
+
+  function spawnTierbannWolf(stone, now) {
+    const start = tierbannFindEnemySpawn(stone, 0, 1);
+    const habitat = tierbannOpenWolfHabitat(stone.mapId);
+
+    const actor = createWolfActor(
+      wolfActors.length,
+      stone.mapId,
+      habitat,
+      false,
+      {
+        start,
+        tierbannSummon: true,
+        tierbannAggressive: true,
+        noRespawn: true
+      }
+    );
+
+    actor.tierbannAggressive = true;
+    actor.tierbannSummon = true;
+    actor.noRespawn = true;
+    actor.speed = 315 + Math.random() * 55;
+    actor.pauseUntil = 0;
+    actor.nextDecision = 0;
+    actor.moving = true;
+
+    wolfActors.push(actor);
+  }
+
+  function triggerTierbannWave(stone, definition, now) {
+    if (!stone || stone.dead || stone.triggered.has(definition.hp)) return;
+    stone.triggered.add(definition.hp);
+
+    if (definition.type === "rabbit") {
+      spawnTierbannRabbits(stone, definition.count, now);
+    } else if (definition.type === "boar") {
+      spawnTierbannBoars(stone, definition.count, now);
+    } else if (definition.type === "wolf") {
+      spawnTierbannWolf(stone, now);
+    }
+  }
+
+  function destroyTierbannstein(stone) {
+    if (!stone || stone.dead) return;
+    stone.dead = true;
+    stone.hp = 0;
+
+    createTierbannImpactDust(stone.x, stone.y);
+    stone.element.classList.add("tierbannstein--destroying");
+
+    window.setTimeout(() => {
+      stone.removed = true;
+      stone.element.remove();
+      tierbannSteine = tierbannSteine.filter((entry) => entry !== stone);
+      // Its blue spawn point is now immediately free for future checks.
+    }, 540);
+  }
+
+  function damageTierbannstein(stone, amount, critical, now) {
+    if (!stone || stone.dead || stone.removed) return;
+
+    const oldHp = stone.hp;
+    stone.hp = Math.max(0, stone.hp - amount);
+
+    // Same damage readout and critical label as all current animals.
+    createRabbitDamageText(stone, amount, critical);
+
+    // The rock NEVER receives knockback. It only wobbles in place.
+    tierbannStoneWobble(stone);
+
+    if (critical) {
+      createRabbitDust(stone);
+    }
+
+    for (const definition of TIERBANNSTEIN_CONFIG.thresholds) {
+      if (
+        oldHp > definition.hp &&
+        stone.hp <= definition.hp &&
+        !stone.triggered.has(definition.hp)
+      ) {
+        triggerTierbannWave(stone, definition, now);
+      }
+    }
+
+    if (stone.hp <= 0) {
+      destroyTierbannstein(stone);
+    }
+  }
+
+  function resolveTierbannsteinAttackFrame(frame) {
+    if (!frame || !frame.hit) return;
+
+    const direction = rabbitAttackDirection();
+    const now = performance.now();
+
+    for (const stone of tierbannSteine) {
+      if (stone.mapId !== MAP.id || stone.dead || stone.removed) continue;
+
+      // Reuse the exact same player attack reach used by rabbits/wolves/boars.
+      // Supply the minimal actor shape expected by rabbitInsideAttackHitbox().
+      const target = {
+        x: stone.x,
+        y: stone.y,
+        dead: false,
+        away: false
+      };
+
+      if (!rabbitInsideAttackHitbox(target, direction)) continue;
+
+      damageTierbannstein(
+        stone,
+        frame.damage || 20,
+        Boolean(frame.critical),
+        now
+      );
+    }
+  }
+
+  function tierbannRabbitChooseRoam(actor, now) {
+    const d = tierbannMapDimensions(actor.zone.mapId);
+
+    for (let attempt = 0; attempt < 70; attempt += 1) {
+      const angle = Math.random() * Math.PI * 2;
+      const radius = 450 + Math.random() * 1150;
+      const x = actor.x + Math.cos(angle) * radius;
+      const y = actor.y + Math.sin(angle) * radius;
+
+      if (x < 240 || x > d.width - 240 || y < 650 || y > d.height - 160) {
+        continue;
+      }
+      if (!tierbannPointAllowed(x, y)) continue;
+
+      actor.targetX = x;
+      actor.targetY = y;
+      actor.speed = 155 + Math.random() * 145;
+      actor.moving = true;
+      actor.pauseUntil = 0;
+      actor.nextDecision = now + 1800 + Math.random() * 2800;
+      actor.element.classList.add("map-rabbit--moving");
+
+      const dx = x - actor.x;
+      if (Math.abs(dx) > 12) {
+        actor.facing = dx < 0 ? -1 : 1;
+        actor.element.style.setProperty("--rabbit-facing", actor.facing);
+      }
+      return;
+    }
+
+    actor.moving = false;
+    actor.pauseUntil = now + 450 + Math.random() * 900;
+    actor.nextDecision = actor.pauseUntil;
+    actor.element.classList.remove("map-rabbit--moving");
+  }
+
+  function tierbannRabbitFleeFromPlayer(actor, now) {
+    const angle =
+      Math.atan2(actor.y - playerY, actor.x - playerX) +
+      (Math.random() - 0.5) * 0.5;
+
+    actor.tierbannMode = "escape";
+    actor.tierbannEscapeAngle = angle;
+    actor.tierbannEscapeUntil = now + 1500 + Math.random() * 700;
+    actor.speed = 380 + Math.random() * 100;
+    actor.moving = true;
+    actor.element.classList.add("map-rabbit--moving");
+  }
+
+  function updateTierbannRabbit(actor, deltaSeconds, now) {
+    if (actor.dead || actor.away) return;
+
+    if (now >= actor.nextFrameChange) rabbitPickFrame(actor);
+
+    if (actor.tierbannMode === "escape") {
+      if (now >= actor.tierbannEscapeUntil) {
+        actor.tierbannMode = "roam";
+        actor.moving = false;
+        actor.element.classList.remove("map-rabbit--moving");
+        actor.pauseUntil = now + 350 + Math.random() * 850;
+        actor.nextDecision = actor.pauseUntil;
+        return;
+      }
+
+      const angle = actor.tierbannEscapeAngle;
+      const amount = actor.speed * deltaSeconds;
+      const moved = tierbannStepWithCollision(
+        actor,
+        Math.cos(angle),
+        Math.sin(angle),
+        amount
+      );
+
+      // If terrain blocks the initial direction, fan away to a nearby open angle.
+      if (!moved) {
+        actor.tierbannEscapeAngle +=
+          (Math.random() < 0.5 ? -1 : 1) * (0.55 + Math.random() * 0.65);
+      }
+
+      actor.facing = Math.cos(actor.tierbannEscapeAngle) < 0 ? -1 : 1;
+      actor.element.style.setProperty("--rabbit-facing", actor.facing);
+      return;
+    }
+
+    if (actor.moving) {
+      const dx = actor.targetX - actor.x;
+      const dy = actor.targetY - actor.y;
+      const distance = Math.hypot(dx, dy);
+
+      if (distance <= 14) {
+        actor.moving = false;
+        actor.element.classList.remove("map-rabbit--moving");
+        actor.pauseUntil = now + 550 + Math.random() * 2100;
+        actor.nextDecision = actor.pauseUntil;
+        return;
+      }
+
+      const step = Math.min(distance, actor.speed * deltaSeconds);
+      const moved = tierbannStepWithCollision(actor, dx, dy, step);
+      if (!moved) {
+        actor.moving = false;
+        actor.element.classList.remove("map-rabbit--moving");
+        actor.pauseUntil = now + 300 + Math.random() * 700;
+        actor.nextDecision = actor.pauseUntil;
+      }
+      return;
+    }
+
+    if (now >= actor.pauseUntil && now >= actor.nextDecision) {
+      tierbannRabbitChooseRoam(actor, now);
+    }
+  }
+
+  function updateTierbannAggressiveBoar(actor, deltaSeconds, now) {
+    if (actor.dead || actor.away) return;
+
+    const dx = playerX - actor.x;
+    const dy = playerY - actor.y;
+    const distance = Math.hypot(dx, dy);
+
+    if (Math.abs(dx) > 12) boarSetFacing(actor, dx < 0 ? -1 : 1);
+    boarShowLayer(actor, 1);
+    actor.moving = true;
+
+    // Stop just short of the player's foot anchor; still actively tracks him.
+    if (distance > 225) {
+      tierbannStepWithCollision(actor, dx, dy, actor.speed * deltaSeconds);
+    }
+  }
+
+  function updateTierbannAggressiveWolf(actor, deltaSeconds, now) {
+    if (actor.dead || actor.away) return;
+
+    actor.howling = false;
+
+    const dx = playerX - actor.x;
+    const dy = playerY - actor.y;
+    const distance = Math.hypot(dx, dy);
+
+    if (Math.abs(dx) > 12) {
+      actor.facing = dx < 0 ? -1 : 1;
+      actor.element.style.setProperty("--wolf-facing", actor.facing);
+    }
+
+    actor.moving = true;
+    if (now >= actor.nextFrameAt) wolfPickWalkFrame(actor);
+
+    if (distance > 225) {
+      tierbannStepWithCollision(actor, dx, dy, actor.speed * deltaSeconds);
+    }
+  }
+
+  function createTierbannsteinSystem() {
+    installTierbannsteinStyles();
+
+    const preload = new Image();
+    preload.src = encodeURI(TIERBANNSTEIN_CONFIG.image);
+    if (typeof preload.decode === "function") preload.decode().catch(() => {});
+
+    tierbannSteine = [];
+    const firstCheck = performance.now() + TIERBANNSTEIN_CONFIG.checkInterval;
+
+    for (const mapId of Object.keys(TIERBANNSTEIN_CONFIG.maps)) {
+      // Separate timer/state per map = fully independent 25% rolls.
+      tierbannMapTimers.set(mapId, firstCheck);
+    }
+  }
+
+  function updateTierbannsteine(deltaSeconds, now) {
+    // Independent two-minute rolls for BOTH maps, even if one map is currently hidden.
+    for (const mapId of Object.keys(TIERBANNSTEIN_CONFIG.maps)) {
+      let nextCheck = tierbannMapTimers.get(mapId);
+      if (!Number.isFinite(nextCheck)) {
+        nextCheck = now + TIERBANNSTEIN_CONFIG.checkInterval;
+      }
+
+      while (now >= nextCheck) {
+        tryTierbannsteinMapSpawn(mapId, now);
+        nextCheck += TIERBANNSTEIN_CONFIG.checkInterval;
+      }
+
+      tierbannMapTimers.set(mapId, nextCheck);
+    }
+
+    for (const stone of tierbannSteine) {
+      if (stone.removed) continue;
+      stone.element.style.display = stone.mapId === MAP.id ? "" : "none";
     }
   }
 
@@ -9637,6 +10517,7 @@
     resolveRabbitAttackFrame(attackSequence[0]);
     resolveWolfAttackFrame(attackSequence[0]);
     resolveBoarAttackFrame(attackSequence[0]);
+    resolveTierbannsteinAttackFrame(attackSequence[0]);
     resolveMoleAttackFrame(attackSequence[0]);
   }
 
@@ -9682,6 +10563,7 @@
       resolveRabbitAttackFrame(attackSequence[attackStep]);
       resolveWolfAttackFrame(attackSequence[attackStep]);
       resolveBoarAttackFrame(attackSequence[attackStep]);
+      resolveTierbannsteinAttackFrame(attackSequence[attackStep]);
       resolveMoleAttackFrame(attackSequence[attackStep]);
     }
   }
@@ -9858,6 +10740,7 @@
       updateWolves(deltaSeconds, now);
       updateGoat(deltaSeconds, now);
       updateBoars(deltaSeconds, now);
+      updateTierbannsteine(deltaSeconds, now);
       updateMole(now);
     }
 
@@ -10056,6 +10939,7 @@
     createWolves();
     createGoat();
     createBoars();
+    createTierbannsteinSystem();
     createMoleSystem();
     createOberkirchBuildings();
     createR11Buildings();
