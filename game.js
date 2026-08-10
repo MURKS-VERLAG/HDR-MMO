@@ -355,6 +355,15 @@
   const MAP_MUSIC_VOLUME = 1.0;
   const MAP_MUSIC_FADE_MS = 1400;
 
+  // R60 START FLOW MUSIC:
+  // Both screens before OBERKIRCH use the EXACT existing RENCHTALSTADION track.
+  // No duplicate audio file is needed; we reuse MAP_MUSIC["renchtalstadion"].
+  function desiredBackgroundMusicId() {
+    return (typeof startFlowState !== "undefined" && startFlowState !== "campaign")
+      ? "renchtalstadion"
+      : (MAP && MAP.id ? MAP.id : "oberkirch-zentrum");
+  }
+
   const mapMusicPlayers = new Map();
   let musicUnlocked = false;
   let activeMapMusicId = null;
@@ -385,7 +394,7 @@
   }
 
   function startBackgroundMusic() {
-    const mapId = MAP && MAP.id ? MAP.id : "oberkirch-zentrum";
+    const mapId = desiredBackgroundMusicId();
     const audio = getMapMusicPlayer(mapId);
 
     activeMapMusicId = mapId;
@@ -403,7 +412,7 @@
   }
 
   function unlockBackgroundMusic() {
-    const mapId = MAP && MAP.id ? MAP.id : "oberkirch-zentrum";
+    const mapId = desiredBackgroundMusicId();
     const audio = getMapMusicPlayer(mapId);
 
     activeMapMusicId = mapId;
@@ -7142,8 +7151,11 @@
         inset: 0;
         width: 100%;
         height: 100%;
-        object-fit: cover;
+        /* R60: FULL artwork always visible.
+           "cover" cropped top/bottom on wide desktop browser windows. */
+        object-fit: contain;
         object-position: center center;
+        background: #000;
         pointer-events: none;
         -webkit-user-drag: none;
       }
@@ -7635,6 +7647,11 @@
     startFlowUI.root.remove();
     startFlowUI = null;
     startFlowState = "campaign";
+
+    // R60: NOW — and only now — leave the RENCHTALSTADION intro music
+    // and enter OBERKIRCH's original existing music with the normal crossfade.
+    crossfadeMapMusic("oberkirch-zentrum");
+
     lastFrame = performance.now();
 
     await new Promise((resolve) =>
