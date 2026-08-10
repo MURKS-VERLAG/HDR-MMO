@@ -7636,37 +7636,87 @@
   }
 
 
+  // R55 PLAYER STABILITY:
+  // Keep EVERY player frame resident and decoded before gameplay starts.
+  // This includes stand, all walking directions/intermediate frames,
+  // all four attack frames in every direction, and block/base frames.
   const allSprites = [
     PLAYER.standDown,
     PLAYER.standRight,
     PLAYER.standLeft,
     PLAYER.standUp,
+
     ...PLAYER.walkRight,
     ...PLAYER.walkLeft,
     ...PLAYER.walkDown,
     ...PLAYER.walkUp,
+
     PLAYER.combatBase,
     PLAYER.combatBaseLeft,
+
     PLAYER.attackRight1,
     PLAYER.attackRight2,
     PLAYER.attackRight3,
+    PLAYER.attackRight4,
+
     PLAYER.attackLeft1,
     PLAYER.attackLeft2,
     PLAYER.attackLeft3,
+    PLAYER.attackLeft4,
+
     PLAYER.attackDown1,
     PLAYER.attackDown2,
+    PLAYER.attackDown3,
+    PLAYER.attackDown4,
+
+    PLAYER.attackUp1,
+    PLAYER.attackUp2,
+    PLAYER.attackUp3,
+    PLAYER.attackUp4,
+
     PLAYER.attackFinish,
     PLAYER.attackFinishLeft,
     PLAYER.blockRight,
     PLAYER.blockLeft
   ];
 
+  // Remove duplicate paths while preserving their original order.
+  const playerSpriteSources = [...new Set(allSprites)];
   const preloaded = {};
-  allSprites.forEach((src) => {
-    const img = new Image();
-    img.src = src;
-    preloaded[src] = img;
-  });
+
+  function preloadAndDecodePlayerSprites() {
+    const jobs = playerSpriteSources.map((src) => {
+      const img = new Image();
+      img.decoding = "async";
+      img.src = encodeURI(src);
+      preloaded[src] = img;
+
+      // decode() forces the browser to prepare the bitmap now instead of
+      // stalling on the first live walk/attack frame. Fall back safely on
+      // browsers where decode() is unavailable or rejects.
+      if (typeof img.decode === "function") {
+        return img.decode().catch(() => new Promise((resolve) => {
+          if (img.complete) {
+            resolve();
+            return;
+          }
+          img.addEventListener("load", resolve, { once: true });
+          img.addEventListener("error", resolve, { once: true });
+        }));
+      }
+
+      return new Promise((resolve) => {
+        if (img.complete) {
+          resolve();
+          return;
+        }
+        img.addEventListener("load", resolve, { once: true });
+        img.addEventListener("error", resolve, { once: true });
+      });
+    });
+
+    return Promise.all(jobs);
+  }
 
   let viewportWidth = window.innerWidth;
   let viewportHeight = window.innerHeight;
@@ -8315,6 +8365,14 @@
     keys.clear();
   });
 
+  // R55 PLAYER STABILITY:
+  // A browser can pause requestAnimationFrame while a tab is hidden.
+  // Reset only the frame clock on return so walking/combat never inherits
+  // stale elapsed time. No animation state, timing constants or sequence changes.
+  document.addEventListener("visibilitychange", () => {
+    lastFrame = performance.now();
+  });
+
   game.addEventListener("wheel", (event) => {
     event.preventDefault();
 
@@ -8344,9 +8402,13 @@
     renderWorld();
   });
 
-  function initialize() {
+  async function initialize() {
     startBackgroundMusic();
     installMapTransitionUI();
+
+    // R55: all player walking + combat frames are ready before gameplay starts.
+    // Existing animation orders, durations and sound synchronization stay untouched.
+    await preloadAndDecodePlayerSprites();
     resizeWorldForCurrentMap();
     calculateFitScale();
     displayScale = scaleForLevel(0);
