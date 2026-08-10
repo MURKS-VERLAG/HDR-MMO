@@ -6236,8 +6236,10 @@
     castleGateFrontMicroOverride: Object.freeze([
       Object.freeze([7870, 4630]),
       Object.freeze([8235, 4630]),
-      Object.freeze([8235, 4865]),
-      Object.freeze([7870, 4865])
+      // R54 FINAL NEUENSTEIN MICRO-EXTENSION:
+      // same narrow yellow gate/stair strip, only ~1/3 player height farther down.
+      Object.freeze([8235, 5075]),
+      Object.freeze([7870, 5075])
     ])
   });
 
@@ -6744,6 +6746,17 @@
   function updateChurchPlayerDepth() {
     if (!playerEl) return;
 
+    // R54 FIX:
+    // Hubacker-only building sprites must be hidden BEFORE any map-specific
+    // early return. Previously the LAUTENBACH branch returned first, so
+    // Hubacker Hof / Neuenstein / Alt-Neuenstein could remain visible after
+    // switching MAP 4 -> MAP 3.
+    if (MAP.id !== "hubacker") {
+      for (const element of hubackerBuildingElements.values()) {
+        element.style.display = "none";
+      }
+    }
+
     // R22 MAP 2 Obsthof:
     // only the blue/purple roof zone is walk-behind.
     // blue/green stays foreground; all Oberkirch depth rules remain untouched.
@@ -6761,11 +6774,6 @@
     if (MAP.id === "hubacker") {
       updateHubackerBuildingDepth();
       return;
-    }
-
-    // Also hide Hubacker-only building elements immediately on other maps.
-    for (const element of hubackerBuildingElements.values()) {
-      element.style.display = "none";
     }
 
     if (MAP.id !== "oberkirch-zentrum") {
