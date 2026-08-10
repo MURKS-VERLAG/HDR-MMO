@@ -4464,24 +4464,28 @@
     // R47 NEUENSTEIN: two additional WHITE W/S-only snap routes from the supplied map overlay.
     // Both are stored TOP -> BOTTOM. W moves toward index 0; S moves toward the last point.
     neuensteinRuinPath: Object.freeze([
-      Object.freeze([2890, 1770]),
-      Object.freeze([2868, 1990]),
-      Object.freeze([2852, 2225]),
-      Object.freeze([2835, 2470]),
-      Object.freeze([2815, 2725]),
-      Object.freeze([2795, 2985])
+      // R49 exact new WHITE line from the supplied markup.
+      // TOP -> BOTTOM; visibly shifted left from the previous path.
+      Object.freeze([2635, 1650]),
+      Object.freeze([2632, 1925]),
+      Object.freeze([2629, 2200]),
+      Object.freeze([2626, 2475]),
+      Object.freeze([2623, 2750]),
+      Object.freeze([2620, 3035])
     ]),
 
     neuensteinCastlePath: Object.freeze([
-      Object.freeze([8290, 1760]),
-      Object.freeze([8280, 2150]),
-      Object.freeze([8268, 2550]),
-      Object.freeze([8255, 2960]),
-      Object.freeze([8243, 3380]),
-      Object.freeze([8233, 3800]),
-      Object.freeze([8223, 4220]),
-      Object.freeze([8208, 4580]),
-      Object.freeze([8188, 4950])
+      // R49 exact new WHITE line through both Neuenstein gates/courtyards.
+      // TOP -> BOTTOM; shifted left onto the marked central stair/door axis.
+      Object.freeze([8085, 2000]),
+      Object.freeze([8080, 2350]),
+      Object.freeze([8076, 2700]),
+      Object.freeze([8072, 3050]),
+      Object.freeze([8068, 3400]),
+      Object.freeze([8064, 3750]),
+      Object.freeze([8060, 4100]),
+      Object.freeze([8056, 4500]),
+      Object.freeze([8052, 4905])
     ]),
 
     neuensteinSnapDistance: 185,
@@ -6100,17 +6104,27 @@
   // RUIN RED remains exactly as before (player behind, z=100 vs ruin z=110).
   // RUIN BLUE and the complete NEUENSTEIN BLUE rectangle put the player in front.
   const HUBACKER_NEUENSTEIN_DEPTH = Object.freeze({
+    // R49 RUIN:
+    // Existing upper/front logic is preserved, but the lower edge is extended
+    // far enough downward that the player's full sprite is already foreground
+    // before visually entering the orange-marked lower ruin/foundation strip.
     ruinFrontZone: Object.freeze([
       Object.freeze([1405, 1245]),
       Object.freeze([4265, 1245]),
-      Object.freeze([4265, 2720]),
-      Object.freeze([1405, 2720])
+      Object.freeze([4265, 3350]),
+      Object.freeze([1405, 3350])
     ]),
+
+    // R49 CASTLE:
+    // Same principle at Burg Neuenstein. The front zone starts exactly as before
+    // and is extended downward through the yellow-marked lower rock/entry area.
+    // Hubacker Hof remains absolute priority in updateHubackerBuildingDepth(),
+    // so this extension can NEVER override the Hof walk-behind rule.
     castleFrontZone: Object.freeze([
       Object.freeze([6595, 255]),
       Object.freeze([10030, 255]),
-      Object.freeze([10030, 4385]),
-      Object.freeze([6595, 4385])
+      Object.freeze([10030, 5050]),
+      Object.freeze([6595, 5050])
     ])
   });
 
