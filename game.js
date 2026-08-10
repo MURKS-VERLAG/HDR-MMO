@@ -3161,6 +3161,36 @@
         animation: none !important;
       }
 
+      /* R61: corpse fades first; loot becomes visible only after that fade completes. */
+      .map-rabbit--loot-fading {
+        opacity: 0 !important;
+        transition: opacity 420ms ease !important;
+      }
+
+      .rabbit-loot-drop {
+        position: absolute;
+        z-index: 11;
+        width: 150px;
+        height: 150px;
+        transform: translate(-50%, -50%) scale(1);
+        pointer-events: none;
+        user-select: none;
+        opacity: 1;
+        transition: opacity 360ms ease, transform 360ms ease;
+        filter: drop-shadow(0 0 7px rgba(255,255,255,.78)) drop-shadow(0 8px 5px rgba(0,0,0,.48));
+      }
+
+      .rabbit-loot-drop__icon {
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+      }
+
+      .rabbit-loot-drop--pickup {
+        opacity: 0;
+        transform: translate(-50%, -90%) scale(.42);
+      }
+
       @media (prefers-reduced-motion: reduce) {
         .map-rabbit,
         .map-rabbit__sprite {
@@ -3464,6 +3494,90 @@
     actor.speed = 300 + Math.random() * 90;
   }
 
+  function rollRabbitLoot() {
+    const drops = [];
+    if (Math.random() < RABBIT_LOOT_CONFIG.carrotChance) drops.push(CARROT_ITEM);
+    if (Math.random() < RABBIT_LOOT_CONFIG.rabbitFootChance) drops.push(RABBIT_FOOT_ITEM);
+    return drops;
+  }
+
+  function spawnRabbitLoot(item, x, y, mapId = MAP.id, offsetIndex = 0) {
+    const element = document.createElement("div");
+    element.className = "rabbit-loot-drop";
+    element.dataset.mapId = mapId;
+    element.dataset.itemId = item.id;
+    element.title = item.name;
+
+    const spread = offsetIndex === 0 ? 0 : (offsetIndex % 2 ? 85 : -85);
+    const dropX = x + spread;
+    const dropY = y - (offsetIndex > 1 ? 55 : 0);
+    element.style.left = `${dropX}px`;
+    element.style.top = `${dropY}px`;
+
+    const icon = document.createElement("img");
+    icon.className = "rabbit-loot-drop__icon";
+    icon.src = encodeURI(item.icon);
+    icon.alt = "";
+    icon.draggable = false;
+    element.appendChild(icon);
+    world.appendChild(element);
+
+    rabbitLootDrops.push({ element, item, x: dropX, y: dropY, mapId, collected: false });
+    element.style.display = mapId === MAP.id ? "" : "none";
+  }
+
+  function showRabbitLootPlusOne(item) {
+    const popup = document.createElement("div");
+    popup.className = "black-penny-plus";
+    popup.style.left = `${playerX}px`;
+    popup.style.top = `${playerY - 360}px`;
+
+    const icon = document.createElement("img");
+    icon.src = encodeURI(item.icon);
+    icon.alt = "";
+    icon.style.width = "92px";
+    icon.style.height = "92px";
+    icon.style.objectFit = "contain";
+    icon.style.verticalAlign = "middle";
+    icon.style.marginRight = "18px";
+
+    const value = document.createElement("span");
+    value.textContent = "+1";
+    popup.append(icon, value);
+    world.appendChild(popup);
+    window.setTimeout(() => popup.remove(), 1160);
+  }
+
+  function collectRabbitLoot() {
+    let nearest = null;
+    let nearestDistance = Infinity;
+    for (const drop of rabbitLootDrops) {
+      if (drop.collected || drop.mapId !== MAP.id) continue;
+      const distance = Math.hypot(drop.x - playerX, drop.y - playerY);
+      if (distance <= RABBIT_LOOT_CONFIG.pickupRadius && distance < nearestDistance) {
+        nearest = drop;
+        nearestDistance = distance;
+      }
+    }
+    if (!nearest) return false;
+    if (!addItemToInventory(nearest.item)) return false;
+
+    nearest.collected = true;
+    nearest.element.classList.add("rabbit-loot-drop--pickup");
+    showRabbitLootPlusOne(nearest.item);
+    window.setTimeout(() => {
+      nearest.element.remove();
+      rabbitLootDrops = rabbitLootDrops.filter((drop) => drop !== nearest);
+    }, 390);
+    return true;
+  }
+
+  function updateRabbitLootVisibility() {
+    for (const drop of rabbitLootDrops) {
+      drop.element.style.display = drop.mapId === MAP.id ? "" : "none";
+    }
+  }
+
   function killRabbit(actor, now) {
     if (actor.dead) return;
 
@@ -3486,11 +3600,24 @@
     actor.images[active].classList.add("map-rabbit__sprite--visible");
     actor.images[hidden].classList.remove("map-rabbit__sprite--visible");
 
-    // Keep the dead rabbit visible briefly, then remove it and allow a later respawn.
+    // Keep existing respawn timing. Loot roll happens exactly once on death,
+    // but the loot is not shown until the corpse has fully faded away.
+    actor.pendingLoot = rollRabbitLoot();
+    actor.lootSpawned = false;
+    actor.fadeStarted = false;
     actor.respawnAt = now + 6500 + Math.random() * 5000;
+    actor.fadeAt = actor.respawnAt - RABBIT_LOOT_CONFIG.fadeDuration;
   }
 
   function respawnRabbit(actor, now) {
+    // Corpse fade is complete now: reveal any rolled loot at the exact death position.
+    if (!actor.lootSpawned && actor.pendingLoot && actor.pendingLoot.length) {
+      actor.pendingLoot.forEach((item, index) =>
+        spawnRabbitLoot(item, actor.x, actor.y, actor.zone.mapId || "oberkirch-zentrum", index)
+      );
+      actor.lootSpawned = true;
+    }
+
     const start = rabbitRandomPoint(actor.zone, 160);
 
     actor.hp = RABBIT_MAX_HP;
@@ -3507,11 +3634,16 @@
     actor.nextDecision = now + 1500 + Math.random() * 2500;
     actor.nextFrameChange = now + 350 + Math.random() * 900;
     actor.respawnAt = 0;
+    actor.fadeAt = 0;
+    actor.fadeStarted = false;
+    actor.pendingLoot = [];
+    actor.lootSpawned = false;
 
     actor.element.classList.remove(
       "map-rabbit--dead",
       "map-rabbit--away",
-      "map-rabbit--critical-hit"
+      "map-rabbit--critical-hit",
+      "map-rabbit--loot-fading"
     );
 
     actor.element.style.left = `${actor.x}px`;
@@ -3612,6 +3744,10 @@
       hp: RABBIT_MAX_HP,
       dead: false,
       respawnAt: 0,
+      fadeAt: 0,
+      fadeStarted: false,
+      pendingLoot: [],
+      lootSpawned: false,
 
       pauseUntil: performance.now() + 500 + Math.random() * 2000,
       nextDecision: performance.now() + 1000 + Math.random() * 3000,
@@ -3652,6 +3788,10 @@
       if (!activeOnMap) continue;
 
       if (actor.dead) {
+        if (!actor.fadeStarted && actor.fadeAt && now >= actor.fadeAt) {
+          actor.fadeStarted = true;
+          actor.element.classList.add("map-rabbit--loot-fading");
+        }
         if (actor.respawnAt && now >= actor.respawnAt) {
           respawnRabbit(actor, now);
         }
@@ -3738,6 +3878,33 @@
     name: "SCHWARZER PFENNIG",
     description: "MAULWURFKOT"
   });
+
+  // R61 RABBIT LOOT — exact requested independent death rolls.
+  // 5% carrot + 1% rabbit foot. Both can theoretically drop from the same rabbit.
+  const CARROT_ITEM = Object.freeze({
+    id: "carrot",
+    name: "KAROTTE",
+    description: "HASENLOOT",
+    icon: "assets/items/KAROTTE.svg",
+    stackable: true
+  });
+
+  const RABBIT_FOOT_ITEM = Object.freeze({
+    id: "rabbit-foot",
+    name: "HASENPFOTE",
+    description: "SELTENER HASENLOOT",
+    icon: "assets/items/HASENPFOTE.svg",
+    stackable: true
+  });
+
+  const RABBIT_LOOT_CONFIG = Object.freeze({
+    carrotChance: 0.05,
+    rabbitFootChance: 0.01,
+    fadeDuration: 420,
+    pickupRadius: 820
+  });
+
+  let rabbitLootDrops = [];
 
   const moleDigAudio = new Audio("assets/audio/moles/MOLE DIG.mp3");
   moleDigAudio.preload = "auto";
@@ -7686,9 +7853,10 @@
       "assets/ui/inventory/INVENTORY PAGE 1.png",
       "assets/ui/inventory/INVENTORY PAGE 2.png"
     ]),
-    columns: 7,
+    // R61 RASTERFIX: supplied artwork is an exact 6 x 6 raster.
+    columns: 6,
     rows: 6,
-    slotCount: 42,
+    slotCount: 36,
 
     // Coordinates measured on the 507 x 1241 PAGE I source image.
     // The overlay never redraws the raster; it only aligns logical slots
@@ -7820,11 +7988,21 @@
         display: grid;
         place-items: center;
         pointer-events: auto;
+        box-sizing: border-box;
+        padding: 8%;
+      }
+
+      .inventory-item__icon {
+        width: 72%;
+        height: 72%;
+        object-fit: contain;
+        object-position: 50% 50%;
+        display: block;
       }
 
       .inventory-item__penny {
         position: relative;
-        width: 61%;
+        width: 72%;
         aspect-ratio: 1;
         border-radius: 50%;
         background:
@@ -7943,6 +8121,13 @@
         const icon = document.createElement("div");
         icon.className = "inventory-item__penny";
         item.appendChild(icon);
+      } else if (stack.icon) {
+        const icon = document.createElement("img");
+        icon.className = "inventory-item__icon";
+        icon.src = encodeURI(stack.icon);
+        icon.alt = "";
+        icon.draggable = false;
+        item.appendChild(icon);
       }
 
       const quantity = document.createElement("span");
@@ -8019,8 +8204,8 @@
   function addItemToInventory(item) {
     if (!item || !item.id) return false;
 
-    // BLACK PENNY V1 is stackable. Further stack rules can be added per item later.
-    if (item.id === "black-penny") {
+    // R61: loot resources stack cleanly in one exact raster slot.
+    if (item.id === "black-penny" || item.stackable) {
       const existing = findInventoryStack(item.id);
       if (existing) {
         existing.stack.quantity += 1;
@@ -8036,6 +8221,7 @@
       id: item.id,
       name: item.name || item.id,
       description: item.description || "",
+      icon: item.icon || "",
       width: 1,
       height: 1,
       quantity: 1
@@ -8050,6 +8236,11 @@
 
     // Preload both supplied page artworks immediately so page II never flashes late.
     for (const src of INVENTORY_CONFIG.pageImages) {
+      const preload = new Image();
+      preload.src = encodeURI(src);
+    }
+
+    for (const src of [CARROT_ITEM.icon, RABBIT_FOOT_ITEM.icon]) {
       const preload = new Image();
       preload.src = encodeURI(src);
     }
@@ -9292,6 +9483,7 @@
       updateAreaSigns();
       updateTrunkenbold(deltaSeconds, now);
       updateRabbits(deltaSeconds, now);
+      updateRabbitLootVisibility();
       updateWolves(deltaSeconds, now);
       updateGoat(deltaSeconds, now);
       updateBoars(deltaSeconds, now);
@@ -9363,7 +9555,8 @@
       event.key === "°"
     ) {
       event.preventDefault();
-      collectBlackPenny();
+      // Same pickup key as the existing mole loot.
+      if (!collectRabbitLoot()) collectBlackPenny();
       return;
     }
 
