@@ -7083,6 +7083,581 @@
   }
 
 
+
+  // ------------------------------------------------------------------
+  // R59 NEW GAME START FLOW
+  // START_NAME -> HERO_SELECT -> CAMPAIGN
+  // This is a screen-only layer in front of the existing game.
+  // Existing maps, spawns, combat, inventory, NPCs and map transitions
+  // remain untouched underneath it.
+  // ------------------------------------------------------------------
+  const START_FLOW = Object.freeze({
+    startImage: "assets/ui/start/HDR START SCREEN.png",
+    heroSelectImage: "assets/ui/start/HDR HERO SELECT.png",
+    heroImage: "assets/ui/start/HDR HERO PLAYER.png",
+    titleHoldMs: 3000,
+    initialFadeMs: 1800,
+    panelFadeMs: 620,
+    blackFadeMs: 920,
+    irisMs: 2700
+  });
+
+  let startFlowState = "start-name";
+  let chosenPlayerName = "";
+  let startFlowUI = null;
+
+  function gameplayUnlocked() {
+    return startFlowState === "campaign";
+  }
+
+  function installStartFlowStyles() {
+    if (document.getElementById("startFlowStyles")) return;
+
+    const style = document.createElement("style");
+    style.id = "startFlowStyles";
+    style.textContent = `
+      #startFlowUI {
+        position: fixed;
+        inset: 0;
+        z-index: 30000;
+        overflow: hidden;
+        background: #000;
+        color: #fff;
+        user-select: none;
+      }
+
+      .start-flow__scene {
+        position: absolute;
+        inset: 0;
+        opacity: 0;
+        transition: opacity ${START_FLOW.initialFadeMs}ms ease;
+      }
+
+      .start-flow__scene--visible {
+        opacity: 1;
+      }
+
+      .start-flow__background {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        object-position: center center;
+        pointer-events: none;
+        -webkit-user-drag: none;
+      }
+
+      .start-flow__name-panel {
+        position: absolute;
+        left: 50%;
+        bottom: clamp(22px, 3.4vh, 48px);
+        width: min(620px, 76vw);
+        transform: translate(-50%, 18px);
+        box-sizing: border-box;
+        padding: 18px 26px 20px;
+        border: 1px solid rgba(214, 198, 166, .46);
+        border-radius: 5px;
+        background:
+          linear-gradient(rgba(8, 8, 8, .73), rgba(8, 8, 8, .73));
+        box-shadow:
+          inset 0 0 0 1px rgba(255,255,255,.035),
+          0 10px 30px rgba(0,0,0,.42);
+        opacity: 0;
+        visibility: hidden;
+        transition:
+          opacity ${START_FLOW.panelFadeMs}ms ease,
+          transform ${START_FLOW.panelFadeMs}ms cubic-bezier(.2,.76,.2,1),
+          visibility ${START_FLOW.panelFadeMs}ms ease;
+        text-align: center;
+      }
+
+      .start-flow__name-panel--visible {
+        opacity: 1;
+        visibility: visible;
+        transform: translate(-50%, 0);
+      }
+
+      .start-flow__name-label {
+        display: block;
+        margin-bottom: 10px;
+        color: #fff;
+        font-family:
+          "Old English Text MT",
+          "Lucida Blackletter",
+          "UnifrakturCook",
+          Georgia,
+          serif;
+        font-size: clamp(21px, 2.2vw, 34px);
+        font-weight: 900;
+        letter-spacing: .055em;
+        text-shadow: 0 3px 6px rgba(0,0,0,.9);
+      }
+
+      .start-flow__name-input {
+        display: block;
+        width: min(410px, 88%);
+        margin: 0 auto;
+        box-sizing: border-box;
+        padding: 10px 14px 9px;
+        border: 1px solid rgba(223, 210, 184, .62);
+        border-radius: 2px;
+        outline: none;
+        background: rgba(0,0,0,.48);
+        color: #fff;
+        font-family: Georgia, "Times New Roman", serif;
+        font-size: clamp(18px, 1.65vw, 27px);
+        text-align: center;
+        letter-spacing: .035em;
+        caret-color: #fff;
+        box-shadow: inset 0 0 13px rgba(0,0,0,.7);
+        user-select: text;
+      }
+
+      .start-flow__name-input:focus {
+        border-color: rgba(255,255,255,.86);
+        box-shadow:
+          inset 0 0 13px rgba(0,0,0,.72),
+          0 0 12px rgba(255,255,255,.18);
+      }
+
+      .start-flow__continue {
+        display: inline-block;
+        margin-top: 12px;
+        padding: 7px 24px 8px;
+        border: 1px solid rgba(218, 201, 169, .58);
+        border-radius: 2px;
+        background: rgba(17,17,17,.55);
+        color: #fff;
+        cursor: pointer;
+        font-family:
+          "Old English Text MT",
+          "Lucida Blackletter",
+          "UnifrakturCook",
+          Georgia,
+          serif;
+        font-size: clamp(17px, 1.5vw, 24px);
+        font-weight: 900;
+        letter-spacing: .06em;
+        transition:
+          filter 160ms ease,
+          text-shadow 160ms ease,
+          border-color 160ms ease;
+      }
+
+      .start-flow__continue:hover,
+      .start-flow__continue:focus-visible {
+        filter: brightness(1.18);
+        border-color: rgba(255,255,255,.88);
+        text-shadow:
+          0 0 5px rgba(255,255,255,.8),
+          0 0 12px rgba(255,255,255,.35);
+      }
+
+      .start-flow__continue:disabled {
+        opacity: .35;
+        cursor: default;
+        filter: none;
+        text-shadow: none;
+      }
+
+      .start-flow__hero-stage {
+        position: absolute;
+        inset: 0;
+        opacity: 0;
+        visibility: hidden;
+      }
+
+      .start-flow__hero-stage--visible {
+        opacity: 1;
+        visibility: visible;
+      }
+
+      .start-flow__hero-choice {
+        position: absolute;
+        left: 50%;
+        top: 56%;
+        height: min(39vh, 395px);
+        width: auto;
+        transform: translate(-50%, -50%) scale(1);
+        transform-origin: 50% 75%;
+        cursor: pointer;
+        pointer-events: auto;
+        -webkit-user-drag: none;
+        filter:
+          drop-shadow(0 8px 8px rgba(0,0,0,.5));
+        transition:
+          transform 210ms cubic-bezier(.2,.8,.2,1),
+          filter 210ms ease;
+      }
+
+      .start-flow__hero-choice:hover,
+      .start-flow__hero-choice:focus-visible {
+        transform: translate(-50%, -50%) scale(1.035);
+        filter:
+          brightness(1.13)
+          drop-shadow(0 0 7px rgba(255,255,255,.9))
+          drop-shadow(0 0 18px rgba(255,246,214,.55))
+          drop-shadow(0 8px 8px rgba(0,0,0,.5));
+        outline: none;
+      }
+
+      .start-flow__hero-name {
+        position: absolute;
+        left: 50%;
+        bottom: clamp(8px, 1.3vh, 18px);
+        max-width: 82vw;
+        transform: translate(-50%, 7px);
+        opacity: 0;
+        visibility: hidden;
+        white-space: nowrap;
+        pointer-events: none;
+        color: #fff;
+        font-family:
+          "Old English Text MT",
+          "Lucida Blackletter",
+          "UnifrakturCook",
+          Georgia,
+          serif;
+        font-size: clamp(28px, 3.1vw, 52px);
+        font-weight: 900;
+        letter-spacing: .065em;
+        line-height: 1;
+        text-align: center;
+        text-shadow:
+          0 2px 3px #000,
+          0 4px 9px #000,
+          0 0 14px rgba(0,0,0,.92);
+        transition:
+          opacity 180ms ease,
+          transform 180ms ease,
+          visibility 180ms ease;
+      }
+
+      .start-flow__hero-choice:hover ~ .start-flow__hero-name,
+      .start-flow__hero-choice:focus-visible ~ .start-flow__hero-name {
+        opacity: 1;
+        visibility: visible;
+        transform: translate(-50%, 0);
+      }
+
+      .start-flow__black {
+        position: absolute;
+        inset: 0;
+        z-index: 10;
+        pointer-events: none;
+        background: #000;
+        opacity: 1;
+        transition: opacity ${START_FLOW.initialFadeMs}ms ease;
+      }
+
+      .start-flow__black--clear {
+        opacity: 0;
+      }
+
+      .start-flow__black--fade-in {
+        opacity: 1;
+        transition-duration: ${START_FLOW.blackFadeMs}ms;
+      }
+
+      .start-flow__iris {
+        position: absolute;
+        inset: 0;
+        z-index: 11;
+        pointer-events: none;
+        background: #000;
+        opacity: 0;
+        --start-iris-radius: 0%;
+        -webkit-mask-image:
+          radial-gradient(circle at 50% 50%,
+            transparent 0 var(--start-iris-radius),
+            #000 calc(var(--start-iris-radius) + 1%));
+        mask-image:
+          radial-gradient(circle at 50% 50%,
+            transparent 0 var(--start-iris-radius),
+            #000 calc(var(--start-iris-radius) + 1%));
+      }
+
+      @media (max-aspect-ratio: 4/3) {
+        .start-flow__hero-choice {
+          top: 57%;
+          height: min(34vh, 360px);
+        }
+
+        .start-flow__name-panel {
+          width: min(600px, 88vw);
+        }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .start-flow__scene,
+        .start-flow__name-panel,
+        .start-flow__hero-choice,
+        .start-flow__hero-name,
+        .start-flow__black {
+          transition-duration: 1ms !important;
+        }
+      }
+    `;
+
+    document.head.appendChild(style);
+  }
+
+  function preloadStartFlowImage(src) {
+    return new Promise((resolve, reject) => {
+      const image = new Image();
+      image.onload = () => resolve(image);
+      image.onerror = reject;
+      image.src = encodeURI(src);
+    });
+  }
+
+  function createStartFlowUI() {
+    installStartFlowStyles();
+
+    const root = document.createElement("div");
+    root.id = "startFlowUI";
+    root.setAttribute("aria-label", "Spielstart");
+
+    const startScene = document.createElement("section");
+    startScene.className = "start-flow__scene";
+
+    const startImage = document.createElement("img");
+    startImage.className = "start-flow__background";
+    startImage.src = encodeURI(START_FLOW.startImage);
+    startImage.alt = "";
+    startImage.draggable = false;
+
+    const namePanel = document.createElement("form");
+    namePanel.className = "start-flow__name-panel";
+    namePanel.autocomplete = "off";
+
+    const nameLabel = document.createElement("label");
+    nameLabel.className = "start-flow__name-label";
+    nameLabel.htmlFor = "startPlayerName";
+    nameLabel.textContent = "DEIN NAME:";
+
+    const nameInput = document.createElement("input");
+    nameInput.id = "startPlayerName";
+    nameInput.className = "start-flow__name-input";
+    nameInput.type = "text";
+    nameInput.maxLength = 28;
+    nameInput.spellcheck = false;
+    nameInput.autocomplete = "off";
+    nameInput.setAttribute("aria-label", "Dein Name");
+
+    const continueButton = document.createElement("button");
+    continueButton.className = "start-flow__continue";
+    continueButton.type = "submit";
+    continueButton.textContent = "WEITER";
+    continueButton.disabled = true;
+
+    namePanel.append(nameLabel, nameInput, continueButton);
+    startScene.append(startImage, namePanel);
+
+    const heroStage = document.createElement("section");
+    heroStage.className = "start-flow__hero-stage";
+
+    const heroBackground = document.createElement("img");
+    heroBackground.className = "start-flow__background";
+    heroBackground.src = encodeURI(START_FLOW.heroSelectImage);
+    heroBackground.alt = "";
+    heroBackground.draggable = false;
+
+    const heroChoice = document.createElement("img");
+    heroChoice.className = "start-flow__hero-choice";
+    heroChoice.src = encodeURI(START_FLOW.heroImage);
+    heroChoice.alt = "Spielcharakter auswählen";
+    heroChoice.draggable = false;
+    heroChoice.tabIndex = 0;
+    heroChoice.setAttribute("role", "button");
+
+    const heroName = document.createElement("div");
+    heroName.className = "start-flow__hero-name";
+
+    heroStage.append(heroBackground, heroChoice, heroName);
+
+    const iris = document.createElement("div");
+    iris.className = "start-flow__iris";
+
+    const black = document.createElement("div");
+    black.className = "start-flow__black";
+
+    root.append(startScene, heroStage, iris, black);
+    document.body.appendChild(root);
+
+    startFlowUI = {
+      root,
+      startScene,
+      startImage,
+      namePanel,
+      nameInput,
+      continueButton,
+      heroStage,
+      heroBackground,
+      heroChoice,
+      heroName,
+      iris,
+      black,
+      transitionBusy: false
+    };
+
+    nameInput.addEventListener("input", () => {
+      continueButton.disabled = nameInput.value.trim().length === 0;
+    });
+
+    namePanel.addEventListener("submit", (event) => {
+      event.preventDefault();
+      const name = nameInput.value.trim();
+      if (!name || startFlowUI.transitionBusy) return;
+      chosenPlayerName = name;
+      showHeroSelection();
+    });
+
+    const selectHero = () => {
+      if (startFlowState !== "hero-select" || startFlowUI.transitionBusy) return;
+      enterCampaignFromHeroSelection();
+    };
+
+    heroChoice.addEventListener("click", selectHero);
+    heroChoice.addEventListener("keydown", (event) => {
+      if (event.code === "Enter" || event.code === "Space") {
+        event.preventDefault();
+        selectHero();
+      }
+    });
+  }
+
+  async function beginStartFlow() {
+    if (!startFlowUI) createStartFlowUI();
+
+    startFlowState = "start-name";
+    startFlowUI.transitionBusy = true;
+    keys.clear();
+    attackHeld = false;
+    cancelAttackImmediately();
+    if (blocking) stopBlocking();
+    if (inventoryState.open) closeInventory();
+
+    // Both later screens are ready before the first fade starts.
+    try {
+      await Promise.all([
+        preloadStartFlowImage(START_FLOW.startImage),
+        preloadStartFlowImage(START_FLOW.heroSelectImage),
+        preloadStartFlowImage(START_FLOW.heroImage)
+      ]);
+    } catch (error) {
+      console.error("START FLOW asset preload failed:", error);
+    }
+
+    await new Promise((resolve) =>
+      requestAnimationFrame(() => requestAnimationFrame(resolve))
+    );
+
+    startFlowUI.startScene.classList.add("start-flow__scene--visible");
+    startFlowUI.black.classList.add("start-flow__black--clear");
+
+    await waitMs(START_FLOW.initialFadeMs + START_FLOW.titleHoldMs);
+
+    if (startFlowState !== "start-name") return;
+    startFlowUI.namePanel.classList.add("start-flow__name-panel--visible");
+    startFlowUI.transitionBusy = false;
+
+    window.setTimeout(() => {
+      if (startFlowState === "start-name") startFlowUI.nameInput.focus();
+    }, START_FLOW.panelFadeMs + 40);
+  }
+
+  async function showHeroSelection() {
+    if (!startFlowUI || startFlowUI.transitionBusy) return;
+
+    startFlowUI.transitionBusy = true;
+    startFlowUI.nameInput.blur();
+    startFlowUI.black.classList.remove("start-flow__black--clear");
+    startFlowUI.black.classList.add("start-flow__black--fade-in");
+
+    await waitMs(START_FLOW.blackFadeMs);
+
+    startFlowState = "hero-select";
+    startFlowUI.heroName.textContent = chosenPlayerName;
+    startFlowUI.startScene.classList.remove("start-flow__scene--visible");
+    startFlowUI.heroStage.classList.add("start-flow__hero-stage--visible");
+
+    // Iris opens the new hero-selection artwork from black.
+    startFlowUI.black.style.opacity = "0";
+    startFlowUI.black.style.transition = "none";
+    startFlowUI.iris.style.opacity = "1";
+    startFlowUI.iris.style.setProperty("--start-iris-radius", "0%");
+
+    await new Promise((resolve) =>
+      requestAnimationFrame(() => requestAnimationFrame(resolve))
+    );
+
+    startFlowUI.iris.style.transition =
+      `--start-iris-radius ${START_FLOW.irisMs}ms cubic-bezier(.2,.72,.2,1)`;
+    startFlowUI.iris.style.setProperty("--start-iris-radius", "150%");
+
+    await waitMs(START_FLOW.irisMs + 40);
+
+    startFlowUI.iris.style.opacity = "0";
+    startFlowUI.iris.style.transition = "none";
+    startFlowUI.iris.style.setProperty("--start-iris-radius", "0%");
+    startFlowUI.transitionBusy = false;
+    startFlowUI.heroChoice.focus({ preventScroll: true });
+  }
+
+  async function enterCampaignFromHeroSelection() {
+    if (!startFlowUI || startFlowUI.transitionBusy) return;
+
+    startFlowUI.transitionBusy = true;
+    keys.clear();
+    attackHeld = false;
+    cancelAttackImmediately();
+    if (blocking) stopBlocking();
+
+    // Smooth fade to black first.
+    startFlowUI.black.style.transition = `opacity ${START_FLOW.blackFadeMs}ms ease`;
+    startFlowUI.black.style.opacity = "1";
+    await waitMs(START_FLOW.blackFadeMs);
+
+    // Prepare the EXISTING map-transition overlay as a full black curtain.
+    const overlay = transitionOverlay();
+    if (overlay) {
+      overlay.style.transition = "none";
+      overlay.style.opacity = "1";
+      overlay.style.setProperty("--iris-radius", "0%");
+      overlay.style.webkitMaskImage =
+        "radial-gradient(circle at 50% 50%, transparent 0 var(--iris-radius), #000 calc(var(--iris-radius) + 1%))";
+      overlay.style.maskImage =
+        "radial-gradient(circle at 50% 50%, transparent 0 var(--iris-radius), #000 calc(var(--iris-radius) + 1%))";
+    }
+
+    startFlowUI.root.remove();
+    startFlowUI = null;
+    startFlowState = "campaign";
+    lastFrame = performance.now();
+
+    await new Promise((resolve) =>
+      requestAnimationFrame(() => requestAnimationFrame(resolve))
+    );
+
+    // Existing HDR iris language now reveals OBERKIRCH.
+    if (overlay) {
+      overlay.style.transition =
+        `--iris-radius ${START_FLOW.irisMs}ms cubic-bezier(.2,.72,.2,1)`;
+      overlay.style.setProperty("--iris-radius", "150%");
+
+      await waitMs(START_FLOW.irisMs + 40);
+
+      overlay.style.transition = "none";
+      overlay.style.opacity = "0";
+      overlay.style.webkitMaskImage = "none";
+      overlay.style.maskImage = "none";
+      overlay.style.setProperty("--iris-radius", "0%");
+    }
+  }
+
+
   // ------------------------------------------------------------------
   // R56 INVENTORY V1 — two-page screen UI + BLACK PENNY pickup test.
   // Artwork is the supplied inventory sheet split into two fixed pages.
@@ -8692,7 +9267,7 @@
 
     updateZoom(now);
 
-    if (!mapTransitioning) {
+    if (gameplayUnlocked() && !mapTransitioning) {
       if (!inventoryState.open) {
         updatePlayer(deltaSeconds);
         checkMapExit();
@@ -8720,6 +9295,19 @@
   }
 
   window.addEventListener("keydown", (event) => {
+    if (!gameplayUnlocked()) {
+      const target = event.target;
+      const isNameField =
+        target && target.id === "startPlayerName";
+
+      // Typing in the name field remains completely native.
+      if (isNameField) return;
+
+      // No gameplay key may leak into the campaign while either start screen is open.
+      event.preventDefault();
+      return;
+    }
+
     const controlled = [
       "KeyW", "KeyA", "KeyS", "KeyD", "KeyI",
       "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight",
@@ -8787,6 +9375,11 @@
   }, { passive: false });
 
   window.addEventListener("keyup", (event) => {
+    if (!gameplayUnlocked()) {
+      keys.delete(event.code);
+      return;
+    }
+
     if (inventoryState.open) {
       keys.delete(event.code);
       return;
@@ -8825,6 +9418,8 @@
   game.addEventListener("wheel", (event) => {
     event.preventDefault();
 
+    if (!gameplayUnlocked()) return;
+
     if (event.deltaY < 0) {
       setZoomLevel(zoomLevel + 1);
     } else if (event.deltaY > 0) {
@@ -8855,6 +9450,10 @@
     startBackgroundMusic();
     installMapTransitionUI();
     createInventorySystem();
+
+    // Install immediately as a black curtain so OBERKIRCH never flashes before
+    // the new-game sequence. It is screen UI only; no map state is changed.
+    createStartFlowUI();
 
     // R55: all player walking + combat frames are ready before gameplay starts.
     // Existing animation orders, durations and sound synchronization stay untouched.
@@ -8889,6 +9488,10 @@
     renderPlayer();
     renderWorld();
     requestAnimationFrame(frame);
+
+    // New game begins only after the existing world has finished preparing.
+    // The world stays frozen behind the full-screen start flow until hero select.
+    beginStartFlow();
   }
 
   mapImage.addEventListener("load", () => {
