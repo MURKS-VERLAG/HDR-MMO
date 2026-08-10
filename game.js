@@ -6104,10 +6104,7 @@
   // RUIN RED remains exactly as before (player behind, z=100 vs ruin z=110).
   // RUIN BLUE and the complete NEUENSTEIN BLUE rectangle put the player in front.
   const HUBACKER_NEUENSTEIN_DEPTH = Object.freeze({
-    // R49 RUIN:
-    // Existing upper/front logic is preserved, but the lower edge is extended
-    // far enough downward that the player's full sprite is already foreground
-    // before visually entering the orange-marked lower ruin/foundation strip.
+    // R49 RUIN — FINAL / LOCKED.
     ruinFrontZone: Object.freeze([
       Object.freeze([1405, 1245]),
       Object.freeze([4265, 1245]),
@@ -6115,16 +6112,25 @@
       Object.freeze([1405, 3350])
     ]),
 
-    // R49 CASTLE:
-    // Same principle at Burg Neuenstein. The front zone starts exactly as before
-    // and is extended downward through the yellow-marked lower rock/entry area.
-    // Hubacker Hof remains absolute priority in updateHubackerBuildingDepth(),
-    // so this extension can NEVER override the Hof walk-behind rule.
+    // Existing Neuenstein foreground zone remains unchanged.
     castleFrontZone: Object.freeze([
       Object.freeze([6595, 255]),
       Object.freeze([10030, 255]),
       Object.freeze([10030, 5050]),
       Object.freeze([6595, 5050])
+    ]),
+
+    // R50 FINAL MINIFIX:
+    // Tight lower-castle override for the exact Hubacker-Hof overlap strip.
+    castleLowerFrontOverride: Object.freeze([
+      Object.freeze([6610, 4060]),
+      Object.freeze([9140, 4060]),
+      Object.freeze([9190, 4350]),
+      Object.freeze([8990, 4560]),
+      Object.freeze([8400, 4675]),
+      Object.freeze([7650, 4695]),
+      Object.freeze([7000, 4625]),
+      Object.freeze([6600, 4460])
     ])
   });
 
@@ -6137,6 +6143,15 @@
       worldPointInPolygon(
         playerX, playerY, HUBACKER_NEUENSTEIN_DEPTH.castleFrontZone
       )
+    );
+  }
+
+  function playerInNeuensteinLowerFrontOverride() {
+    if (MAP.id !== "hubacker") return false;
+    return worldPointInPolygon(
+      playerX,
+      playerY,
+      HUBACKER_NEUENSTEIN_DEPTH.castleLowerFrontOverride
     );
   }
 
@@ -6209,12 +6224,12 @@
 
     if (!onHubacker || !playerEl) return;
 
-    // R47 DEPTH PRIORITY:
-    // 1) HUBACKER HOF stays EXACTLY as before: blue Hof zone -> player behind Hof.
-    // 2) RUIN blue lower zone + complete NEUENSTEIN blue zone -> player foreground.
-    // 3) Everything else keeps the old normal z=100, so the RUIN red upper zone
-    //    remains behind its z=110 artwork exactly as before.
-    if (playerBehindHubackerHof()) {
+    // R50 FINAL DEPTH PRIORITY:
+    // Tiny lower-Neuenstein overlap strip wins FIRST.
+    // Outside it, Hubacker Hof keeps its old priority exactly.
+    if (playerInNeuensteinLowerFrontOverride()) {
+      playerEl.style.zIndex = "120";
+    } else if (playerBehindHubackerHof()) {
       playerEl.style.zIndex = "5";
     } else if (playerInNeuensteinForegroundZone()) {
       playerEl.style.zIndex = "120";
