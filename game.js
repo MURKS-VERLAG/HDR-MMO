@@ -346,10 +346,10 @@
     "oberkirch-zentrum": "assets/audio/THE WEEPING STONE.mp3",
     "winterbach-ranglehen": "assets/audio/maps/WINTERBACH - FROSTBOUND BALLAD.mp3",
     "lautenbach": "assets/audio/maps/LAUTENBACH - FROSTBOUND BALLAD.mp3",
-    // R38: no new Hubacker music was requested; keep the Lautenbach regional track.
-    "hubacker": "assets/audio/maps/LAUTENBACH - FROSTBOUND BALLAD.mp3",
-    // R51 stadium is directly south of Oberkirch and keeps the Oberkirch regional track.
-    "renchtalstadion": "assets/audio/THE WEEPING STONE.mp3"
+    // R52 dedicated HUBACKER track supplied by the user.
+    "hubacker": "assets/audio/maps/HUBACKER - THE LAST KNIGHT'S LAMENT.mp3",
+    // R52 dedicated RENCHTALSTADION track supplied by the user.
+    "renchtalstadion": "assets/audio/maps/RENCHTALSTADION - MEDIEVAL BATTLE.mp3"
   });
 
   const MAP_MUSIC_VOLUME = 1.0;
@@ -6196,6 +6196,19 @@
       Object.freeze([7650, 4695]),
       Object.freeze([7000, 4625]),
       Object.freeze([6600, 4460])
+    ]),
+
+    // R52 FINAL MICRO-FIX:
+    // ONLY the tiny yellow-marked stair/gate strip is extended downward.
+    // At X≈8054 the former foreground seam ended around Y≈4684; the
+    // screenshot shows the remaining half-body dropout at Y≈4759.
+    // This narrow patch closes exactly that final gap without widening
+    // the Hubacker-Hof overlap rule elsewhere.
+    castleGateFrontMicroOverride: Object.freeze([
+      Object.freeze([7870, 4630]),
+      Object.freeze([8235, 4630]),
+      Object.freeze([8235, 4865]),
+      Object.freeze([7870, 4865])
     ])
   });
 
@@ -6217,6 +6230,15 @@
       playerX,
       playerY,
       HUBACKER_NEUENSTEIN_DEPTH.castleLowerFrontOverride
+    );
+  }
+
+  function playerInNeuensteinGateFrontMicroOverride() {
+    if (MAP.id !== "hubacker") return false;
+    return worldPointInPolygon(
+      playerX,
+      playerY,
+      HUBACKER_NEUENSTEIN_DEPTH.castleGateFrontMicroOverride
     );
   }
 
@@ -6292,7 +6314,10 @@
     // R50 FINAL DEPTH PRIORITY:
     // Tiny lower-Neuenstein overlap strip wins FIRST.
     // Outside it, Hubacker Hof keeps its old priority exactly.
-    if (playerInNeuensteinLowerFrontOverride()) {
+    if (
+      playerInNeuensteinGateFrontMicroOverride() ||
+      playerInNeuensteinLowerFrontOverride()
+    ) {
       playerEl.style.zIndex = "120";
     } else if (playerBehindHubackerHof()) {
       playerEl.style.zIndex = "5";
