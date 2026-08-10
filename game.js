@@ -4315,13 +4315,46 @@
       Object.freeze([5661,3752])
     ]),
     cliffSnapDistance: 175,
-    cliffTravelSpeed: PLAYER.speed * 0.92
+    cliffTravelSpeed: PLAYER.speed * 0.92,
+
+    // R47 NEUENSTEIN: two additional WHITE W/S-only snap routes from the supplied map overlay.
+    // Both are stored TOP -> BOTTOM. W moves toward index 0; S moves toward the last point.
+    neuensteinRuinPath: Object.freeze([
+      Object.freeze([2890, 1770]),
+      Object.freeze([2868, 1990]),
+      Object.freeze([2852, 2225]),
+      Object.freeze([2835, 2470]),
+      Object.freeze([2815, 2725]),
+      Object.freeze([2795, 2985])
+    ]),
+
+    neuensteinCastlePath: Object.freeze([
+      Object.freeze([8290, 1760]),
+      Object.freeze([8280, 2150]),
+      Object.freeze([8268, 2550]),
+      Object.freeze([8255, 2960]),
+      Object.freeze([8243, 3380]),
+      Object.freeze([8233, 3800]),
+      Object.freeze([8223, 4220]),
+      Object.freeze([8208, 4580]),
+      Object.freeze([8188, 4950])
+    ]),
+
+    neuensteinSnapDistance: 185,
+    neuensteinTravelSpeed: PLAYER.speed * 0.92
   });
 
   let activeHubackerCliffPath = false;
   let hubackerCliffDistance = 0;
   let hubackerCliffSnapping = false;
   let hubackerCliffReleaseUntil = 0;
+
+  // R47: independent Neuenstein W/S snap state.
+  // Existing Hubacker river/cliff snap remains completely untouched.
+  let activeNeuensteinSnap = null; // "ruin" | "castle" | null
+  let neuensteinSnapDistance = 0;
+  let neuensteinSnapping = false;
+  let neuensteinReleaseUntil = 0;
 
   function pointInsideHubackerEllipse(x, y, ellipse) {
     const dx = (x - ellipse.cx) / ellipse.rx;
@@ -4456,6 +4489,105 @@
 
       // Deliberate outward S-release.  This places the foot anchor beyond the
       // capture tube and the cooldown prevents an immediate next-frame regrab.
+      playerY += 96;
+    }
+
+    return true;
+  }
+
+  // R47 MAP 4 — ALT-NEUENSTEIN + NEUENSTEIN vertical WHITE snap routes.
+  function neuensteinPathFor(id) {
+    if (id === "ruin") return HUBACKER_TERRAIN.neuensteinRuinPath;
+    if (id === "castle") return HUBACKER_TERRAIN.neuensteinCastlePath;
+    return null;
+  }
+
+  function tryEngageNeuensteinSnap(dx, dy) {
+    if (MAP.id !== "hubacker" || activeNeuensteinSnap) return false;
+    if (performance.now() < neuensteinReleaseUntil) return false;
+
+    // WHITE routes are W/S ONLY. A/D never captures them.
+    const verticalDirection = dy < 0 ? -1 : dy > 0 ? 1 : 0;
+    if (!verticalDirection) return false;
+
+    let best = null;
+    for (const id of ["ruin", "castle"]) {
+      const path = neuensteinPathFor(id);
+      const closest = closestPointOnBridgePath(playerX, playerY, path);
+      if (!closest || closest.distance > HUBACKER_TERRAIN.neuensteinSnapDistance) continue;
+      if (!best || closest.distance < best.closest.distance) {
+        best = { id, path, closest };
+      }
+    }
+
+    if (!best) return false;
+
+    activeNeuensteinSnap = best.id;
+    neuensteinSnapDistance = best.closest.pathDistance;
+    neuensteinSnapping = true;
+    clearIceVelocity();
+    updateIceVisual();
+    return true;
+  }
+
+  function moveAlongNeuensteinSnap(dx, dy, deltaSeconds) {
+    if (!activeNeuensteinSnap) return false;
+
+    const path = neuensteinPathFor(activeNeuensteinSnap);
+    if (!path) {
+      activeNeuensteinSnap = null;
+      neuensteinSnapping = false;
+      return false;
+    }
+
+    const closest = closestPointOnBridgePath(playerX, playerY, path);
+
+    if (neuensteinSnapping && closest) {
+      const pull = Math.min(1, 10 * deltaSeconds);
+      playerX += (closest.x - playerX) * pull;
+      playerY += (closest.y - playerY) * pull;
+
+      if (closest.distance <= 7) {
+        playerX = closest.x;
+        playerY = closest.y;
+        neuensteinSnapDistance = closest.pathDistance;
+        neuensteinSnapping = false;
+      }
+      return true;
+    }
+
+    // Captured: ONLY W/S works. A/D and diagonal horizontal input have no effect.
+    const verticalDirection = dy < 0 ? -1 : dy > 0 ? 1 : 0;
+    if (!verticalDirection) return true;
+
+    const metrics = getPathMetrics(path);
+    const nextDistance = Math.max(
+      0,
+      Math.min(
+        metrics.total,
+        neuensteinSnapDistance +
+          verticalDirection *
+          HUBACKER_TERRAIN.neuensteinTravelSpeed *
+          deltaSeconds
+      )
+    );
+
+    const p = pointAtBridgeDistance(path, nextDistance);
+    playerX = p.x;
+    playerY = p.y;
+    neuensteinSnapDistance = nextDistance;
+
+    // TOP: hard lock. W can never release upward; only S can return.
+    if (nextDistance <= 0.001 && verticalDirection < 0) {
+      neuensteinSnapDistance = 0;
+      return true;
+    }
+
+    // BOTTOM: S cleanly releases into free movement, matching the existing cliff snap.
+    if (nextDistance >= metrics.total - 0.001 && verticalDirection > 0) {
+      activeNeuensteinSnap = null;
+      neuensteinSnapping = false;
+      neuensteinReleaseUntil = performance.now() + 520;
       playerY += 96;
     }
 
@@ -5088,6 +5220,22 @@
     if (MAP.id !== "hubacker" && activeHubackerCliffPath) {
       activeHubackerCliffPath = false;
       hubackerCliffSnapping = false;
+    }
+
+    if (MAP.id !== "hubacker" && activeNeuensteinSnap) {
+      activeNeuensteinSnap = null;
+      neuensteinSnapping = false;
+    }
+
+    // R47 MAP 4: the two WHITE Neuenstein W/S-only snap routes.
+    // They own movement completely while active; A/D cannot drift off the line.
+    if (
+      MAP.id === "hubacker" &&
+      (activeNeuensteinSnap || tryEngageNeuensteinSnap(dx, dy))
+    ) {
+      moveAlongNeuensteinSnap(dx, dy, deltaSeconds);
+      clampPlayer();
+      return;
     }
 
     // R39 MAP 4: exact white-marked HUBACKER bridge snap.
@@ -5804,6 +5952,36 @@
     return !!hof && worldPointInPolygon(playerX, playerY, hof.behindZone);
   }
 
+  // R47 depth zones taken from the supplied blue/red overlay.
+  // RUIN RED remains exactly as before (player behind, z=100 vs ruin z=110).
+  // RUIN BLUE and the complete NEUENSTEIN BLUE rectangle put the player in front.
+  const HUBACKER_NEUENSTEIN_DEPTH = Object.freeze({
+    ruinFrontZone: Object.freeze([
+      Object.freeze([1405, 1245]),
+      Object.freeze([4265, 1245]),
+      Object.freeze([4265, 2720]),
+      Object.freeze([1405, 2720])
+    ]),
+    castleFrontZone: Object.freeze([
+      Object.freeze([6595, 255]),
+      Object.freeze([10030, 255]),
+      Object.freeze([10030, 4385]),
+      Object.freeze([6595, 4385])
+    ])
+  });
+
+  function playerInNeuensteinForegroundZone() {
+    if (MAP.id !== "hubacker") return false;
+    return (
+      worldPointInPolygon(
+        playerX, playerY, HUBACKER_NEUENSTEIN_DEPTH.ruinFrontZone
+      ) ||
+      worldPointInPolygon(
+        playerX, playerY, HUBACKER_NEUENSTEIN_DEPTH.castleFrontZone
+      )
+    );
+  }
+
   function isHubackerBuildingBlockedFootPoint(x, y) {
     if (MAP.id !== "hubacker") return false;
 
@@ -5873,10 +6051,18 @@
 
     if (!onHubacker || !playerEl) return;
 
-    // Hof is foreground only while the player occupies the exact BLUE zone.
-    // Outside it the player remains normal foreground; hard collision prevents
-    // him from entering the blocked lower/right Hof footprint.
-    playerEl.style.zIndex = playerBehindHubackerHof() ? "5" : "100";
+    // R47 DEPTH PRIORITY:
+    // 1) HUBACKER HOF stays EXACTLY as before: blue Hof zone -> player behind Hof.
+    // 2) RUIN blue lower zone + complete NEUENSTEIN blue zone -> player foreground.
+    // 3) Everything else keeps the old normal z=100, so the RUIN red upper zone
+    //    remains behind its z=110 artwork exactly as before.
+    if (playerBehindHubackerHof()) {
+      playerEl.style.zIndex = "5";
+    } else if (playerInNeuensteinForegroundZone()) {
+      playerEl.style.zIndex = "120";
+    } else {
+      playerEl.style.zIndex = "100";
+    }
   }
 
 
