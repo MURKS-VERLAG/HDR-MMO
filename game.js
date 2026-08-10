@@ -8190,15 +8190,17 @@
     rows: 6,
     slotCount: 36,
 
-    // Coordinates measured on the 507 x 1241 PAGE I source image.
-    // The overlay never redraws the raster; it only aligns logical slots
-    // to the already-painted cells in the supplied artwork.
-    grid: Object.freeze({
-      left: 18,
-      top: 780,
-      right: 492,
-      bottom: 1184
-    }),
+    // R66 PIXELFIX — measured directly against the painted 6x6 raster.
+    // The visible metal grid-line centers on the 507x1241 source are:
+    // X: 41,110,180,250,320,389,459
+    // Y: 782,846,913,979,1047,1114,1182
+    //
+    // Every logical slot receives the EXACT SAME 64x60 hitbox and is
+    // centered inside its painted cell. No slot touches the ornament frame.
+    slotCentersX: Object.freeze([75.5, 145, 215, 285, 354.5, 424]),
+    slotCentersY: Object.freeze([814, 879.5, 946, 1013, 1080.5, 1148]),
+    slotWidth: 64,
+    slotHeight: 60,
 
     // Invisible mouse hit areas over the painted controls.
     closeRect: Object.freeze({ x1: 430, y1: 16, x2: 490, y2: 77 }),
@@ -8335,6 +8337,7 @@
         width: 68%;
         height: 68%;
         transform: translate(-50%, -50%);
+        transform-origin: 50% 50%;
         max-width: none !important;
         max-height: none !important;
         object-fit: contain;
@@ -8349,10 +8352,11 @@
       .inventory-item__penny {
         position: absolute;
         z-index: 3;
-        left: 14%;
-        top: 14%;
-        width: 72%;
-        aspect-ratio: 1;
+        left: 50%;
+        top: 50%;
+        width: 68%;
+        height: 68%;
+        transform: translate(-50%, -50%);
         border-radius: 50%;
         background:
           radial-gradient(circle at 34% 28%, #444 0%, #171717 28%, #050505 63%, #000 100%);
@@ -8379,10 +8383,10 @@
       .inventory-item__quantity {
         position: absolute;
         z-index: 5;
-        right: 3%;
-        bottom: 3%;
+        right: 0;
+        bottom: 0;
         min-width: 24%;
-        padding: 0 3%;
+        padding: 0;
         color: #fff;
         font: 900 clamp(10px, 1.45vh, 17px)/1 Georgia, "Times New Roman", serif;
         text-align: right;
@@ -8419,17 +8423,19 @@
   }
 
   function inventorySlotRect(slotIndex) {
-    const grid = INVENTORY_CONFIG.grid;
     const col = slotIndex % INVENTORY_CONFIG.columns;
     const row = Math.floor(slotIndex / INVENTORY_CONFIG.columns);
-    const cellW = (grid.right - grid.left) / INVENTORY_CONFIG.columns;
-    const cellH = (grid.bottom - grid.top) / INVENTORY_CONFIG.rows;
+
+    const centerX = INVENTORY_CONFIG.slotCentersX[col];
+    const centerY = INVENTORY_CONFIG.slotCentersY[row];
+    const width = INVENTORY_CONFIG.slotWidth;
+    const height = INVENTORY_CONFIG.slotHeight;
 
     return {
-      x: grid.left + col * cellW,
-      y: grid.top + row * cellH,
-      width: cellW,
-      height: cellH
+      x: centerX - width / 2,
+      y: centerY - height / 2,
+      width,
+      height
     };
   }
 
