@@ -5062,6 +5062,21 @@
       x >= MAP_EXIT_CONFIG.hubackerSouthLeft.x1 &&
       x <= MAP_EXIT_CONFIG.hubackerSouthLeft.x2;
 
+    // R53 FINAL STADIUM EXIT FIX:
+    // These two lanes were already known by clampPlayer() and checkMapExit(),
+    // but canMoveFootTo() still rejected every step past MAP.height - 10.
+    // Without these flags the player could NEVER physically reach the
+    // transition threshold.
+    const inOberkirchStadiumSouthExit =
+      MAP.id === "oberkirch-zentrum" &&
+      x >= MAP_EXIT_CONFIG.oberkirchStadiumSouth.x1 &&
+      x <= MAP_EXIT_CONFIG.oberkirchStadiumSouth.x2;
+
+    const inStadiumOberkirchSouthExit =
+      MAP.id === "renchtalstadion" &&
+      x >= MAP_EXIT_CONFIG.stadiumOberkirchSouth.x1 &&
+      x <= MAP_EXIT_CONFIG.stadiumOberkirchSouth.x2;
+
     if (y < minY) {
       const oberkirchNorthLeaveFloor = Math.min(
         MAP_EXIT_CONFIG.oberkirchNorth.leaveY,
@@ -5100,7 +5115,21 @@
         inHubackerSouthExit &&
         y <= MAP.height + MAP_EXIT_CONFIG.hubackerSouthLeft.leavePadding + 80;
 
-      if (!winterbachSouthAllowed && !lautenbachSouthAllowed && !hubackerSouthAllowed) {
+      const oberkirchStadiumSouthAllowed =
+        inOberkirchStadiumSouthExit &&
+        y <= MAP.height + MAP_EXIT_CONFIG.oberkirchStadiumSouth.leavePadding + 80;
+
+      const stadiumOberkirchSouthAllowed =
+        inStadiumOberkirchSouthExit &&
+        y <= MAP.height + MAP_EXIT_CONFIG.stadiumOberkirchSouth.leavePadding + 80;
+
+      if (
+        !winterbachSouthAllowed &&
+        !lautenbachSouthAllowed &&
+        !hubackerSouthAllowed &&
+        !oberkirchStadiumSouthAllowed &&
+        !stadiumOberkirchSouthAllowed
+      ) {
         return false;
       }
     }
