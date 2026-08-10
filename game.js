@@ -163,8 +163,8 @@
     // R51 OBERKIRCH -> RENCHTALSTADION:
     // existing red south arrow / ZUSENHOFEN-side lane on MAP 1.
     oberkirchStadiumSouth: Object.freeze({
-      x1: 6750,
-      x2: 7900,
+      x1: 6500,
+      x2: 8050,
       leavePadding: 18
     }),
 
