@@ -1307,6 +1307,33 @@
     ry: 1900
   });
 
+  // R48 MAP 4 — seven wolves ONLY inside the red Neuenstein meadow polygon.
+  const HUBACKER_WOLF_HABITAT = Object.freeze({
+    mapId: "hubacker",
+    count: 7,
+    canExitTop: false,
+    polygon: Object.freeze([
+      Object.freeze([7565, 376]),
+      Object.freeze([6325, 586]),
+      Object.freeze([5847, 924]),
+      Object.freeze([5759, 1390]),
+      Object.freeze([6212, 3468]),
+      Object.freeze([6583, 3531]),
+      Object.freeze([6457, 2116]),
+      Object.freeze([6671, 1906]),
+      Object.freeze([6999, 1638])
+    ])
+  });
+
+  // R48 PINK rectangle: while a HUBACKER wolf stands here,
+  // NEUENSTEIN is explicitly foreground for that wolf.
+  const HUBACKER_WOLF_NEUENSTEIN_FOREGROUND = Object.freeze([
+    Object.freeze([6218, 198]),
+    Object.freeze([9057, 198]),
+    Object.freeze([9057, 1931]),
+    Object.freeze([6218, 1931])
+  ]);
+
   let wolfActors = [];
   let nextWolfHowlAt = 0;
   const wolfHowlAudio = new Audio(WOLF_CONFIG.howlSound);
@@ -1364,8 +1391,30 @@
     document.head.appendChild(style);
   }
 
+  function wolfPolygonContains(x, y, polygon) {
+    let inside = false;
+    for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+      const xi = polygon[i][0];
+      const yi = polygon[i][1];
+      const xj = polygon[j][0];
+      const yj = polygon[j][1];
+      const intersect =
+        ((yi > y) !== (yj > y)) &&
+        (x < ((xj - xi) * (y - yi)) / ((yj - yi) || 0.000001) + xi);
+      if (intersect) inside = !inside;
+    }
+    return inside;
+  }
+
   function wolfPointInsideHabitat(x, y, habitat = WOLF_CONFIG.habitat) {
     const h = habitat;
+
+    // R48: HUBACKER uses the exact red polygon; all previous ellipse habitats
+    // retain their original behaviour unchanged.
+    if (h.polygon) {
+      return wolfPolygonContains(x, y, h.polygon);
+    }
+
     const dx = (x - h.cx) / h.rx;
     const dy = (y - h.cy) / h.ry;
     return dx * dx + dy * dy <= 1;
@@ -1373,6 +1422,30 @@
 
   function wolfRandomPoint(inset = 90, habitat = WOLF_CONFIG.habitat, mapId = WOLF_CONFIG.mapId) {
     const h = habitat;
+
+    if (h.polygon) {
+      const xs = h.polygon.map((p) => p[0]);
+      const ys = h.polygon.map((p) => p[1]);
+      const minX = Math.min(...xs);
+      const maxX = Math.max(...xs);
+      const minY = Math.min(...ys);
+      const maxY = Math.max(...ys);
+
+      for (let i = 0; i < 400; i += 1) {
+        const x = minX + inset + Math.random() * Math.max(1, maxX - minX - inset * 2);
+        const y = minY + inset + Math.random() * Math.max(1, maxY - minY - inset * 2);
+
+        if (wolfPointInsideHabitat(x, y, habitat)) {
+          return { x, y };
+        }
+      }
+
+      // Safe polygon fallback near its visual center.
+      return {
+        x: (minX + maxX) / 2,
+        y: (minY + maxY) / 2
+      };
+    }
 
     for (let i = 0; i < 120; i += 1) {
       const angle = Math.random() * Math.PI * 2;
@@ -1653,6 +1726,17 @@
       );
     }
 
+    for (let i = 0; i < HUBACKER_WOLF_HABITAT.count; i += 1) {
+      wolfActors.push(
+        createWolfActor(
+          i,
+          HUBACKER_WOLF_HABITAT.mapId,
+          HUBACKER_WOLF_HABITAT,
+          HUBACKER_WOLF_HABITAT.canExitTop
+        )
+      );
+    }
+
     nextWolfHowlAt = performance.now() + WOLF_CONFIG.howlInterval;
   }
 
@@ -1661,6 +1745,20 @@
 
     for (const actor of wolfActors) {
       actor.element.style.display = actor.mapId === MAP.id ? "" : "none";
+
+      // R48 HUBACKER wolf depth:
+      // Outside the pink Neuenstein overlap wolves remain above the castle artwork;
+      // inside the pink rectangle the castle is foreground and hides them.
+      if (actor.mapId === "hubacker") {
+        const behindNeuenstein = wolfPolygonContains(
+          actor.x,
+          actor.y,
+          HUBACKER_WOLF_NEUENSTEIN_FOREGROUND
+        );
+        actor.element.style.zIndex = behindNeuenstein ? "5" : "111";
+      } else {
+        actor.element.style.zIndex = "5";
+      }
     }
 
     if (!activeActors.length) return;
@@ -2148,6 +2246,18 @@
         polygon: [
           [8550,3500],[9100,3300],[9700,3380],[10000,3700],
           [10000,5200],[9570,5400],[8950,5250],[8500,4850]
+        ]
+      },
+      {
+        id: "hubacker-boar-fields",
+        mapId: "hubacker",
+        count: 2,
+        exits: [],
+        polygon: [
+          [1674, 3480],
+          [434, 4978],
+          [2335, 5858],
+          [3493, 4213]
         ]
       }
     ])
@@ -2651,8 +2761,13 @@
 
       if (now < actor.pauseUntil) continue;
 
-      // Rarely leave through the only open side: right map edge.
-      if (Math.random() < 0.10) {
+      // Rarely leave only when this zone explicitly has an open RIGHT edge.
+      // R48 HUBACKER farm has exits: [] and is therefore strictly enclosed.
+      if (
+        actor.zone.exits &&
+        actor.zone.exits.includes("right") &&
+        Math.random() < 0.10
+      ) {
         boarStartRightExit(actor, now);
       } else {
         boarChooseShortMove(actor, now);
@@ -2802,6 +2917,18 @@
       ],
       exits: ["left"],
       count: 6
+    },
+    {
+      id: "hubacker-rabbits-fields",
+      mapId: "hubacker",
+      polygon: [
+        [1674, 3480],
+        [434, 4978],
+        [2335, 5858],
+        [3493, 4213]
+      ],
+      exits: [],
+      count: 3
     }
   ]);
 
@@ -3768,6 +3895,23 @@
       return {
         x: cx + Math.cos(angle) * rx * radius,
         y: cy + Math.sin(angle) * ry * radius
+      };
+    }
+
+    if (MAP.id === "hubacker") {
+      // R48: HUBACKER mole may spawn ONLY inside one of the two marked blue circles.
+      // Choose a circle first, then distribute uniformly inside that circle.
+      const circles = [
+        { cx: 894, cy: 1766, rx: 176, ry: 178 },
+        { cx: 5463, cy: 931, rx: 126, ry: 127 }
+      ];
+      const circle = circles[Math.floor(Math.random() * circles.length)];
+      const angle = Math.random() * Math.PI * 2;
+      const radius = Math.sqrt(Math.random());
+
+      return {
+        x: circle.cx + Math.cos(angle) * circle.rx * radius,
+        y: circle.cy + Math.sin(angle) * circle.ry * radius
       };
     }
 
