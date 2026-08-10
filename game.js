@@ -7205,30 +7205,16 @@
         transform: translateY(-1px);
       }
 
-      .inventory-hotspot--page-1::after {
-        content: "I";
-        font-family: Georgia, "Times New Roman", serif;
-        font-size: 39px;
-        font-weight: 500;
-      }
-
+      .inventory-hotspot--page-1::after,
       .inventory-hotspot--page-2::after {
-        content: "II";
-        font-family: Georgia, "Times New Roman", serif;
-        font-size: 39px;
-        font-weight: 500;
-        letter-spacing: 2px;
+        content: none;
+        display: none;
       }
 
-      .inventory-hotspot:hover::after,
-      .inventory-hotspot:focus-visible::after {
+
+      .inventory-hotspot--close:hover::after,
+      .inventory-hotspot--close:focus-visible::after {
         opacity: .82;
-      }
-
-      /* Active tab is already painted bright in the supplied artwork.
-         Do not paint an extra hover glyph over the active Roman numeral. */
-      .inventory-hotspot[aria-current="page"]::after {
-        opacity: 0 !important;
       }
 
       .inventory-slots-layer {
