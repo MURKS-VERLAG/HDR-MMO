@@ -1351,7 +1351,11 @@
       "assets/animals/wolves/WOLF WALK 2.png"
     ]),
     howlFrame: "assets/animals/wolves/WOLF HOWL.png",
+    deadFrame: "assets/animals/wolves/WOLF DEAD.png",
     howlSound: "assets/audio/wolves/WOLF HOWL.mp3",
+    maxHp: 750,
+    deadDuration: 6500,
+    fadeDuration: 420,
     count: 5,
     // R17: one tick larger.
     // R18: another very small size increase.
@@ -1434,8 +1438,13 @@
         will-change: left, top, opacity;
       }
 
-      .map-wolf--away {
+      .map-wolf--away,
+      .map-wolf--death-fading {
         opacity: 0;
+      }
+
+      .map-wolf--critical-hit {
+        transition: left 210ms ease-out, top 210ms cubic-bezier(.1,.75,.25,1), opacity 420ms ease !important;
       }
 
       .map-wolf__sprite {
@@ -1641,7 +1650,7 @@
 
   function wolfSetHowl(actor, now, delay) {
     window.setTimeout(() => {
-      if (!actor || !actor.ready || actor.away || MAP.id !== actor.mapId) return;
+      if (!actor || !actor.ready || actor.away || actor.dead || MAP.id !== actor.mapId) return;
 
       actor.howling = true;
       actor.moving = false;
@@ -1700,8 +1709,15 @@
     imageHowl.draggable = false;
     imageHowl.decoding = "async";
 
-    // All three sources exist permanently before the wolf ever animates.
-    element.append(imageA, imageB, imageHowl);
+    const imageDead = document.createElement("img");
+    imageDead.className = "map-wolf__sprite";
+    imageDead.src = encodeURI(WOLF_CONFIG.deadFrame);
+    imageDead.alt = "";
+    imageDead.draggable = false;
+    imageDead.decoding = "async";
+
+    // Walk 1 / Walk 2 / Howl / KO are all permanently loaded.
+    element.append(imageA, imageB, imageHowl, imageDead);
     world.appendChild(element);
 
     const actor = {
@@ -1709,8 +1725,13 @@
       mapId,
       habitat,
       canExitTop,
-      images: [imageA, imageB, imageHowl],
+      images: [imageA, imageB, imageHowl, imageDead],
       visibleLayer: 0,
+      hp: WOLF_CONFIG.maxHp,
+      dead: false,
+      respawnAt: 0,
+      fadeAt: 0,
+      fadeStarted: false,
       frameIndex: 0,
       x: start.x,
       y: start.y,
@@ -1776,7 +1797,7 @@
   function createWolves() {
     installWolfStyles();
 
-    for (const src of [...WOLF_CONFIG.frames, WOLF_CONFIG.howlFrame]) {
+    for (const src of [...WOLF_CONFIG.frames, WOLF_CONFIG.howlFrame, WOLF_CONFIG.deadFrame]) {
       const image = new Image();
       image.decoding = "async";
       image.src = encodeURI(src);
@@ -1843,6 +1864,15 @@
 
     for (const actor of activeActors) {
       if (!actor.ready) continue;
+
+      if (actor.dead) {
+        if (!actor.fadeStarted && actor.fadeAt && now >= actor.fadeAt) {
+          actor.fadeStarted = true;
+          actor.element.classList.add("map-wolf--death-fading");
+        }
+        if (actor.respawnAt && now >= actor.respawnAt) respawnWolf(actor, now);
+        continue;
+      }
 
       if (actor.away) {
         if (now >= actor.returnAt) wolfReturn(actor, now);
@@ -2250,6 +2280,10 @@
 
     idleFrame: "assets/animals/boars/WILDSCHWEIN STAND.png",
     runFrame: "assets/animals/boars/WILDSCHWEIN LAUF.png",
+    deadFrame: "assets/animals/boars/WILDSCHWEIN DEAD.png",
+    maxHp: 500,
+    deadDuration: 6500,
+    fadeDuration: 420,
 
     sounds: Object.freeze([
       "assets/audio/boars/WILDSCHWEIN 1.mp3",
@@ -2366,8 +2400,13 @@
         will-change: left, top, opacity;
       }
 
-      .map-boar--away {
+      .map-boar--away,
+      .map-boar--death-fading {
         opacity: 0;
+      }
+
+      .map-boar--critical-hit {
+        transition: left 210ms ease-out, top 210ms cubic-bezier(.1,.75,.25,1), opacity 420ms ease !important;
       }
 
       .map-boar__sprite {
@@ -2648,13 +2687,25 @@
     runImage.draggable = false;
     runImage.decoding = "async";
 
-    element.append(idleImage, runImage);
+    const deadImage = document.createElement("img");
+    deadImage.className = "map-boar__sprite";
+    deadImage.src = encodeURI(BOAR_CONFIG.deadFrame);
+    deadImage.alt = "";
+    deadImage.draggable = false;
+    deadImage.decoding = "async";
+
+    element.append(idleImage, runImage, deadImage);
     world.appendChild(element);
 
     const actor = {
       element,
-      images: [idleImage, runImage],
+      images: [idleImage, runImage, deadImage],
       visibleLayer: 0,
+      hp: BOAR_CONFIG.maxHp,
+      dead: false,
+      respawnAt: 0,
+      fadeAt: 0,
+      fadeStarted: false,
       zone,
       x: start.x,
       y: start.y,
@@ -2710,7 +2761,7 @@
   function createBoars() {
     installBoarStyles();
 
-    for (const src of [BOAR_CONFIG.idleFrame, BOAR_CONFIG.runFrame]) {
+    for (const src of [BOAR_CONFIG.idleFrame, BOAR_CONFIG.runFrame, BOAR_CONFIG.deadFrame]) {
       const image = new Image();
       image.decoding = "async";
       image.src = encodeURI(src);
@@ -2736,7 +2787,7 @@
     const nearby = boarActors.filter((actor) => {
       const actorMapId = actor.zone.mapId || BOAR_CONFIG.mapId;
       if (actorMapId !== MAP.id) return false;
-      if (!actor.ready || actor.away) return false;
+      if (!actor.ready || actor.away || actor.dead) return false;
       return (
         Math.hypot(playerX - actor.x, playerY - actor.y) <=
         BOAR_CONFIG.soundDistance
@@ -2786,6 +2837,15 @@
       const actorMapId = actor.zone.mapId || BOAR_CONFIG.mapId;
       if (actorMapId !== MAP.id) continue;
       if (!actor.ready) continue;
+
+      if (actor.dead) {
+        if (!actor.fadeStarted && actor.fadeAt && now >= actor.fadeAt) {
+          actor.fadeStarted = true;
+          actor.element.classList.add("map-boar--death-fading");
+        }
+        if (actor.respawnAt && now >= actor.respawnAt) respawnBoar(actor, now);
+        continue;
+      }
 
       if (actor.away) {
         if (now >= actor.returnAt) {
@@ -3670,6 +3730,169 @@
     }
 
     rabbitForceEscape(actor, now);
+  }
+
+  // ------------------------------------------------------------------
+  // R63 LARGE ANIMAL COMBAT — WOLF + WILDSCHWEIN
+  // Same player damage table / same directional strike geometry as rabbits.
+  // ------------------------------------------------------------------
+  function largeAnimalCriticalKnockback(actor, direction, cssClass) {
+    actor.element.classList.add(cssClass);
+
+    let knockX = 0;
+    let knockY = -45;
+    if (direction === "right") knockX = 190;
+    else if (direction === "left") knockX = -190;
+    else knockY = 185;
+
+    actor.x += knockX;
+    actor.y += knockY;
+    actor.element.style.left = `${actor.x}px`;
+    actor.element.style.top = `${actor.y}px`;
+
+    window.setTimeout(() => actor.element.classList.remove(cssClass), 240);
+  }
+
+  function killWolf(actor, now) {
+    if (!actor || actor.dead) return;
+    actor.dead = true;
+    actor.hp = 0;
+    actor.moving = false;
+    actor.exiting = false;
+    actor.entering = false;
+    actor.away = false;
+    actor.howling = false;
+    actor.pauseUntil = Infinity;
+    actor.nextDecision = Infinity;
+    actor.nextFrameAt = Infinity;
+    actor.element.classList.remove("map-wolf--away");
+    actor.element.classList.remove("map-wolf--death-fading");
+    wolfShowStaticLayer(actor, 3);
+    actor.fadeStarted = false;
+    actor.respawnAt = now + WOLF_CONFIG.deadDuration;
+    actor.fadeAt = actor.respawnAt - WOLF_CONFIG.fadeDuration;
+  }
+
+  function respawnWolf(actor, now) {
+    const start = wolfRandomPoint(180, actor.habitat, actor.mapId);
+    actor.hp = WOLF_CONFIG.maxHp;
+    actor.dead = false;
+    actor.away = false;
+    actor.exiting = false;
+    actor.entering = false;
+    actor.moving = false;
+    actor.howling = false;
+    actor.x = start.x;
+    actor.y = start.y;
+    actor.targetX = start.x;
+    actor.targetY = start.y;
+    actor.respawnAt = 0;
+    actor.fadeAt = 0;
+    actor.fadeStarted = false;
+    actor.pauseUntil = now + 600 + Math.random() * 1600;
+    actor.nextDecision = actor.pauseUntil;
+    actor.nextFrameAt = now + WOLF_CONFIG.frameDuration;
+    actor.frameIndex = 0;
+    actor.element.classList.remove("map-wolf--death-fading", "map-wolf--critical-hit", "map-wolf--away");
+    actor.element.style.left = `${actor.x}px`;
+    actor.element.style.top = `${actor.y}px`;
+    wolfShowStaticLayer(actor, 0);
+  }
+
+  function damageWolf(actor, amount, critical, direction, now) {
+    if (!actor || actor.dead || actor.away) return;
+    actor.hp = Math.max(0, actor.hp - amount);
+    createRabbitDamageText(actor, amount, critical);
+    playRabbitHitSound();
+    actor.moving = false;
+    actor.howling = false;
+    if (critical) {
+      createRabbitDust(actor);
+      largeAnimalCriticalKnockback(actor, direction, "map-wolf--critical-hit");
+    }
+    if (actor.hp <= 0) killWolf(actor, now);
+    else {
+      actor.pauseUntil = now + 250;
+      actor.nextDecision = now + 250;
+    }
+  }
+
+  function resolveWolfAttackFrame(frame) {
+    if (!frame || !frame.hit) return;
+    const direction = rabbitAttackDirection();
+    const now = performance.now();
+    for (const actor of wolfActors) {
+      if (actor.mapId !== MAP.id || actor.dead || actor.away || !actor.ready) continue;
+      if (!rabbitInsideAttackHitbox(actor, direction)) continue;
+      damageWolf(actor, frame.damage || 20, Boolean(frame.critical), direction, now);
+    }
+  }
+
+  function killBoar(actor, now) {
+    if (!actor || actor.dead) return;
+    actor.dead = true;
+    actor.hp = 0;
+    actor.moving = false;
+    actor.exiting = false;
+    actor.entering = false;
+    actor.away = false;
+    actor.pauseUntil = Infinity;
+    actor.moveEndAt = 0;
+    actor.element.classList.remove("map-boar--away");
+    actor.element.classList.remove("map-boar--death-fading");
+    boarShowLayer(actor, 2);
+    actor.fadeStarted = false;
+    actor.respawnAt = now + BOAR_CONFIG.deadDuration;
+    actor.fadeAt = actor.respawnAt - BOAR_CONFIG.fadeDuration;
+  }
+
+  function respawnBoar(actor, now) {
+    const start = boarRandomPoint(actor.zone, 130);
+    actor.hp = BOAR_CONFIG.maxHp;
+    actor.dead = false;
+    actor.away = false;
+    actor.exiting = false;
+    actor.entering = false;
+    actor.moving = false;
+    actor.x = start.x;
+    actor.y = start.y;
+    actor.targetX = start.x;
+    actor.targetY = start.y;
+    actor.respawnAt = 0;
+    actor.fadeAt = 0;
+    actor.fadeStarted = false;
+    actor.pauseUntil = now + 700 + Math.random() * 1800;
+    actor.moveEndAt = 0;
+    actor.element.classList.remove("map-boar--death-fading", "map-boar--critical-hit", "map-boar--away");
+    actor.element.style.left = `${actor.x}px`;
+    actor.element.style.top = `${actor.y}px`;
+    boarShowLayer(actor, 0);
+  }
+
+  function damageBoar(actor, amount, critical, direction, now) {
+    if (!actor || actor.dead || actor.away) return;
+    actor.hp = Math.max(0, actor.hp - amount);
+    createRabbitDamageText(actor, amount, critical);
+    playRabbitHitSound();
+    actor.moving = false;
+    if (critical) {
+      createRabbitDust(actor);
+      largeAnimalCriticalKnockback(actor, direction, "map-boar--critical-hit");
+    }
+    if (actor.hp <= 0) killBoar(actor, now);
+    else boarStartPause(actor, now);
+  }
+
+  function resolveBoarAttackFrame(frame) {
+    if (!frame || !frame.hit) return;
+    const direction = rabbitAttackDirection();
+    const now = performance.now();
+    for (const actor of boarActors) {
+      const actorMapId = actor.zone.mapId || BOAR_CONFIG.mapId;
+      if (actorMapId !== MAP.id || actor.dead || actor.away || !actor.ready) continue;
+      if (!rabbitInsideAttackHitbox(actor, direction)) continue;
+      damageBoar(actor, frame.damage || 20, Boolean(frame.critical), direction, now);
+    }
   }
 
   function resolveRabbitAttackFrame(frame) {
@@ -7920,6 +8143,7 @@
 
       .inventory-panel__image {
         position: absolute;
+        z-index: 1;
         inset: 0;
         width: 100%;
         height: 100%;
@@ -7979,29 +8203,44 @@
 
       .inventory-slots-layer {
         position: absolute;
+        z-index: 4;
         inset: 0;
         pointer-events: none;
       }
 
       .inventory-item {
         position: absolute;
-        display: grid;
-        place-items: center;
+        z-index: 1;
+        display: block;
         pointer-events: auto;
         box-sizing: border-box;
-        padding: 8%;
+        padding: 0;
+        overflow: visible;
       }
 
       .inventory-item__icon {
+        position: absolute;
+        z-index: 3;
+        left: 14%;
+        top: 14%;
         width: 72%;
         height: 72%;
+        max-width: none !important;
+        max-height: none !important;
         object-fit: contain;
         object-position: 50% 50%;
-        display: block;
+        display: block !important;
+        opacity: 1 !important;
+        visibility: visible !important;
+        pointer-events: none;
+        filter: drop-shadow(0 2px 2px rgba(0,0,0,.7));
       }
 
       .inventory-item__penny {
-        position: relative;
+        position: absolute;
+        z-index: 3;
+        left: 14%;
+        top: 14%;
         width: 72%;
         aspect-ratio: 1;
         border-radius: 50%;
@@ -8029,6 +8268,7 @@
 
       .inventory-item__quantity {
         position: absolute;
+        z-index: 5;
         right: 10%;
         bottom: 7%;
         min-width: 24%;
@@ -8127,6 +8367,11 @@
         icon.src = encodeURI(stack.icon);
         icon.alt = "";
         icon.draggable = false;
+        icon.width = 64;
+        icon.height = 64;
+        icon.addEventListener("error", () => {
+          console.warn("Inventory icon failed to load:", stack.icon);
+        });
         item.appendChild(icon);
       }
 
@@ -9270,6 +9515,8 @@
 
     setSprite(attackSequence[0].sprite);
     resolveRabbitAttackFrame(attackSequence[0]);
+    resolveWolfAttackFrame(attackSequence[0]);
+    resolveBoarAttackFrame(attackSequence[0]);
     resolveMoleAttackFrame(attackSequence[0]);
   }
 
@@ -9302,7 +9549,9 @@
           startAttackSound();
           setSprite(attackSequence[0].sprite);
           resolveRabbitAttackFrame(attackSequence[0]);
-    resolveMoleAttackFrame(attackSequence[0]);
+          resolveWolfAttackFrame(attackSequence[0]);
+          resolveBoarAttackFrame(attackSequence[0]);
+          resolveMoleAttackFrame(attackSequence[0]);
         } else {
           finishAttackState();
         }
@@ -9311,6 +9560,8 @@
 
       setSprite(attackSequence[attackStep].sprite);
       resolveRabbitAttackFrame(attackSequence[attackStep]);
+      resolveWolfAttackFrame(attackSequence[attackStep]);
+      resolveBoarAttackFrame(attackSequence[attackStep]);
       resolveMoleAttackFrame(attackSequence[attackStep]);
     }
   }
