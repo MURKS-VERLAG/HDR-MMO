@@ -3446,6 +3446,57 @@
     audio.play().catch(() => {});
   }
 
+  // R64 LARGE ANIMAL HIT AUDIO — species-specific, interruptible.
+  const WOLF_HIT_SOUNDS = Object.freeze([
+    "assets/audio/wolves/WOLF HIT 1.mp3",
+    "assets/audio/wolves/WOLF HIT 2.mp3",
+    "assets/audio/wolves/WOLF HIT 3.mp3"
+  ]);
+  const BOAR_HIT_SOUNDS = Object.freeze([
+    "assets/audio/boars/WILDSCHWEIN HIT 1.mp3",
+    "assets/audio/boars/WILDSCHWEIN HIT 2.mp3",
+    "assets/audio/boars/WILDSCHWEIN HIT 3.mp3"
+  ]);
+
+  let activeWolfHitAudio = null;
+  let activeBoarHitAudio = null;
+  let wolfHitFadeToken = 0;
+  let boarHitFadeToken = 0;
+
+  function playInterruptibleAnimalHitSound(kind) {
+    const isWolf = kind === "wolf";
+    const sounds = isWolf ? WOLF_HIT_SOUNDS : BOAR_HIT_SOUNDS;
+    const old = isWolf ? activeWolfHitAudio : activeBoarHitAudio;
+    const token = isWolf ? ++wolfHitFadeToken : ++boarHitFadeToken;
+
+    // A new hit must sound immediately. The previous cry fades out very fast.
+    if (old && !old.paused) {
+      const startVolume = old.volume;
+      const startedAt = performance.now();
+      const fadeMs = 85;
+      const fade = (now) => {
+        const currentToken = isWolf ? wolfHitFadeToken : boarHitFadeToken;
+        if (token !== currentToken) return;
+        const t = Math.min(1, (now - startedAt) / fadeMs);
+        old.volume = Math.max(0, startVolume * (1 - t));
+        if (t < 1) requestAnimationFrame(fade);
+        else { old.pause(); old.currentTime = 0; old.volume = 1; }
+      };
+      requestAnimationFrame(fade);
+    }
+
+    const audio = new Audio(sounds[Math.floor(Math.random() * sounds.length)]);
+    audio.preload = "auto";
+    audio.loop = false;
+    audio.volume = 1.0;
+    if (isWolf) activeWolfHitAudio = audio;
+    else activeBoarHitAudio = audio;
+    audio.play().catch(() => {});
+  }
+
+  function playWolfHitSound() { playInterruptibleAnimalHitSound("wolf"); }
+  function playBoarHitSound() { playInterruptibleAnimalHitSound("boar"); }
+
   function rabbitAttackDirection() {
     if (attackSequence === ATTACK_DOWN) return "down";
     if (attackSequence === ATTACK_LEFT) return "left";
@@ -3803,7 +3854,7 @@
     if (!actor || actor.dead || actor.away) return;
     actor.hp = Math.max(0, actor.hp - amount);
     createRabbitDamageText(actor, amount, critical);
-    playRabbitHitSound();
+    playWolfHitSound();
     actor.moving = false;
     actor.howling = false;
     if (critical) {
@@ -3873,7 +3924,7 @@
     if (!actor || actor.dead || actor.away) return;
     actor.hp = Math.max(0, actor.hp - amount);
     createRabbitDamageText(actor, amount, critical);
-    playRabbitHitSound();
+    playBoarHitSound();
     actor.moving = false;
     if (critical) {
       createRabbitDust(actor);
@@ -8221,10 +8272,11 @@
       .inventory-item__icon {
         position: absolute;
         z-index: 3;
-        left: 14%;
-        top: 14%;
-        width: 72%;
-        height: 72%;
+        left: 50%;
+        top: 50%;
+        width: 68%;
+        height: 68%;
+        transform: translate(-50%, -50%);
         max-width: none !important;
         max-height: none !important;
         object-fit: contain;
@@ -8269,8 +8321,8 @@
       .inventory-item__quantity {
         position: absolute;
         z-index: 5;
-        right: 10%;
-        bottom: 7%;
+        right: 3%;
+        bottom: 3%;
         min-width: 24%;
         padding: 0 3%;
         color: #fff;
