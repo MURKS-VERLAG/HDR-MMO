@@ -29,6 +29,13 @@
       image: "assets/maps/MAP 4 HUBACKER.jpg",
       width: 10240,
       height: 6827
+    }),
+    renchtalstadion: Object.freeze({
+      id: "renchtalstadion",
+      name: "RENCHTALSTADION",
+      image: "assets/maps/MAP 5 RENCHTALSTADION.jpg",
+      width: 10240,
+      height: 5763
     })
   });
 
@@ -151,6 +158,33 @@
     lautenbachNorthLeftReturnSpawn: Object.freeze({
       x: 5325,
       y: 165
+    }),
+
+    // R51 OBERKIRCH -> RENCHTALSTADION:
+    // existing red south arrow / ZUSENHOFEN-side lane on MAP 1.
+    oberkirchStadiumSouth: Object.freeze({
+      x1: 6750,
+      x2: 7900,
+      leavePadding: 18
+    }),
+
+    // Yellow-square arrival inside the stadium, directly above the main south gate.
+    stadiumFromOberkirchSpawn: Object.freeze({
+      x: 5120,
+      y: 4740
+    }),
+
+    // Red-arrow stadium return lane through the main bottom gate.
+    stadiumOberkirchSouth: Object.freeze({
+      x1: 4580,
+      x2: 5660,
+      leavePadding: 18
+    }),
+
+    // Return to the matching red-arrow lane at the bottom of OBERKIRCH.
+    oberkirchFromStadiumSpawn: Object.freeze({
+      x: 7310,
+      y: 6490
     })
   });
 
@@ -313,7 +347,9 @@
     "winterbach-ranglehen": "assets/audio/maps/WINTERBACH - FROSTBOUND BALLAD.mp3",
     "lautenbach": "assets/audio/maps/LAUTENBACH - FROSTBOUND BALLAD.mp3",
     // R38: no new Hubacker music was requested; keep the Lautenbach regional track.
-    "hubacker": "assets/audio/maps/LAUTENBACH - FROSTBOUND BALLAD.mp3"
+    "hubacker": "assets/audio/maps/LAUTENBACH - FROSTBOUND BALLAD.mp3",
+    // R51 stadium is directly south of Oberkirch and keeps the Oberkirch regional track.
+    "renchtalstadion": "assets/audio/THE WEEPING STONE.mp3"
   });
 
   const MAP_MUSIC_VOLUME = 1.0;
@@ -673,6 +709,35 @@
       direction: "down",
       glow: "#ffffff",
       trigger: { x1: 2400, y1: 5550, x2: 3750, y2: 6827 }
+    },
+
+    // R51 MAP 5 — RENCHTALSTADION route labels.
+    {
+      id: "stadium-oberkirch",
+      mapId: "renchtalstadion",
+      text: "OBERKIRCH",
+      x: 5120, y: 5260,
+      direction: "down",
+      glow: "#ffffff",
+      trigger: { x1: 4300, y1: 4450, x2: 5900, y2: 5763 }
+    },
+    {
+      id: "stadium-nesselried",
+      mapId: "renchtalstadion",
+      text: "NESSELRIED",
+      x: 9300, y: 780,
+      direction: "right",
+      glow: "#ffffff",
+      trigger: { x1: 8550, y1: 0, x2: 10240, y2: 1700 }
+    },
+    {
+      id: "stadium-zusenhofen",
+      mapId: "renchtalstadion",
+      text: "ZUSENHOFEN",
+      x: 7860, y: 5180,
+      direction: "down",
+      glow: "#ffffff",
+      trigger: { x1: 6900, y1: 4450, x2: 8850, y2: 5763 }
     }
   ]);
 
@@ -7117,6 +7182,8 @@
       label = "LAUTENBACH";
     } else if (map.id === "hubacker") {
       label = "HUBACKER";
+    } else if (map.id === "renchtalstadion") {
+      label = "RENCHTALSTADION";
     } else if (map.id === "oberkirch-zentrum") {
       label = "OBERKIRCH";
     } else {
@@ -7311,6 +7378,22 @@
     );
   }
 
+  function playerInOberkirchStadiumSouthExitLane() {
+    return (
+      MAP.id === "oberkirch-zentrum" &&
+      playerX >= MAP_EXIT_CONFIG.oberkirchStadiumSouth.x1 &&
+      playerX <= MAP_EXIT_CONFIG.oberkirchStadiumSouth.x2
+    );
+  }
+
+  function playerInStadiumOberkirchSouthExitLane() {
+    return (
+      MAP.id === "renchtalstadion" &&
+      playerX >= MAP_EXIT_CONFIG.stadiumOberkirchSouth.x1 &&
+      playerX <= MAP_EXIT_CONFIG.stadiumOberkirchSouth.x2
+    );
+  }
+
   function checkMapExit() {
     if (mapTransitioning) return false;
 
@@ -7412,6 +7495,34 @@
       switchMap(
         MAPS.lautenbach,
         MAP_EXIT_CONFIG.lautenbachNorthLeftReturnSpawn,
+        true
+      );
+      return true;
+    }
+
+    // R51 MAP 1 red south arrow -> MAP 5 RENCHTALSTADION yellow spawn.
+    if (
+      playerInOberkirchStadiumSouthExitLane() &&
+      movingDown &&
+      playerY >= MAP.height + MAP_EXIT_CONFIG.oberkirchStadiumSouth.leavePadding
+    ) {
+      switchMap(
+        MAPS.renchtalstadion,
+        MAP_EXIT_CONFIG.stadiumFromOberkirchSpawn,
+        true
+      );
+      return true;
+    }
+
+    // R51 MAP 5 red bottom arrow -> matching south lane on OBERKIRCH.
+    if (
+      playerInStadiumOberkirchSouthExitLane() &&
+      movingDown &&
+      playerY >= MAP.height + MAP_EXIT_CONFIG.stadiumOberkirchSouth.leavePadding
+    ) {
+      switchMap(
+        MAPS.oberkirch,
+        MAP_EXIT_CONFIG.oberkirchFromStadiumSpawn,
         true
       );
       return true;
@@ -7567,7 +7678,9 @@
         playerInWinterbachSouthExitLane() ||
         playerInLautenbachSouthLeftExitLane() ||
         playerInLautenbachSouthRightExitLane() ||
-        playerInHubackerSouthLeftExitLane()
+        playerInHubackerSouthLeftExitLane() ||
+        playerInOberkirchStadiumSouthExitLane() ||
+        playerInStadiumOberkirchSouthExitLane()
       ) &&
       (keys.has("KeyS") || keys.has("ArrowDown"));
 
@@ -7608,6 +7721,10 @@
         );
       } else if (MAP.id === "hubacker") {
         leavePadding = MAP_EXIT_CONFIG.hubackerSouthLeft.leavePadding;
+      } else if (MAP.id === "oberkirch-zentrum") {
+        leavePadding = MAP_EXIT_CONFIG.oberkirchStadiumSouth.leavePadding;
+      } else if (MAP.id === "renchtalstadion") {
+        leavePadding = MAP_EXIT_CONFIG.stadiumOberkirchSouth.leavePadding;
       }
 
       playerY = Math.max(
