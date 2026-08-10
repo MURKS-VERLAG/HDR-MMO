@@ -7178,23 +7178,57 @@
         outline: none;
       }
 
+      /* R57 INVENTORY MINIFIX:
+         no rectangular hover overlay. Only the painted control glyph itself
+         (X / I / II) receives a subtle light glow. */
       .inventory-hotspot::after {
-        content: "";
         position: absolute;
-        inset: 5%;
-        border-radius: 5px;
+        inset: 0;
+        display: grid;
+        place-items: center;
         opacity: 0;
-        box-shadow:
-          inset 0 0 0 2px rgba(255,244,205,.7),
-          0 0 11px rgba(255,246,205,.82),
-          0 0 21px rgba(255,255,255,.45);
-        transition: opacity 110ms ease;
+        color: rgba(255,255,255,.96);
+        line-height: 1;
         pointer-events: none;
+        transition: opacity 110ms ease, text-shadow 110ms ease;
+        text-shadow:
+          0 0 4px rgba(255,255,255,.98),
+          0 0 9px rgba(255,246,205,.88),
+          0 0 15px rgba(255,246,205,.62);
+      }
+
+      .inventory-hotspot--close::after {
+        content: "×";
+        font-family: Georgia, "Times New Roman", serif;
+        font-size: 46px;
+        font-weight: 400;
+        transform: translateY(-1px);
+      }
+
+      .inventory-hotspot--page-1::after {
+        content: "I";
+        font-family: Georgia, "Times New Roman", serif;
+        font-size: 39px;
+        font-weight: 500;
+      }
+
+      .inventory-hotspot--page-2::after {
+        content: "II";
+        font-family: Georgia, "Times New Roman", serif;
+        font-size: 39px;
+        font-weight: 500;
+        letter-spacing: 2px;
       }
 
       .inventory-hotspot:hover::after,
       .inventory-hotspot:focus-visible::after {
-        opacity: 1;
+        opacity: .82;
+      }
+
+      /* Active tab is already painted bright in the supplied artwork.
+         Do not paint an extra hover glyph over the active Roman numeral. */
+      .inventory-hotspot[aria-current="page"]::after {
+        opacity: 0 !important;
       }
 
       .inventory-slots-layer {
@@ -7299,6 +7333,15 @@
     inventoryState.image.src = encodeURI(
       INVENTORY_CONFIG.pageImages[inventoryState.currentPage]
     );
+
+    inventoryState.pageButtons.forEach((button, index) => {
+      if (!button) return;
+      if (index === inventoryState.currentPage) {
+        button.setAttribute("aria-current", "page");
+      } else {
+        button.removeAttribute("aria-current");
+      }
+    });
 
     inventoryState.slotsLayer.replaceChildren();
 
