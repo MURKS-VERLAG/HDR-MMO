@@ -4264,6 +4264,9 @@
 
     if (!nearest) return;
 
+    // R56 INVENTORY: never delete world loot if both inventory pages are full.
+    if (!addItemToInventory(BLACK_PENNY_ITEM)) return;
+
     nearest.collected = true;
     blackPennyCount += 1;
 
@@ -7079,6 +7082,408 @@
     throw new Error("Game DOM incomplete: map/player elements missing.");
   }
 
+
+  // ------------------------------------------------------------------
+  // R56 INVENTORY V1 — two-page screen UI + BLACK PENNY pickup test.
+  // Artwork is the supplied inventory sheet split into two fixed pages.
+  // No equipment / drag-and-drop yet: this patch only establishes the
+  // reusable inventory state, page switching and automatic loot placement.
+  // ------------------------------------------------------------------
+  const INVENTORY_CONFIG = Object.freeze({
+    pageImages: Object.freeze([
+      "assets/ui/inventory/INVENTORY PAGE 1.png",
+      "assets/ui/inventory/INVENTORY PAGE 2.png"
+    ]),
+    columns: 7,
+    rows: 6,
+    slotCount: 42,
+
+    // Coordinates measured on the 507 x 1241 PAGE I source image.
+    // The overlay never redraws the raster; it only aligns logical slots
+    // to the already-painted cells in the supplied artwork.
+    grid: Object.freeze({
+      left: 18,
+      top: 780,
+      right: 492,
+      bottom: 1184
+    }),
+
+    // Invisible mouse hit areas over the painted controls.
+    closeRect: Object.freeze({ x1: 430, y1: 16, x2: 490, y2: 77 }),
+    page1Rect: Object.freeze({ x1: 18, y1: 713, x2: 246, y2: 772 }),
+    page2Rect: Object.freeze({ x1: 252, y1: 713, x2: 490, y2: 772 })
+  });
+
+  const inventoryState = {
+    open: false,
+    currentPage: 0,
+    pages: [
+      new Array(INVENTORY_CONFIG.slotCount).fill(null),
+      new Array(INVENTORY_CONFIG.slotCount).fill(null)
+    ],
+    root: null,
+    panel: null,
+    image: null,
+    slotsLayer: null,
+    closeButton: null,
+    pageButtons: []
+  };
+
+  function installInventoryStyles() {
+    if (document.getElementById("inventoryStyles")) return;
+
+    const style = document.createElement("style");
+    style.id = "inventoryStyles";
+    style.textContent = `
+      #inventoryUI {
+        position: fixed;
+        inset: 0;
+        z-index: 12000;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        pointer-events: none;
+        user-select: none;
+      }
+
+      #inventoryUI.inventory-ui--open {
+        display: flex;
+      }
+
+      .inventory-panel {
+        position: relative;
+        height: min(92vh, 1010px);
+        aspect-ratio: 507 / 1241;
+        pointer-events: auto;
+        filter: drop-shadow(0 18px 20px rgba(0,0,0,.52));
+      }
+
+      .inventory-panel__image {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        object-fit: fill;
+        pointer-events: none;
+        -webkit-user-drag: none;
+      }
+
+      .inventory-hotspot {
+        position: absolute;
+        border: 0;
+        margin: 0;
+        padding: 0;
+        background: transparent;
+        cursor: pointer;
+        outline: none;
+      }
+
+      .inventory-hotspot::after {
+        content: "";
+        position: absolute;
+        inset: 5%;
+        border-radius: 5px;
+        opacity: 0;
+        box-shadow:
+          inset 0 0 0 2px rgba(255,244,205,.7),
+          0 0 11px rgba(255,246,205,.82),
+          0 0 21px rgba(255,255,255,.45);
+        transition: opacity 110ms ease;
+        pointer-events: none;
+      }
+
+      .inventory-hotspot:hover::after,
+      .inventory-hotspot:focus-visible::after {
+        opacity: 1;
+      }
+
+      .inventory-slots-layer {
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+      }
+
+      .inventory-item {
+        position: absolute;
+        display: grid;
+        place-items: center;
+        pointer-events: auto;
+      }
+
+      .inventory-item__penny {
+        position: relative;
+        width: 61%;
+        aspect-ratio: 1;
+        border-radius: 50%;
+        background:
+          radial-gradient(circle at 34% 28%, #444 0%, #171717 28%, #050505 63%, #000 100%);
+        border: clamp(1px, .16vh, 3px) ridge #656565;
+        box-shadow:
+          0 3px 7px rgba(0,0,0,.62),
+          inset 2px 2px 4px rgba(255,255,255,.13),
+          inset -2px -2px 5px rgba(0,0,0,.9);
+      }
+
+      .inventory-item__penny::after {
+        content: "•";
+        position: absolute;
+        inset: 0;
+        display: grid;
+        place-items: center;
+        color: #111;
+        font-family: Georgia, serif;
+        font-size: 64%;
+        font-weight: 900;
+        text-shadow: 1px 1px 0 #555;
+      }
+
+      .inventory-item__quantity {
+        position: absolute;
+        right: 10%;
+        bottom: 7%;
+        min-width: 24%;
+        padding: 0 3%;
+        color: #fff;
+        font: 900 clamp(10px, 1.45vh, 17px)/1 Georgia, "Times New Roman", serif;
+        text-align: right;
+        text-shadow:
+          -1px -1px 0 #000,
+          1px -1px 0 #000,
+          -1px 1px 0 #000,
+          1px 1px 0 #000,
+          0 2px 3px #000;
+      }
+
+      @media (max-width: 680px) {
+        .inventory-panel {
+          height: min(89vh, 900px);
+        }
+      }
+    `;
+    document.head.appendChild(style);
+  }
+
+  function inventoryPercentX(px) {
+    return (px / 507) * 100;
+  }
+
+  function inventoryPercentY(px) {
+    return (px / 1241) * 100;
+  }
+
+  function setInventoryRect(element, rect) {
+    element.style.left = `${inventoryPercentX(rect.x1)}%`;
+    element.style.top = `${inventoryPercentY(rect.y1)}%`;
+    element.style.width = `${inventoryPercentX(rect.x2 - rect.x1)}%`;
+    element.style.height = `${inventoryPercentY(rect.y2 - rect.y1)}%`;
+  }
+
+  function inventorySlotRect(slotIndex) {
+    const grid = INVENTORY_CONFIG.grid;
+    const col = slotIndex % INVENTORY_CONFIG.columns;
+    const row = Math.floor(slotIndex / INVENTORY_CONFIG.columns);
+    const cellW = (grid.right - grid.left) / INVENTORY_CONFIG.columns;
+    const cellH = (grid.bottom - grid.top) / INVENTORY_CONFIG.rows;
+
+    return {
+      x: grid.left + col * cellW,
+      y: grid.top + row * cellH,
+      width: cellW,
+      height: cellH
+    };
+  }
+
+  function renderInventory() {
+    if (!inventoryState.root || !inventoryState.image || !inventoryState.slotsLayer) return;
+
+    inventoryState.image.src = encodeURI(
+      INVENTORY_CONFIG.pageImages[inventoryState.currentPage]
+    );
+
+    inventoryState.slotsLayer.replaceChildren();
+
+    const page = inventoryState.pages[inventoryState.currentPage];
+    for (let slotIndex = 0; slotIndex < page.length; slotIndex += 1) {
+      const stack = page[slotIndex];
+      if (!stack) continue;
+
+      const rect = inventorySlotRect(slotIndex);
+      const item = document.createElement("div");
+      item.className = "inventory-item";
+      item.dataset.itemId = stack.id;
+      item.dataset.slotIndex = String(slotIndex);
+      item.style.left = `${inventoryPercentX(rect.x)}%`;
+      item.style.top = `${inventoryPercentY(rect.y)}%`;
+      item.style.width = `${inventoryPercentX(rect.width)}%`;
+      item.style.height = `${inventoryPercentY(rect.height)}%`;
+
+      // V1: the black penny is the first real inventory item.
+      if (stack.id === "black-penny") {
+        const icon = document.createElement("div");
+        icon.className = "inventory-item__penny";
+        item.appendChild(icon);
+      }
+
+      const quantity = document.createElement("span");
+      quantity.className = "inventory-item__quantity";
+      quantity.textContent = String(stack.quantity || 1);
+      item.appendChild(quantity);
+
+      inventoryState.slotsLayer.appendChild(item);
+    }
+  }
+
+  function setInventoryPage(pageIndex) {
+    const safePage = Math.max(0, Math.min(1, Number(pageIndex) || 0));
+    if (inventoryState.currentPage === safePage) return;
+    inventoryState.currentPage = safePage;
+    renderInventory();
+  }
+
+  function openInventory() {
+    if (!inventoryState.root) return;
+
+    // Every fresh I-open starts on Roman page I, as requested.
+    inventoryState.currentPage = 0;
+    inventoryState.open = true;
+    keys.clear();
+    attackHeld = false;
+    cancelAttackImmediately();
+    if (blocking) stopBlocking();
+
+    renderInventory();
+    inventoryState.root.classList.add("inventory-ui--open");
+    inventoryState.root.setAttribute("aria-hidden", "false");
+  }
+
+  function closeInventory() {
+    if (!inventoryState.root) return;
+    inventoryState.open = false;
+    keys.clear();
+    inventoryState.root.classList.remove("inventory-ui--open");
+    inventoryState.root.setAttribute("aria-hidden", "true");
+  }
+
+  function toggleInventory() {
+    if (inventoryState.open) {
+      closeInventory();
+    } else {
+      openInventory();
+    }
+  }
+
+  function findInventoryStack(itemId) {
+    for (let pageIndex = 0; pageIndex < inventoryState.pages.length; pageIndex += 1) {
+      const page = inventoryState.pages[pageIndex];
+      for (let slotIndex = 0; slotIndex < page.length; slotIndex += 1) {
+        const stack = page[slotIndex];
+        if (stack && stack.id === itemId) {
+          return { pageIndex, slotIndex, stack };
+        }
+      }
+    }
+    return null;
+  }
+
+  function findFirstFreeInventorySlot() {
+    for (let pageIndex = 0; pageIndex < inventoryState.pages.length; pageIndex += 1) {
+      const page = inventoryState.pages[pageIndex];
+      for (let slotIndex = 0; slotIndex < page.length; slotIndex += 1) {
+        if (!page[slotIndex]) return { pageIndex, slotIndex };
+      }
+    }
+    return null;
+  }
+
+  function addItemToInventory(item) {
+    if (!item || !item.id) return false;
+
+    // BLACK PENNY V1 is stackable. Further stack rules can be added per item later.
+    if (item.id === "black-penny") {
+      const existing = findInventoryStack(item.id);
+      if (existing) {
+        existing.stack.quantity += 1;
+        if (inventoryState.open) renderInventory();
+        return true;
+      }
+    }
+
+    const free = findFirstFreeInventorySlot();
+    if (!free) return false;
+
+    inventoryState.pages[free.pageIndex][free.slotIndex] = {
+      id: item.id,
+      name: item.name || item.id,
+      description: item.description || "",
+      width: 1,
+      height: 1,
+      quantity: 1
+    };
+
+    if (inventoryState.open) renderInventory();
+    return true;
+  }
+
+  function createInventorySystem() {
+    installInventoryStyles();
+
+    // Preload both supplied page artworks immediately so page II never flashes late.
+    for (const src of INVENTORY_CONFIG.pageImages) {
+      const preload = new Image();
+      preload.src = encodeURI(src);
+    }
+
+    const root = document.createElement("div");
+    root.id = "inventoryUI";
+    root.setAttribute("aria-hidden", "true");
+
+    const panel = document.createElement("div");
+    panel.className = "inventory-panel";
+
+    const image = document.createElement("img");
+    image.className = "inventory-panel__image";
+    image.src = encodeURI(INVENTORY_CONFIG.pageImages[0]);
+    image.alt = "Inventar";
+    image.draggable = false;
+
+    const slotsLayer = document.createElement("div");
+    slotsLayer.className = "inventory-slots-layer";
+
+    const closeButton = document.createElement("button");
+    closeButton.type = "button";
+    closeButton.className = "inventory-hotspot inventory-hotspot--close";
+    closeButton.setAttribute("aria-label", "Inventar schließen");
+    setInventoryRect(closeButton, INVENTORY_CONFIG.closeRect);
+    closeButton.addEventListener("click", closeInventory);
+
+    const page1Button = document.createElement("button");
+    page1Button.type = "button";
+    page1Button.className = "inventory-hotspot inventory-hotspot--page-1";
+    page1Button.setAttribute("aria-label", "Inventarseite I");
+    setInventoryRect(page1Button, INVENTORY_CONFIG.page1Rect);
+    page1Button.addEventListener("click", () => setInventoryPage(0));
+
+    const page2Button = document.createElement("button");
+    page2Button.type = "button";
+    page2Button.className = "inventory-hotspot inventory-hotspot--page-2";
+    page2Button.setAttribute("aria-label", "Inventarseite II");
+    setInventoryRect(page2Button, INVENTORY_CONFIG.page2Rect);
+    page2Button.addEventListener("click", () => setInventoryPage(1));
+
+    panel.append(image, slotsLayer, closeButton, page1Button, page2Button);
+    root.appendChild(panel);
+    document.body.appendChild(root);
+
+    inventoryState.root = root;
+    inventoryState.panel = panel;
+    inventoryState.image = image;
+    inventoryState.slotsLayer = slotsLayer;
+    inventoryState.closeButton = closeButton;
+    inventoryState.pageButtons = [page1Button, page2Button];
+
+    renderInventory();
+  }
+
   function installMapTransitionUI() {
     if (document.getElementById("mapTransitionStyles")) return;
 
@@ -8259,8 +8664,10 @@
     updateZoom(now);
 
     if (!mapTransitioning) {
-      updatePlayer(deltaSeconds);
-      checkMapExit();
+      if (!inventoryState.open) {
+        updatePlayer(deltaSeconds);
+        checkMapExit();
+      }
       updateAreaSigns();
       updateTrunkenbold(deltaSeconds, now);
       updateRabbits(deltaSeconds, now);
@@ -8285,7 +8692,7 @@
 
   window.addEventListener("keydown", (event) => {
     const controlled = [
-      "KeyW", "KeyA", "KeyS", "KeyD",
+      "KeyW", "KeyA", "KeyS", "KeyD", "KeyI",
       "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight",
       "Equal", "NumpadAdd", "Minus", "NumpadSubtract",
       "Space", "ControlLeft", "ControlRight", "Backquote"
@@ -8294,6 +8701,14 @@
     if (controlled.includes(event.code) || event.key === "Control") {
       event.preventDefault();
     }
+
+    if (event.code === "KeyI") {
+      if (!event.repeat) toggleInventory();
+      return;
+    }
+
+    // Inventory is screen UI: gameplay controls are ignored until it closes.
+    if (inventoryState.open) return;
 
     if (isControlEvent(event)) {
       startBlocking();
@@ -8343,6 +8758,11 @@
   }, { passive: false });
 
   window.addEventListener("keyup", (event) => {
+    if (inventoryState.open) {
+      keys.delete(event.code);
+      return;
+    }
+
     if (isControlEvent(event)) {
       event.preventDefault();
       stopBlocking();
@@ -8405,6 +8825,7 @@
   async function initialize() {
     startBackgroundMusic();
     installMapTransitionUI();
+    createInventorySystem();
 
     // R55: all player walking + combat frames are ready before gameplay starts.
     // Existing animation orders, durations and sound synchronization stay untouched.
