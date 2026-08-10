@@ -1466,6 +1466,11 @@
         -webkit-backface-visibility: hidden;
       }
 
+      .map-wolf__sprite--dead {
+        transform: scaleX(var(--wolf-facing, 1)) scale(.75);
+        transform-origin: 50% 100%;
+      }
+
       .map-wolf__sprite--visible {
         opacity: 1;
         visibility: visible;
@@ -1710,7 +1715,7 @@
     imageHowl.decoding = "async";
 
     const imageDead = document.createElement("img");
-    imageDead.className = "map-wolf__sprite";
+    imageDead.className = "map-wolf__sprite map-wolf__sprite--dead";
     imageDead.src = encodeURI(WOLF_CONFIG.deadFrame);
     imageDead.alt = "";
     imageDead.draggable = false;
@@ -1732,6 +1737,8 @@
       respawnAt: 0,
       fadeAt: 0,
       fadeStarted: false,
+      pendingLoot: [],
+      lootSpawned: false,
       frameIndex: 0,
       x: start.x,
       y: start.y,
@@ -2426,6 +2433,11 @@
         -webkit-backface-visibility: hidden;
       }
 
+      .map-boar__sprite--dead {
+        transform: scaleX(var(--boar-facing, 1)) scale(.75);
+        transform-origin: 50% 100%;
+      }
+
       .map-boar__sprite--visible {
         opacity: 1;
         visibility: visible;
@@ -2688,7 +2700,7 @@
     runImage.decoding = "async";
 
     const deadImage = document.createElement("img");
-    deadImage.className = "map-boar__sprite";
+    deadImage.className = "map-boar__sprite map-boar__sprite--dead";
     deadImage.src = encodeURI(BOAR_CONFIG.deadFrame);
     deadImage.alt = "";
     deadImage.draggable = false;
@@ -2706,6 +2718,8 @@
       respawnAt: 0,
       fadeAt: 0,
       fadeStarted: false,
+      pendingLoot: [],
+      lootSpawned: false,
       zone,
       x: start.x,
       y: start.y,
@@ -3612,6 +3626,23 @@
     return drops;
   }
 
+  function rollWolfLoot() {
+    const drops = [];
+    if (Math.random() < WOLF_LOOT_CONFIG.peltChance) drops.push(WOLF_PELT_ITEM);
+    if (Math.random() < WOLF_LOOT_CONFIG.clawChance) drops.push(WOLF_CLAW_ITEM);
+    if (Math.random() < WOLF_LOOT_CONFIG.bagChance) drops.push(WANDERER_BAG_ITEM);
+    return drops;
+  }
+
+  function rollBoarLoot() {
+    const drops = [];
+    if (Math.random() < BOAR_LOOT_CONFIG.radishChance) drops.push(RADISH_ITEM);
+    if (Math.random() < BOAR_LOOT_CONFIG.cabbageChance) drops.push(CABBAGE_ITEM);
+    if (Math.random() < BOAR_LOOT_CONFIG.lettuceChance) drops.push(LETTUCE_ITEM);
+    if (Math.random() < BOAR_LOOT_CONFIG.tuskChance) drops.push(BOAR_TUSK_ITEM);
+    return drops;
+  }
+
   function spawnRabbitLoot(item, x, y, mapId = MAP.id, offsetIndex = 0) {
     const element = document.createElement("div");
     element.className = "rabbit-loot-drop";
@@ -3819,12 +3850,19 @@
     actor.element.classList.remove("map-wolf--away");
     actor.element.classList.remove("map-wolf--death-fading");
     wolfShowStaticLayer(actor, 3);
+    actor.pendingLoot = rollWolfLoot();
+    actor.lootSpawned = false;
     actor.fadeStarted = false;
     actor.respawnAt = now + WOLF_CONFIG.deadDuration;
     actor.fadeAt = actor.respawnAt - WOLF_CONFIG.fadeDuration;
   }
 
   function respawnWolf(actor, now) {
+    if (!actor.lootSpawned && actor.pendingLoot && actor.pendingLoot.length) {
+      actor.pendingLoot.forEach((item, i) => spawnRabbitLoot(item, actor.x, actor.y, actor.mapId, i));
+    }
+    actor.lootSpawned = true;
+    actor.pendingLoot = [];
     const start = wolfRandomPoint(180, actor.habitat, actor.mapId);
     actor.hp = WOLF_CONFIG.maxHp;
     actor.dead = false;
@@ -3892,12 +3930,20 @@
     actor.element.classList.remove("map-boar--away");
     actor.element.classList.remove("map-boar--death-fading");
     boarShowLayer(actor, 2);
+    actor.pendingLoot = rollBoarLoot();
+    actor.lootSpawned = false;
     actor.fadeStarted = false;
     actor.respawnAt = now + BOAR_CONFIG.deadDuration;
     actor.fadeAt = actor.respawnAt - BOAR_CONFIG.fadeDuration;
   }
 
   function respawnBoar(actor, now) {
+    if (!actor.lootSpawned && actor.pendingLoot && actor.pendingLoot.length) {
+      const mapId = actor.zone.mapId || BOAR_CONFIG.mapId;
+      actor.pendingLoot.forEach((item, i) => spawnRabbitLoot(item, actor.x, actor.y, mapId, i));
+    }
+    actor.lootSpawned = true;
+    actor.pendingLoot = [];
     const start = boarRandomPoint(actor.zone, 130);
     actor.hp = BOAR_CONFIG.maxHp;
     actor.dead = false;
@@ -4177,6 +4223,18 @@
     fadeDuration: 420,
     pickupRadius: 820
   });
+
+  // R65 WOLF + BOAR LOOT — independent death rolls, same pickup/inventory pipeline as rabbit loot.
+  const WOLF_PELT_ITEM = Object.freeze({ id: "wolf-pelt", name: "WOLFSPELZ", description: "WOLFSLOOT", icon: "assets/items/WOLFSPELZ.svg", stackable: true });
+  const WOLF_CLAW_ITEM = Object.freeze({ id: "wolf-claw", name: "WOLFSKRALLE", description: "SELTENER WOLFSLOOT", icon: "assets/items/WOLFSKRALLE.svg", stackable: true });
+  const WANDERER_BAG_ITEM = Object.freeze({ id: "wanderer-bag", name: "SÄCKCHEN EINES WANDERERS", description: "SEHR SELTENER WOLFSLOOT", icon: "assets/items/SAECKCHEN EINES WANDERERS.svg", stackable: true });
+  const RADISH_ITEM = Object.freeze({ id: "radish", name: "RETTICH", description: "KEILERLOOT", icon: "assets/items/RETTICH.svg", stackable: true });
+  const CABBAGE_ITEM = Object.freeze({ id: "cabbage", name: "KOHL", description: "KEILERLOOT", icon: "assets/items/KOHL.svg", stackable: true });
+  const LETTUCE_ITEM = Object.freeze({ id: "lettuce", name: "SALATKOPF", description: "KEILERLOOT", icon: "assets/items/SALATKOPF.svg", stackable: true });
+  const BOAR_TUSK_ITEM = Object.freeze({ id: "boar-tusk", name: "KEILERSTOSSZAHN", description: "SELTENER KEILERLOOT", icon: "assets/items/KEILERSTOSSZAHN.svg", stackable: true });
+
+  const WOLF_LOOT_CONFIG = Object.freeze({ peltChance: .05, clawChance: .02, bagChance: .01 });
+  const BOAR_LOOT_CONFIG = Object.freeze({ radishChance: .20, cabbageChance: .10, lettuceChance: .05, tuskChance: .02 });
 
   let rabbitLootDrops = [];
 
@@ -8537,7 +8595,11 @@
       preload.src = encodeURI(src);
     }
 
-    for (const src of [CARROT_ITEM.icon, RABBIT_FOOT_ITEM.icon]) {
+    for (const src of [
+      CARROT_ITEM.icon, RABBIT_FOOT_ITEM.icon,
+      WOLF_PELT_ITEM.icon, WOLF_CLAW_ITEM.icon, WANDERER_BAG_ITEM.icon,
+      RADISH_ITEM.icon, CABBAGE_ITEM.icon, LETTUCE_ITEM.icon, BOAR_TUSK_ITEM.icon
+    ]) {
       const preload = new Image();
       preload.src = encodeURI(src);
     }
