@@ -8717,7 +8717,24 @@
         "assets/stadium/fighters/FLEGEL WALK RIGHT 3.png",
         "assets/stadium/fighters/FLEGEL WALK RIGHT 2.png"
       ]),
-      readyFrame: "assets/stadium/fighters/FLEGEL READY.png"
+      readyFrame: "assets/stadium/fighters/FLEGEL READY.png",
+
+      // R78 — RITTER 1 ROHART-NEUENSTEIN enters after FLEGEL reaches READY.
+      neuensteinStart: Object.freeze({ x: 5000, y: 5585 }),
+      neuensteinLinePoint: Object.freeze({ x: 5035, y: 2910 }),
+      neuensteinLeftPoint: Object.freeze({ x: 2200, y: 3660 }),
+      neuensteinSpeedUp: 620,
+      neuensteinSpeedLeft: 620,
+      neuensteinWalkUpFrames: Object.freeze([
+        "assets/stadium/fighters/NEUENSTEIN WALK UP 1.png",
+        "assets/stadium/fighters/NEUENSTEIN WALK UP 2.png"
+      ]),
+      neuensteinVictoryFrame: "assets/stadium/fighters/NEUENSTEIN VICTORY.png",
+      neuensteinWalkLeftFrames: Object.freeze([
+        "assets/stadium/fighters/NEUENSTEIN WALK LEFT 1.png",
+        "assets/stadium/fighters/NEUENSTEIN WALK LEFT 2.png"
+      ]),
+      neuensteinReadyFrame: "assets/stadium/fighters/NEUENSTEIN READY.png"
     }),
 
     arena: Object.freeze({
@@ -8754,6 +8771,10 @@
   let stadiumFightNextFrameAt = 0;
   let stadiumFightLastState = "";
   let stadiumFightStarted = false;
+  let stadiumFightFighterB = null;
+  let stadiumFightFighterBFrameIndex = 0;
+  let stadiumFightFighterBNextFrameAt = 0;
+  let stadiumFightFighterBSpriteToken = 0;
 
   // R77 — normalize each movement direction to ITS OWN matching stand pose.
   // WALK UP uses FLEGEL VICTORY as its size reference at the green circle.
@@ -9396,11 +9417,36 @@
     fighterRoot.append(fighterImageA, fighterImageB);
     world.appendChild(fighterRoot);
 
+    // R78 — second fighter uses the same proven double-buffer / foot-anchor setup.
+    const fighterBRoot = document.createElement("div");
+    fighterBRoot.id = "stadiumFighterB";
+    fighterBRoot.className = "stadium-fighter";
+    fighterBRoot.style.left = `${STADIUM.fightIntro.neuensteinStart.x}px`;
+    fighterBRoot.style.top = `${STADIUM.fightIntro.neuensteinStart.y}px`;
+
+    const fighterBImageA = document.createElement("img");
+    fighterBImageA.className = "stadium-fighter__sprite stadium-fighter__sprite--active";
+    fighterBImageA.src = encodeURI(STADIUM.fightIntro.neuensteinWalkUpFrames[0]);
+    fighterBImageA.alt = "";
+    fighterBImageA.draggable = false;
+
+    const fighterBImageB = document.createElement("img");
+    fighterBImageB.className = "stadium-fighter__sprite";
+    fighterBImageB.alt = "";
+    fighterBImageB.draggable = false;
+
+    fighterBRoot.append(fighterBImageA, fighterBImageB);
+    world.appendChild(fighterBRoot);
+
     for (const fighterSrc of [
       ...STADIUM.fightIntro.walkUpFrames,
       STADIUM.fightIntro.victoryFrame,
       ...STADIUM.fightIntro.walkRightFrames,
-      STADIUM.fightIntro.readyFrame
+      STADIUM.fightIntro.readyFrame,
+      ...STADIUM.fightIntro.neuensteinWalkUpFrames,
+      STADIUM.fightIntro.neuensteinVictoryFrame,
+      ...STADIUM.fightIntro.neuensteinWalkLeftFrames,
+      STADIUM.fightIntro.neuensteinReadyFrame
     ]) {
       const preload = new Image();
       preload.onload = () => {
@@ -9446,6 +9492,14 @@
       currentSrc: STADIUM.fightIntro.walkUpFrames[0],
       x: STADIUM.fightIntro.start.x,
       y: STADIUM.fightIntro.start.y
+    };
+    stadiumFightFighterB = {
+      root: fighterBRoot,
+      images: [fighterBImageA, fighterBImageB],
+      activeIndex: 0,
+      currentSrc: STADIUM.fightIntro.neuensteinWalkUpFrames[0],
+      x: STADIUM.fightIntro.neuensteinStart.x,
+      y: STADIUM.fightIntro.neuensteinStart.y
     };
     stadiumGateForeground = gate;
 
@@ -9737,6 +9791,79 @@
     stadiumFightFighter.root.style.top = `${y}px`;
   }
 
+  function layoutStadiumFightSpriteB(image) {
+    if (!stadiumFightFighterB || !image || !image.naturalWidth || !image.naturalHeight) return;
+    const metrics = getStadiumFightOpaqueMetrics(image);
+    if (!metrics) return;
+    const fit = Math.min(
+      STADIUM.fightIntro.fighterWidth / metrics.naturalWidth,
+      STADIUM.fightIntro.fighterHeight / metrics.naturalHeight
+    );
+    const footGap = (metrics.naturalHeight - 1 - metrics.footBottomY) * fit;
+    image.style.width = `${(metrics.naturalWidth * fit).toFixed(3)}px`;
+    image.style.height = `${(metrics.naturalHeight * fit).toFixed(3)}px`;
+    image.style.bottom = `${(-footGap).toFixed(3)}px`;
+    image.style.transform = "translateX(-50%)";
+  }
+
+  function setStadiumFightSpriteB(src, force = false) {
+    if (!stadiumFightFighterB || !src) return;
+    if (!force && stadiumFightFighterB.currentSrc === src) return;
+    const token = ++stadiumFightFighterBSpriteToken;
+    const nextIndex = 1 - stadiumFightFighterB.activeIndex;
+    const nextImage = stadiumFightFighterB.images[nextIndex];
+    const oldImage = stadiumFightFighterB.images[stadiumFightFighterB.activeIndex];
+    const reveal = () => {
+      if (token !== stadiumFightFighterBSpriteToken) return;
+      layoutStadiumFightSpriteB(nextImage);
+      nextImage.classList.add("stadium-fighter__sprite--active");
+      oldImage.classList.remove("stadium-fighter__sprite--active");
+      stadiumFightFighterB.activeIndex = nextIndex;
+      stadiumFightFighterB.currentSrc = src;
+    };
+    nextImage.onload = reveal;
+    nextImage.src = encodeURI(src);
+    if (nextImage.complete && nextImage.naturalWidth > 0) reveal();
+  }
+
+  function setStadiumFightPositionB(x, y) {
+    if (!stadiumFightFighterB) return;
+    stadiumFightFighterB.x = x;
+    stadiumFightFighterB.y = y;
+    stadiumFightFighterB.root.style.left = `${x}px`;
+    stadiumFightFighterB.root.style.top = `${y}px`;
+  }
+
+  function moveStadiumFighterBToward(target, speed, deltaSeconds) {
+    if (!stadiumFightFighterB) return true;
+    const dx = target.x - stadiumFightFighterB.x;
+    const dy = target.y - stadiumFightFighterB.y;
+    const distance = Math.hypot(dx, dy);
+    if (distance <= 4) { setStadiumFightPositionB(target.x, target.y); return true; }
+    const step = Math.min(distance, speed * deltaSeconds);
+    setStadiumFightPositionB(
+      stadiumFightFighterB.x + (dx / distance) * step,
+      stadiumFightFighterB.y + (dy / distance) * step
+    );
+    if (step >= distance) { setStadiumFightPositionB(target.x, target.y); return true; }
+    return false;
+  }
+
+  function updateStadiumFighterBWalkAnimation(now, frames, mirror = false) {
+    if (!stadiumFightFighterB || !frames.length) return;
+    if (now >= stadiumFightFighterBNextFrameAt) {
+      while (now >= stadiumFightFighterBNextFrameAt) {
+        stadiumFightFighterBFrameIndex = (stadiumFightFighterBFrameIndex + 1) % frames.length;
+        stadiumFightFighterBNextFrameAt += STADIUM.fightIntro.frameDuration;
+      }
+      setStadiumFightSpriteB(frames[stadiumFightFighterBFrameIndex]);
+    }
+    for (const img of stadiumFightFighterB.images) {
+      const base = "translateX(-50%)";
+      img.style.transform = mirror ? `${base} scaleX(-1)` : base;
+    }
+  }
+
   function resetStadiumFightIntro() {
     stadiumFightStarted = false;
     stadiumFightPhaseEndAt = 0;
@@ -9751,6 +9878,12 @@
       stadiumFightFighter.root.classList.remove("stadium-fighter--visible");
       setStadiumFightPosition(STADIUM.fightIntro.start.x, STADIUM.fightIntro.start.y);
       setStadiumFightSprite(STADIUM.fightIntro.walkUpFrames[0], true);
+    }
+    if (stadiumFightFighterB) {
+      stadiumFightFighterB.root.classList.remove("stadium-fighter--visible");
+      setStadiumFightPositionB(STADIUM.fightIntro.neuensteinStart.x, STADIUM.fightIntro.neuensteinStart.y);
+      setStadiumFightSpriteB(STADIUM.fightIntro.neuensteinWalkUpFrames[0], true);
+      for (const img of stadiumFightFighterB.images) img.style.transform = "translateX(-50%)";
     }
   }
 
@@ -9909,6 +10042,49 @@
       ) {
         stadiumState = "fighter-ready";
         setStadiumFightSprite(STADIUM.fightIntro.readyFrame);
+        stadiumFightPhaseEndAt = now;
+      }
+      return;
+    }
+
+    // R78: as soon as Ritter 1 Neuenstein's opponent has presented his weapon
+    // and reached the green box, Neuenstein enters through the same gate.
+    if (stadiumState === "fighter-ready") {
+      stadiumState = "neuenstein-entry-up";
+      stadiumFightFighterBFrameIndex = 0;
+      stadiumFightFighterBNextFrameAt = now + STADIUM.fightIntro.frameDuration;
+      setStadiumFightPositionB(STADIUM.fightIntro.neuensteinStart.x, STADIUM.fightIntro.neuensteinStart.y);
+      setStadiumFightSpriteB(STADIUM.fightIntro.neuensteinWalkUpFrames[0], true);
+      if (stadiumFightFighterB) stadiumFightFighterB.root.classList.add("stadium-fighter--visible");
+      return;
+    }
+
+    if (stadiumState === "neuenstein-entry-up") {
+      updateStadiumFighterBWalkAnimation(now, STADIUM.fightIntro.neuensteinWalkUpFrames, false);
+      if (moveStadiumFighterBToward(STADIUM.fightIntro.neuensteinLinePoint, STADIUM.fightIntro.neuensteinSpeedUp, deltaSeconds)) {
+        stadiumState = "neuenstein-victory";
+        stadiumFightPhaseEndAt = now + STADIUM.fightIntro.victoryDuration;
+        setStadiumFightSpriteB(STADIUM.fightIntro.neuensteinVictoryFrame);
+      }
+      return;
+    }
+
+    if (stadiumState === "neuenstein-victory") {
+      if (now < stadiumFightPhaseEndAt) return;
+      stadiumState = "neuenstein-entry-left";
+      stadiumFightFighterBFrameIndex = 0;
+      stadiumFightFighterBNextFrameAt = now + STADIUM.fightIntro.frameDuration;
+      setStadiumFightSpriteB(STADIUM.fightIntro.neuensteinWalkLeftFrames[0]);
+      for (const img of stadiumFightFighterB.images) img.style.transform = "translateX(-50%) scaleX(-1)";
+      return;
+    }
+
+    if (stadiumState === "neuenstein-entry-left") {
+      updateStadiumFighterBWalkAnimation(now, STADIUM.fightIntro.neuensteinWalkLeftFrames, true);
+      if (moveStadiumFighterBToward(STADIUM.fightIntro.neuensteinLeftPoint, STADIUM.fightIntro.neuensteinSpeedLeft, deltaSeconds)) {
+        stadiumState = "neuenstein-ready";
+        setStadiumFightSpriteB(STADIUM.fightIntro.neuensteinReadyFrame);
+        for (const img of stadiumFightFighterB.images) img.style.transform = "translateX(-50%)";
       }
       return;
     }
