@@ -8755,6 +8755,13 @@
   let stadiumFightLastState = "";
   let stadiumFightStarted = false;
 
+  // R74 — normalize every fighter frame to one visual body height + one foot line.
+  // The source PNGs may contain different transparent margins; without this, swapping
+  // frames makes the fighter appear to grow/shrink or bounce even though the CSS box is fixed.
+  const stadiumFightFrameMetrics = new Map();
+  let stadiumFightReferenceMetrics = null;
+  let stadiumFightSpriteToken = 0;
+
   function stadiumActive() {
     return MAP.id === STADIUM.mapId && stadiumState !== "inactive";
   }
@@ -9194,6 +9201,9 @@
         object-position: 50% 100%;
         filter: drop-shadow(0 8px 5px rgba(0,0,0,.28));
         transform-origin: 50% 100%;
+        /* R74: frame swaps must never animate scale/position themselves. */
+        transition: none !important;
+        will-change: transform;
       }
 
       .stadium-gate-foreground {
@@ -9233,10 +9243,12 @@
       const choice = button.dataset.stadiumChoice;
 
       if (choice === "spectator") {
-        if (stadiumState === "spectator") {
-          hideStadiumMenu();
-        } else if (stadiumState === "entrance-menu") {
+        if (stadiumState === "entrance-menu") {
           stadiumMoveToSpectator();
+        } else {
+          // R74: ESC menu may also be opened during countdown / arena intro / fight.
+          // Returning to the current stadium view simply closes the menu.
+          hideStadiumMenu();
         }
       } else if (choice === "oberkirch") {
         stadiumReturnToOberkirch();
@@ -9531,9 +9543,81 @@
     stadiumFightOverlay.classList.add("stadium-fight-overlay--visible");
   }
 
+  function getStadiumFightOpaqueMetrics(image) {
+    if (!image || !image.naturalWidth || !image.naturalHeight) return null;
+
+    const key = image.currentSrc || image.src;
+    if (stadiumFightFrameMetrics.has(key)) return stadiumFightFrameMetrics.get(key);
+
+    try {
+      const canvas = document.createElement("canvas");
+      canvas.width = image.naturalWidth;
+      canvas.height = image.naturalHeight;
+      const ctx = canvas.getContext("2d", { willReadFrequently: true });
+      if (!ctx) return null;
+      ctx.drawImage(image, 0, 0);
+      const data = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+
+      let minX = canvas.width, minY = canvas.height, maxX = -1, maxY = -1;
+      for (let y = 0; y < canvas.height; y += 1) {
+        for (let x = 0; x < canvas.width; x += 1) {
+          if (data[(y * canvas.width + x) * 4 + 3] < 20) continue;
+          if (x < minX) minX = x;
+          if (x > maxX) maxX = x;
+          if (y < minY) minY = y;
+          if (y > maxY) maxY = y;
+        }
+      }
+
+      if (maxX < minX || maxY < minY) return null;
+      const metrics = {
+        width: maxX - minX + 1,
+        height: maxY - minY + 1,
+        bottomGap: canvas.height - 1 - maxY,
+        naturalWidth: canvas.width,
+        naturalHeight: canvas.height
+      };
+      stadiumFightFrameMetrics.set(key, metrics);
+      return metrics;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  function normalizeStadiumFightSprite(image, src, token) {
+    if (!stadiumFightFighter || token !== stadiumFightSpriteToken) return;
+    const metrics = getStadiumFightOpaqueMetrics(image);
+    if (!metrics) {
+      image.style.transform = "none";
+      return;
+    }
+
+    // The first walking frame defines the permanent visible character height.
+    // Every later frame is uniformly scaled to that exact opaque height.
+    if (!stadiumFightReferenceMetrics) stadiumFightReferenceMetrics = metrics;
+    const ref = stadiumFightReferenceMetrics;
+    const scale = ref.height / Math.max(1, metrics.height);
+
+    // Compensate different transparent space below the feet. This pins every frame
+    // to the same world-space foot anchor, so the legs no longer jump vertically.
+    const renderedBoxHeight = STADIUM.fightIntro.fighterHeight;
+    const currentBottomGapPx = (metrics.bottomGap / metrics.naturalHeight) * renderedBoxHeight;
+    const referenceBottomGapPx = (ref.bottomGap / ref.naturalHeight) * renderedBoxHeight;
+    const translateY = currentBottomGapPx * scale - referenceBottomGapPx;
+
+    image.style.transform = `translateY(${translateY.toFixed(3)}px) scale(${scale.toFixed(6)})`;
+  }
+
   function setStadiumFightSprite(src) {
     if (!stadiumFightFighter) return;
-    stadiumFightFighter.image.src = encodeURI(src);
+    const image = stadiumFightFighter.image;
+    const token = ++stadiumFightSpriteToken;
+    const encoded = encodeURI(src);
+
+    const apply = () => normalizeStadiumFightSprite(image, src, token);
+    image.onload = apply;
+    image.src = encoded;
+    if (image.complete && image.naturalWidth > 0) apply();
   }
 
   function setStadiumFightPosition(x, y) {
@@ -9550,6 +9634,7 @@
     stadiumFightFrameIndex = 0;
     stadiumFightNextFrameAt = 0;
     stadiumFightLastState = "";
+    stadiumFightReferenceMetrics = null;
     setStadiumFightOverlay(null);
 
     if (stadiumFightFighter) {
@@ -12700,10 +12785,10 @@
           return;
         }
 
-        if (stadiumState === "spectator" || stadiumState === "entrance-menu") {
-          if (stadiumMenuOpen) hideStadiumMenu();
-          else showStadiumMenu();
-        }
+        // R74: outside the bookmaker bet dialog, ESC is ALWAYS available in the
+        // stadium — including countdown, PRÜGEL, fighter walk/victory/ready phases.
+        if (stadiumMenuOpen) hideStadiumMenu();
+        else showStadiumMenu();
         return;
       }
 
