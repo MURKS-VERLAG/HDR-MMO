@@ -8886,6 +8886,12 @@
       .stadium-bet__title {
         font-size: clamp(32px, 4vw, 55px);
         letter-spacing: 1.8px;
+        line-height: 1.02;
+      }
+
+      .stadium-bet__title span {
+        display: block;
+        white-space: nowrap;
       }
 
       .stadium-bet__today {
@@ -8985,16 +8991,20 @@
       }
 
       .stadium-bet__stake-row {
+        position: relative;
         display: flex;
         justify-content: center;
         align-items: center;
-        gap: 10px;
-        margin: 9px 0 18px;
+        width: 260px;
+        min-height: 44px;
+        margin: 9px auto 10px;
       }
 
       .stadium-bet__stake {
+        display: block;
         width: 190px;
         box-sizing: border-box;
+        margin: 0 auto;
         padding: 9px 12px;
         border: 1px solid rgba(216,174,85,.58);
         background: rgba(0,0,0,.64);
@@ -9006,6 +9016,10 @@
       }
 
       .stadium-bet__penny {
+        position: absolute;
+        left: calc(50% + 105px);
+        top: 50%;
+        transform: translateY(-50%);
         width: 34px;
         height: 34px;
         border-radius: 50%;
@@ -9020,6 +9034,9 @@
       }
 
       .stadium-bet__submit {
+        display: block;
+        width: max-content;
+        margin: 0 auto;
         border: 0;
         background: transparent;
         color: #fff;
@@ -9027,6 +9044,7 @@
         font-family: Georgia, "Times New Roman", serif;
         font-size: 22px;
         font-weight: 800;
+        text-align: center;
         cursor: pointer;
         transition: color 150ms ease, text-shadow 150ms ease, transform 150ms ease;
       }
@@ -9116,7 +9134,10 @@
     betRoot.id = "stadiumBetUI";
     betRoot.innerHTML = `
       <div class="stadium-bet__panel" role="dialog" aria-modal="true" aria-label="BUCHMACHER DON FREDO">
-        <div class="stadium-bet__title">BUCHMACHER DON FREDO</div>
+        <div class="stadium-bet__title">
+          <span>BUCHMACHER</span>
+          <span>DON FREDO</span>
+        </div>
         <div class="stadium-bet__today">HEUTE: DERBY!</div>
 
         <div class="stadium-bet__matchup">
