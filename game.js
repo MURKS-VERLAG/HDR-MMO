@@ -8692,7 +8692,7 @@
     fightIntro: Object.freeze({
       countdownStepMs: 1000,
       pruegelMs: 980,
-      frameDuration: 210,
+      frameDuration: 190,
       victoryDuration: 2000,
 
       // World-space foot anchors derived from the marked stadium reference.
@@ -8759,7 +8759,7 @@
   // The source PNGs may contain different transparent margins; without this, swapping
   // frames makes the fighter appear to grow/shrink or bounce even though the CSS box is fixed.
   const stadiumFightFrameMetrics = new Map();
-  let stadiumFightReferenceMetrics = null;
+  let stadiumFightTargetOpaqueHeight = null;
   let stadiumFightSpriteToken = 0;
 
   function stadiumActive() {
@@ -9194,16 +9194,25 @@
 
       .stadium-fighter__sprite {
         position: absolute;
-        inset: 0;
-        width: 100%;
-        height: 100%;
-        object-fit: contain;
-        object-position: 50% 100%;
+        left: 50%;
+        bottom: 0;
+        top: auto;
+        right: auto;
+        width: auto;
+        height: auto;
+        max-width: none;
+        max-height: none;
+        object-fit: fill;
         filter: drop-shadow(0 8px 5px rgba(0,0,0,.28));
+        transform: translateX(-50%);
         transform-origin: 50% 100%;
-        /* R74: frame swaps must never animate scale/position themselves. */
-        transition: none !important;
-        will-change: transform;
+        opacity: 0;
+        transition: opacity 85ms linear;
+        will-change: opacity;
+      }
+
+      .stadium-fighter__sprite--active {
+        opacity: 1;
       }
 
       .stadium-gate-foreground {
@@ -9366,12 +9375,21 @@
     fighterRoot.style.left = `${STADIUM.fightIntro.start.x}px`;
     fighterRoot.style.top = `${STADIUM.fightIntro.start.y}px`;
 
-    const fighterImage = document.createElement("img");
-    fighterImage.className = "stadium-fighter__sprite";
-    fighterImage.src = encodeURI(STADIUM.fightIntro.walkUpFrames[0]);
-    fighterImage.alt = "";
-    fighterImage.draggable = false;
-    fighterRoot.appendChild(fighterImage);
+    // R75: double-buffered fighter sprites. Two image layers guarantee that
+    // WALK UP 1 <-> WALK UP 2 and all side-running frames visibly alternate
+    // without a blank frame while the next PNG is decoded.
+    const fighterImageA = document.createElement("img");
+    fighterImageA.className = "stadium-fighter__sprite stadium-fighter__sprite--active";
+    fighterImageA.src = encodeURI(STADIUM.fightIntro.walkUpFrames[0]);
+    fighterImageA.alt = "";
+    fighterImageA.draggable = false;
+
+    const fighterImageB = document.createElement("img");
+    fighterImageB.className = "stadium-fighter__sprite";
+    fighterImageB.alt = "";
+    fighterImageB.draggable = false;
+
+    fighterRoot.append(fighterImageA, fighterImageB);
     world.appendChild(fighterRoot);
 
     for (const fighterSrc of [
@@ -9402,7 +9420,9 @@
     stadiumFightOverlay = fightOverlay;
     stadiumFightFighter = {
       root: fighterRoot,
-      image: fighterImage,
+      images: [fighterImageA, fighterImageB],
+      activeIndex: 0,
+      currentSrc: STADIUM.fightIntro.walkUpFrames[0],
       x: STADIUM.fightIntro.start.x,
       y: STADIUM.fightIntro.start.y
     };
@@ -9555,6 +9575,7 @@
       canvas.height = image.naturalHeight;
       const ctx = canvas.getContext("2d", { willReadFrequently: true });
       if (!ctx) return null;
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
       ctx.drawImage(image, 0, 0);
       const data = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
 
@@ -9570,10 +9591,28 @@
       }
 
       if (maxX < minX || maxY < minY) return null;
+
+      // Ground anchor: ignore only the extreme outer 8% of the canvas so a
+      // dangling flail/cape edge can never pull the character's feet up/down.
+      const footX1 = Math.floor(canvas.width * 0.08);
+      const footX2 = Math.ceil(canvas.width * 0.92);
+      let footBottomY = -1;
+      for (let y = canvas.height - 1; y >= minY && footBottomY < 0; y -= 1) {
+        for (let x = footX1; x <= footX2; x += 1) {
+          if (data[(y * canvas.width + x) * 4 + 3] >= 20) {
+            footBottomY = y;
+            break;
+          }
+        }
+      }
+      if (footBottomY < 0) footBottomY = maxY;
+
       const metrics = {
         width: maxX - minX + 1,
         height: maxY - minY + 1,
-        bottomGap: canvas.height - 1 - maxY,
+        minY,
+        maxY,
+        footBottomY,
         naturalWidth: canvas.width,
         naturalHeight: canvas.height
       };
@@ -9584,40 +9623,61 @@
     }
   }
 
-  function normalizeStadiumFightSprite(image, src, token) {
-    if (!stadiumFightFighter || token !== stadiumFightSpriteToken) return;
+  function layoutStadiumFightSprite(image) {
+    if (!stadiumFightFighter || !image || !image.naturalWidth || !image.naturalHeight) return;
     const metrics = getStadiumFightOpaqueMetrics(image);
-    if (!metrics) {
-      image.style.transform = "none";
-      return;
+    if (!metrics) return;
+
+    // R75 BOUNCE FIX:
+    // Do NOT use object-fit and do NOT scale the existing fixed box. Different
+    // source PNG canvas sizes (for example 1024x1536 vs 1254x1254) otherwise
+    // produce different rendered character sizes. Instead every frame receives
+    // one explicit pixel size derived from the actual opaque figure height.
+    if (stadiumFightTargetOpaqueHeight == null) {
+      const fit = Math.min(
+        STADIUM.fightIntro.fighterWidth / metrics.naturalWidth,
+        STADIUM.fightIntro.fighterHeight / metrics.naturalHeight
+      );
+      stadiumFightTargetOpaqueHeight = metrics.height * fit;
     }
 
-    // The first walking frame defines the permanent visible character height.
-    // Every later frame is uniformly scaled to that exact opaque height.
-    if (!stadiumFightReferenceMetrics) stadiumFightReferenceMetrics = metrics;
-    const ref = stadiumFightReferenceMetrics;
-    const scale = ref.height / Math.max(1, metrics.height);
+    const scale = stadiumFightTargetOpaqueHeight / Math.max(1, metrics.height);
+    const renderedWidth = metrics.naturalWidth * scale;
+    const renderedHeight = metrics.naturalHeight * scale;
 
-    // Compensate different transparent space below the feet. This pins every frame
-    // to the same world-space foot anchor, so the legs no longer jump vertically.
-    const renderedBoxHeight = STADIUM.fightIntro.fighterHeight;
-    const currentBottomGapPx = (metrics.bottomGap / metrics.naturalHeight) * renderedBoxHeight;
-    const referenceBottomGapPx = (ref.bottomGap / ref.naturalHeight) * renderedBoxHeight;
-    const translateY = currentBottomGapPx * scale - referenceBottomGapPx;
+    // Pin the actual lower character silhouette to the root's world-space foot
+    // anchor. Canvas padding and differing source aspect ratios can no longer
+    // create vertical bouncing.
+    const footGap = (metrics.naturalHeight - 1 - metrics.footBottomY) * scale;
 
-    image.style.transform = `translateY(${translateY.toFixed(3)}px) scale(${scale.toFixed(6)})`;
+    image.style.width = `${renderedWidth.toFixed(3)}px`;
+    image.style.height = `${renderedHeight.toFixed(3)}px`;
+    image.style.bottom = `${(-footGap).toFixed(3)}px`;
+    image.style.transform = "translateX(-50%)";
   }
 
-  function setStadiumFightSprite(src) {
-    if (!stadiumFightFighter) return;
-    const image = stadiumFightFighter.image;
+  function setStadiumFightSprite(src, force = false) {
+    if (!stadiumFightFighter || !src) return;
+    if (!force && stadiumFightFighter.currentSrc === src) return;
+
     const token = ++stadiumFightSpriteToken;
+    const nextIndex = 1 - stadiumFightFighter.activeIndex;
+    const nextImage = stadiumFightFighter.images[nextIndex];
+    const oldImage = stadiumFightFighter.images[stadiumFightFighter.activeIndex];
     const encoded = encodeURI(src);
 
-    const apply = () => normalizeStadiumFightSprite(image, src, token);
-    image.onload = apply;
-    image.src = encoded;
-    if (image.complete && image.naturalWidth > 0) apply();
+    const reveal = () => {
+      if (token !== stadiumFightSpriteToken) return;
+      layoutStadiumFightSprite(nextImage);
+      nextImage.classList.add("stadium-fighter__sprite--active");
+      oldImage.classList.remove("stadium-fighter__sprite--active");
+      stadiumFightFighter.activeIndex = nextIndex;
+      stadiumFightFighter.currentSrc = src;
+    };
+
+    nextImage.onload = reveal;
+    nextImage.src = encoded;
+    if (nextImage.complete && nextImage.naturalWidth > 0) reveal();
   }
 
   function setStadiumFightPosition(x, y) {
@@ -9634,13 +9694,13 @@
     stadiumFightFrameIndex = 0;
     stadiumFightNextFrameAt = 0;
     stadiumFightLastState = "";
-    stadiumFightReferenceMetrics = null;
+    stadiumFightTargetOpaqueHeight = null;
     setStadiumFightOverlay(null);
 
     if (stadiumFightFighter) {
       stadiumFightFighter.root.classList.remove("stadium-fighter--visible");
       setStadiumFightPosition(STADIUM.fightIntro.start.x, STADIUM.fightIntro.start.y);
-      setStadiumFightSprite(STADIUM.fightIntro.walkUpFrames[0]);
+      setStadiumFightSprite(STADIUM.fightIntro.walkUpFrames[0], true);
     }
   }
 
@@ -9659,7 +9719,7 @@
     if (stadiumFightFighter) {
       stadiumFightFighter.root.classList.remove("stadium-fighter--visible");
       setStadiumFightPosition(STADIUM.fightIntro.start.x, STADIUM.fightIntro.start.y);
-      setStadiumFightSprite(STADIUM.fightIntro.walkUpFrames[0]);
+      setStadiumFightSprite(STADIUM.fightIntro.walkUpFrames[0], true);
     }
 
     stadiumState = "fight-countdown-3";
@@ -9705,7 +9765,7 @@
     stadiumFightNextFrameAt = now + STADIUM.fightIntro.frameDuration;
     setStadiumFightOverlay(null);
     setStadiumFightPosition(STADIUM.fightIntro.start.x, STADIUM.fightIntro.start.y);
-    setStadiumFightSprite(STADIUM.fightIntro.walkUpFrames[0]);
+    setStadiumFightSprite(STADIUM.fightIntro.walkUpFrames[0], true);
     if (stadiumFightFighter) {
       stadiumFightFighter.root.classList.add("stadium-fighter--visible");
     }
