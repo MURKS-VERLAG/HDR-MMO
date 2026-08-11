@@ -436,11 +436,27 @@
   stadiumFightAnnouncerAudio.volume = 1.0;
   let stadiumFightAnnouncerPlayed = false;
 
+  // R81 — battle horn after "Wette abschließen".
+  const stadiumBattleHornAudio = new Audio("assets/audio/stadium/BATTLEHORN.mp3");
+  stadiumBattleHornAudio.preload = "auto";
+  stadiumBattleHornAudio.loop = false;
+  stadiumBattleHornAudio.volume = 1.0;
+  let stadiumBattleHornPlayed = false;
+
+  function playStadiumBattleHornOnce() {
+    if (stadiumBattleHornPlayed) return;
+    stadiumBattleHornPlayed = true;
+    try { stadiumBattleHornAudio.currentTime = 0; } catch (_) {}
+    stadiumBattleHornAudio.play().catch(() => {});
+  }
+
   function playStadiumFightAnnouncerOnce() {
-    if (stadiumFightAnnouncerPlayed) return;
+    if (stadiumFightAnnouncerPlayed) return Promise.resolve(false);
     stadiumFightAnnouncerPlayed = true;
     try { stadiumFightAnnouncerAudio.currentTime = 0; } catch (_) {}
-    stadiumFightAnnouncerAudio.play().catch(() => {});
+    return stadiumFightAnnouncerAudio.play()
+      .then(() => true)
+      .catch(() => false);
   }
 
   // ------------------------------------------------------------------
@@ -8727,6 +8743,22 @@
       frameDuration: 190,
       victoryDuration: 2000,
 
+      // R81 — exact final sync to the supplied "It's time" file.
+      finalPruegelAtMs: 5000,
+      finalCountdown3AtMs: 2000,
+      finalCountdown2AtMs: 3000,
+      finalCountdown1AtMs: 4000,
+      announcerFrame2AtMs: 2000,
+      announcerFrame3AtMs: 5000,
+      announcerPoint: Object.freeze({ x: 5035, y: 2910 }),
+      announcerWidth: 980,
+      announcerHeight: 1260,
+      announcerFrames: Object.freeze([
+        "assets/stadium/announcer/ANNOUNCER TRAPDOOR.png",
+        "assets/stadium/announcer/ANNOUNCER MEGAPHONE.png",
+        "assets/stadium/announcer/ANNOUNCER PRUEGEL.png"
+      ]),
+
       // R79 TEAM ORDER:
       // Fighter A / first entrant = ROHART-NEUENSTEIN.
       // World-space foot anchors derived from the marked stadium reference.
@@ -8818,6 +8850,11 @@
   let stadiumFightFighterBFrameIndex = 0;
   let stadiumFightFighterBNextFrameAt = 0;
   let stadiumFightFighterBSpriteToken = 0;
+
+  // R81 — arena announcer and final synchronized countdown.
+  let stadiumArenaAnnouncer = null;
+  let stadiumFinalSequenceStartedAt = 0;
+  let stadiumFinalSequenceStep = -1;
 
   // R77 — normalize each movement direction to ITS OWN matching stand pose.
   // WALK UP uses FLEGEL VICTORY as its size reference at the green circle.
@@ -9315,6 +9352,38 @@
         object-fit: fill;
         display: none;
       }
+
+      .stadium-arena-announcer {
+        position: absolute;
+        z-index: 21;
+        width: ${STADIUM.fightIntro.announcerWidth}px;
+        height: ${STADIUM.fightIntro.announcerHeight}px;
+        transform: translate(-50%, -100%);
+        transform-origin: 50% 100%;
+        pointer-events: none;
+        user-select: none;
+        display: none;
+      }
+
+      .stadium-arena-announcer--visible {
+        display: block;
+      }
+
+      .stadium-arena-announcer__sprite {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+        object-position: 50% 100%;
+        opacity: 0;
+        transition: opacity 180ms ease;
+        filter: drop-shadow(0 8px 5px rgba(0,0,0,.30));
+      }
+
+      .stadium-arena-announcer__sprite--active {
+        opacity: 1;
+      }
     `;
     document.head.appendChild(style);
   }
@@ -9535,6 +9604,30 @@
     fighterBRoot.append(fighterBImageA, fighterBImageB);
     world.appendChild(fighterBRoot);
 
+    // R81 — announcer appears at the same arena presentation point.
+    const announcerRoot = document.createElement("div");
+    announcerRoot.id = "stadiumArenaAnnouncer";
+    announcerRoot.className = "stadium-arena-announcer";
+    announcerRoot.style.left = `${STADIUM.fightIntro.announcerPoint.x}px`;
+    announcerRoot.style.top = `${STADIUM.fightIntro.announcerPoint.y}px`;
+
+    const announcerImages = STADIUM.fightIntro.announcerFrames.map((announcerSrc) => {
+      const img = document.createElement("img");
+      img.className = "stadium-arena-announcer__sprite";
+      img.src = encodeURI(announcerSrc);
+      img.alt = "";
+      img.draggable = false;
+      announcerRoot.appendChild(img);
+      return img;
+    });
+
+    world.appendChild(announcerRoot);
+    stadiumArenaAnnouncer = {
+      root: announcerRoot,
+      images: announcerImages,
+      activeIndex: -1
+    };
+
     for (const fighterSrc of [
       ...STADIUM.fightIntro.walkUpFrames,
       STADIUM.fightIntro.victoryFrame,
@@ -9564,6 +9657,11 @@
       };
       preload.src = encodeURI(fighterSrc);
       if (preload.complete && preload.naturalWidth > 0) preload.onload();
+    }
+
+    for (const announcerSrc of STADIUM.fightIntro.announcerFrames) {
+      const preload = new Image();
+      preload.src = encodeURI(announcerSrc);
     }
 
     const gate = document.createElement("img");
@@ -10025,13 +10123,115 @@
     }
   }
 
+  function setStadiumArenaAnnouncerFrame(index, visible = true) {
+    if (!stadiumArenaAnnouncer) return;
+    const safeIndex = Math.max(0, Math.min(stadiumArenaAnnouncer.images.length - 1, index));
+
+    stadiumArenaAnnouncer.root.classList.toggle(
+      "stadium-arena-announcer--visible",
+      visible
+    );
+
+    stadiumArenaAnnouncer.images.forEach((img, i) => {
+      img.classList.toggle(
+        "stadium-arena-announcer__sprite--active",
+        visible && i === safeIndex
+      );
+    });
+
+    stadiumArenaAnnouncer.activeIndex = visible ? safeIndex : -1;
+  }
+
+  function hideStadiumArenaAnnouncer() {
+    if (!stadiumArenaAnnouncer) return;
+    stadiumArenaAnnouncer.root.classList.remove("stadium-arena-announcer--visible");
+    stadiumArenaAnnouncer.images.forEach((img) => {
+      img.classList.remove("stadium-arena-announcer__sprite--active");
+    });
+    stadiumArenaAnnouncer.activeIndex = -1;
+  }
+
+  function beginStadiumFinalCountdown(now = performance.now()) {
+    if (stadiumState !== "schauenburg-ready") return;
+
+    stadiumState = "fight-final-sync";
+    stadiumFinalSequenceStartedAt = 0;
+    stadiumFinalSequenceStep = -1;
+    setStadiumFightOverlay(null);
+
+    // Prompt Anhang 2: first image appears exactly with the sound.
+    setStadiumArenaAnnouncerFrame(0, true);
+
+    playStadiumFightAnnouncerOnce().then(() => {
+      const currentMs = Number.isFinite(stadiumFightAnnouncerAudio.currentTime)
+        ? stadiumFightAnnouncerAudio.currentTime * 1000
+        : 0;
+      stadiumFinalSequenceStartedAt = performance.now() - currentMs;
+    });
+  }
+
+  function updateStadiumFinalCountdown(now) {
+    if (stadiumState !== "fight-final-sync" || !stadiumFinalSequenceStartedAt) return;
+
+    // The audio itself is the master clock.
+    const elapsedMs =
+      !stadiumFightAnnouncerAudio.paused &&
+      Number.isFinite(stadiumFightAnnouncerAudio.currentTime)
+        ? stadiumFightAnnouncerAudio.currentTime * 1000
+        : Math.max(0, now - stadiumFinalSequenceStartedAt);
+
+    if (
+      elapsedMs >= STADIUM.fightIntro.finalCountdown3AtMs &&
+      stadiumFinalSequenceStep < 1
+    ) {
+      stadiumFinalSequenceStep = 1;
+      // Prompt Anhang 3 after exactly 2 seconds.
+      setStadiumArenaAnnouncerFrame(1, true);
+      setStadiumFightOverlay("countdown", "3");
+    }
+
+    if (
+      elapsedMs >= STADIUM.fightIntro.finalCountdown2AtMs &&
+      stadiumFinalSequenceStep < 2
+    ) {
+      stadiumFinalSequenceStep = 2;
+      setStadiumFightOverlay("countdown", "2");
+    }
+
+    if (
+      elapsedMs >= STADIUM.fightIntro.finalCountdown1AtMs &&
+      stadiumFinalSequenceStep < 3
+    ) {
+      stadiumFinalSequenceStep = 3;
+      setStadiumFightOverlay("countdown", "1");
+    }
+
+    if (
+      elapsedMs >= STADIUM.fightIntro.finalPruegelAtMs &&
+      stadiumFinalSequenceStep < 4
+    ) {
+      stadiumFinalSequenceStep = 4;
+      // Prompt Anhang 4 + PRÜGEL exactly on TIME at 5.000 seconds.
+      setStadiumArenaAnnouncerFrame(2, true);
+      setStadiumFightOverlay("pruegel", "PRÜGEL!");
+      stadiumState = "fight-pruegel-ready";
+      stadiumFightPhaseEndAt = now + STADIUM.fightIntro.pruegelMs;
+    }
+  }
+
   function resetStadiumFightIntro() {
     stadiumFightStarted = false;
     stadiumFightAnnouncerPlayed = false;
+    stadiumBattleHornPlayed = false;
+    stadiumFinalSequenceStartedAt = 0;
+    stadiumFinalSequenceStep = -1;
     try {
       stadiumFightAnnouncerAudio.pause();
       stadiumFightAnnouncerAudio.currentTime = 0;
+      stadiumBattleHornAudio.pause();
+      stadiumBattleHornAudio.currentTime = 0;
     } catch (_) {}
+    hideStadiumArenaAnnouncer();
     stadiumFightPhaseEndAt = 0;
     stadiumFightFrameIndex = 0;
     stadiumFightNextFrameAt = 0;
@@ -10076,11 +10276,10 @@
       setStadiumFightSprite(STADIUM.fightIntro.walkUpFrames[0], true);
     }
 
-    // R80: announcer starts a fraction BEFORE the red timer, exactly once.
-    playStadiumFightAnnouncerOnce();
-    stadiumState = "fight-pre-countdown";
-    stadiumFightPhaseEndAt = now + 180;
-    setStadiumFightOverlay(null);
+    // R81: after betting only the horn, music switch and normal entrance happen.
+    // NO countdown and NO "It's time" effect at this moment.
+    playStadiumBattleHornOnce();
+    beginStadiumFighterWalkUp(now);
   }
 
   function advanceStadiumFightCountdown(now) {
@@ -10173,16 +10372,21 @@
   function updateStadiumFightIntro(deltaSeconds, now) {
     if (!stadiumFightStarted || MAP.id !== STADIUM.mapId) return;
 
-    if (
-      stadiumState === "fight-pre-countdown" ||
-      stadiumState.startsWith("fight-countdown-")
-    ) {
-      if (now >= stadiumFightPhaseEndAt) advanceStadiumFightCountdown(now);
+    if (stadiumState === "fight-final-sync") {
+      updateStadiumFinalCountdown(now);
       return;
     }
 
-    if (stadiumState === "fight-pruegel") {
-      if (now >= stadiumFightPhaseEndAt) beginStadiumFighterWalkUp(now);
+    if (stadiumState === "fight-pruegel-ready") {
+      if (now >= stadiumFightPhaseEndAt) {
+        setStadiumFightOverlay(null);
+        hideStadiumArenaAnnouncer();
+        stadiumState = "fight-await-brawl";
+      }
+      return;
+    }
+
+    if (stadiumState === "fight-await-brawl") {
       return;
     }
 
@@ -10268,6 +10472,9 @@
         stadiumState = "schauenburg-ready";
         setStadiumFightSpriteB(STADIUM.fightIntro.schauenburgReadyFrame);
         for (const img of stadiumFightFighterB.images) img.style.transform = "translateX(-50%)";
+
+        // Both fighters are in position: NOW start "It's time" + announcer.
+        beginStadiumFinalCountdown(now);
       }
       return;
     }
