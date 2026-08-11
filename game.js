@@ -447,13 +447,30 @@
   const MAP_MUSIC_VOLUME = 1.0;
   const MAP_MUSIC_FADE_MS = 1400;
 
+  // R79 STADIUM MUSIC:
+  // RENCHTALSTADION inherits the currently running OBERKIRCH track until
+  // the arena fight is actually started via "Wette abschließen".
+  let stadiumBattleMusicStarted = false;
+
   // R60 START FLOW MUSIC:
   // Both screens before OBERKIRCH use the EXACT existing RENCHTALSTADION track.
   // No duplicate audio file is needed; we reuse MAP_MUSIC["renchtalstadion"].
   function desiredBackgroundMusicId() {
-    return (typeof startFlowState !== "undefined" && startFlowState !== "campaign")
-      ? "renchtalstadion"
-      : (MAP && MAP.id ? MAP.id : "oberkirch-zentrum");
+    if (typeof startFlowState !== "undefined" && startFlowState !== "campaign") {
+      return "renchtalstadion";
+    }
+
+    // R79: while merely visiting / spectating before the bet is submitted,
+    // the stadium must continue OBERKIRCH music without restarting it.
+    if (
+      MAP &&
+      MAP.id === "renchtalstadion" &&
+      !stadiumBattleMusicStarted
+    ) {
+      return "oberkirch-zentrum";
+    }
+
+    return (MAP && MAP.id) ? MAP.id : "oberkirch-zentrum";
   }
 
   const mapMusicPlayers = new Map();
@@ -8695,6 +8712,8 @@
       frameDuration: 190,
       victoryDuration: 2000,
 
+      // R79 TEAM ORDER:
+      // Fighter A / first entrant = ROHART-NEUENSTEIN.
       // World-space foot anchors derived from the marked stadium reference.
       start: Object.freeze({ x: 5000, y: 5585 }),
       linePoint: Object.freeze({ x: 5035, y: 2910 }),
@@ -8719,22 +8738,24 @@
       ]),
       readyFrame: "assets/stadium/fighters/FLEGEL READY.png",
 
-      // R78 — RITTER 1 ROHART-NEUENSTEIN enters after FLEGEL reaches READY.
-      neuensteinStart: Object.freeze({ x: 5000, y: 5585 }),
-      neuensteinLinePoint: Object.freeze({ x: 5035, y: 2910 }),
-      neuensteinLeftPoint: Object.freeze({ x: 2200, y: 3660 }),
-      neuensteinSpeedUp: 620,
-      neuensteinSpeedLeft: 620,
-      neuensteinWalkUpFrames: Object.freeze([
+      // R79 — Fighter B / second entrant = SCHAUENBURG.
+      // IMPORTANT: the files themselves still carry the legacy "NEUENSTEIN"
+      // filenames from R78 so existing GitHub assets remain compatible.
+      schauenburgStart: Object.freeze({ x: 5000, y: 5585 }),
+      schauenburgLinePoint: Object.freeze({ x: 5035, y: 2910 }),
+      schauenburgLeftPoint: Object.freeze({ x: 2200, y: 3660 }),
+      schauenburgSpeedUp: 620,
+      schauenburgSpeedLeft: 620,
+      schauenburgWalkUpFrames: Object.freeze([
         "assets/stadium/fighters/NEUENSTEIN WALK UP 1.png",
         "assets/stadium/fighters/NEUENSTEIN WALK UP 2.png"
       ]),
-      neuensteinVictoryFrame: "assets/stadium/fighters/NEUENSTEIN VICTORY.png",
-      neuensteinWalkLeftFrames: Object.freeze([
+      schauenburgVictoryFrame: "assets/stadium/fighters/NEUENSTEIN VICTORY.png",
+      schauenburgWalkLeftFrames: Object.freeze([
         "assets/stadium/fighters/NEUENSTEIN WALK LEFT 1.png",
         "assets/stadium/fighters/NEUENSTEIN WALK LEFT 2.png"
       ]),
-      neuensteinReadyFrame: "assets/stadium/fighters/NEUENSTEIN READY.png"
+      schauenburgReadyFrame: "assets/stadium/fighters/NEUENSTEIN READY.png"
     }),
 
     arena: Object.freeze({
@@ -9065,7 +9086,7 @@
         display: flex;
         justify-content: center;
         align-items: center;
-        width: 260px;
+        width: min(650px, 100%);
         min-height: 44px;
         margin: 9px auto 10px;
       }
@@ -9101,6 +9122,36 @@
         font-family: Georgia, serif;
         font-weight: 900;
         box-shadow: 0 2px 4px rgba(0,0,0,.65);
+      }
+
+      .stadium-bet__possible-win {
+        position: absolute;
+        left: calc(50% + 154px);
+        top: 50%;
+        transform: translateY(-50%);
+        white-space: nowrap;
+        color: #b87333;
+        font-family: Georgia, "Times New Roman", serif;
+        font-size: 17px;
+        font-weight: 900;
+        letter-spacing: .25px;
+        text-align: left;
+        text-shadow:
+          0 2px 2px rgba(0,0,0,.95),
+          0 0 8px rgba(184,115,51,.25);
+      }
+
+      @media (max-width: 760px) {
+        .stadium-bet__stake-row {
+          min-height: 82px;
+        }
+
+        .stadium-bet__possible-win {
+          left: 50%;
+          top: 66px;
+          transform: translate(-50%, -50%);
+          font-size: 15px;
+        }
       }
 
       .stadium-bet__submit {
@@ -9352,6 +9403,7 @@
         <div class="stadium-bet__stake-row">
           <input id="stadiumBetStake" class="stadium-bet__stake" type="text" inputmode="numeric" maxlength="9" autocomplete="off" aria-label="Einsatz in Pfennig">
           <span class="stadium-bet__penny" aria-hidden="true">₰</span>
+          <span id="stadiumBetPossibleWin" class="stadium-bet__possible-win">MÖGLICHER GEWINN: —</span>
         </div>
 
         <button type="button" class="stadium-bet__submit" id="stadiumBetSubmit">Wette abschließen</button>
@@ -9359,8 +9411,35 @@
     game.appendChild(betRoot);
 
     const stake = betRoot.querySelector("#stadiumBetStake");
+    const possibleWin = betRoot.querySelector("#stadiumBetPossibleWin");
+
+    function updateStadiumPossibleWin() {
+      if (!possibleWin) return;
+
+      const stakeValue = Number.parseInt(stake.value || "0", 10);
+      if (
+        !stadiumBetSelectedTeam ||
+        !Number.isFinite(stakeValue) ||
+        stakeValue <= 0
+      ) {
+        possibleWin.textContent = "MÖGLICHER GEWINN: —";
+        return;
+      }
+
+      const odds = stadiumBetSelectedTeam === "schauenburg"
+        ? STADIUM.derby.schauenburgOdds
+        : STADIUM.derby.neuensteinOdds;
+
+      // Decimal quote is applied directly to the entered Pfennig.
+      // Payout stays in whole Pfennig.
+      const payout = Math.floor(stakeValue * odds);
+      possibleWin.textContent =
+        `MÖGLICHER GEWINN: ${payout.toLocaleString("de-DE")}`;
+    }
+
     stake.addEventListener("input", () => {
       stake.value = stake.value.replace(/\D+/g, "").replace(/^0+(?=\d)/, "");
+      updateStadiumPossibleWin();
     });
 
     betRoot.addEventListener("click", (event) => {
@@ -9373,6 +9452,7 @@
             node.dataset.betTeam === stadiumBetSelectedTeam
           );
         }
+        updateStadiumPossibleWin();
         return;
       }
 
@@ -9421,12 +9501,12 @@
     const fighterBRoot = document.createElement("div");
     fighterBRoot.id = "stadiumFighterB";
     fighterBRoot.className = "stadium-fighter";
-    fighterBRoot.style.left = `${STADIUM.fightIntro.neuensteinStart.x}px`;
-    fighterBRoot.style.top = `${STADIUM.fightIntro.neuensteinStart.y}px`;
+    fighterBRoot.style.left = `${STADIUM.fightIntro.schauenburgStart.x}px`;
+    fighterBRoot.style.top = `${STADIUM.fightIntro.schauenburgStart.y}px`;
 
     const fighterBImageA = document.createElement("img");
     fighterBImageA.className = "stadium-fighter__sprite stadium-fighter__sprite--active";
-    fighterBImageA.src = encodeURI(STADIUM.fightIntro.neuensteinWalkUpFrames[0]);
+    fighterBImageA.src = encodeURI(STADIUM.fightIntro.schauenburgWalkUpFrames[0]);
     fighterBImageA.alt = "";
     fighterBImageA.draggable = false;
 
@@ -9443,10 +9523,10 @@
       STADIUM.fightIntro.victoryFrame,
       ...STADIUM.fightIntro.walkRightFrames,
       STADIUM.fightIntro.readyFrame,
-      ...STADIUM.fightIntro.neuensteinWalkUpFrames,
-      STADIUM.fightIntro.neuensteinVictoryFrame,
-      ...STADIUM.fightIntro.neuensteinWalkLeftFrames,
-      STADIUM.fightIntro.neuensteinReadyFrame
+      ...STADIUM.fightIntro.schauenburgWalkUpFrames,
+      STADIUM.fightIntro.schauenburgVictoryFrame,
+      ...STADIUM.fightIntro.schauenburgWalkLeftFrames,
+      STADIUM.fightIntro.schauenburgReadyFrame
     ]) {
       const preload = new Image();
       preload.onload = () => {
@@ -9497,9 +9577,9 @@
       root: fighterBRoot,
       images: [fighterBImageA, fighterBImageB],
       activeIndex: 0,
-      currentSrc: STADIUM.fightIntro.neuensteinWalkUpFrames[0],
-      x: STADIUM.fightIntro.neuensteinStart.x,
-      y: STADIUM.fightIntro.neuensteinStart.y
+      currentSrc: STADIUM.fightIntro.schauenburgWalkUpFrames[0],
+      x: STADIUM.fightIntro.schauenburgStart.x,
+      y: STADIUM.fightIntro.schauenburgStart.y
     };
     stadiumGateForeground = gate;
 
@@ -9881,8 +9961,8 @@
     }
     if (stadiumFightFighterB) {
       stadiumFightFighterB.root.classList.remove("stadium-fighter--visible");
-      setStadiumFightPositionB(STADIUM.fightIntro.neuensteinStart.x, STADIUM.fightIntro.neuensteinStart.y);
-      setStadiumFightSpriteB(STADIUM.fightIntro.neuensteinWalkUpFrames[0], true);
+      setStadiumFightPositionB(STADIUM.fightIntro.schauenburgStart.x, STADIUM.fightIntro.schauenburgStart.y);
+      setStadiumFightSpriteB(STADIUM.fightIntro.schauenburgWalkUpFrames[0], true);
       for (const img of stadiumFightFighterB.images) img.style.transform = "translateX(-50%)";
     }
   }
@@ -9898,6 +9978,11 @@
     keys.clear();
     clearStadiumBookmakerHover();
     closeStadiumBetUI();
+
+    // R79: only NOW does RENCHTALSTADION switch from the continuing
+    // OBERKIRCH music to its already existing dedicated battle track.
+    stadiumBattleMusicStarted = true;
+    crossfadeMapMusic("renchtalstadion");
 
     if (stadiumFightFighter) {
       stadiumFightFighter.root.classList.remove("stadium-fighter--visible");
@@ -10047,43 +10132,43 @@
       return;
     }
 
-    // R78: as soon as Ritter 1 Neuenstein's opponent has presented his weapon
-    // and reached the green box, Neuenstein enters through the same gate.
+    // R79: Fighter A = Rohart-Neuenstein. As soon as he reaches his green
+    // final position, Fighter B = Schauenburg enters through the same gate.
     if (stadiumState === "fighter-ready") {
-      stadiumState = "neuenstein-entry-up";
+      stadiumState = "schauenburg-entry-up";
       stadiumFightFighterBFrameIndex = 0;
       stadiumFightFighterBNextFrameAt = now + STADIUM.fightIntro.frameDuration;
-      setStadiumFightPositionB(STADIUM.fightIntro.neuensteinStart.x, STADIUM.fightIntro.neuensteinStart.y);
-      setStadiumFightSpriteB(STADIUM.fightIntro.neuensteinWalkUpFrames[0], true);
+      setStadiumFightPositionB(STADIUM.fightIntro.schauenburgStart.x, STADIUM.fightIntro.schauenburgStart.y);
+      setStadiumFightSpriteB(STADIUM.fightIntro.schauenburgWalkUpFrames[0], true);
       if (stadiumFightFighterB) stadiumFightFighterB.root.classList.add("stadium-fighter--visible");
       return;
     }
 
-    if (stadiumState === "neuenstein-entry-up") {
-      updateStadiumFighterBWalkAnimation(now, STADIUM.fightIntro.neuensteinWalkUpFrames, false);
-      if (moveStadiumFighterBToward(STADIUM.fightIntro.neuensteinLinePoint, STADIUM.fightIntro.neuensteinSpeedUp, deltaSeconds)) {
-        stadiumState = "neuenstein-victory";
+    if (stadiumState === "schauenburg-entry-up") {
+      updateStadiumFighterBWalkAnimation(now, STADIUM.fightIntro.schauenburgWalkUpFrames, false);
+      if (moveStadiumFighterBToward(STADIUM.fightIntro.schauenburgLinePoint, STADIUM.fightIntro.schauenburgSpeedUp, deltaSeconds)) {
+        stadiumState = "schauenburg-victory";
         stadiumFightPhaseEndAt = now + STADIUM.fightIntro.victoryDuration;
-        setStadiumFightSpriteB(STADIUM.fightIntro.neuensteinVictoryFrame);
+        setStadiumFightSpriteB(STADIUM.fightIntro.schauenburgVictoryFrame);
       }
       return;
     }
 
-    if (stadiumState === "neuenstein-victory") {
+    if (stadiumState === "schauenburg-victory") {
       if (now < stadiumFightPhaseEndAt) return;
-      stadiumState = "neuenstein-entry-left";
+      stadiumState = "schauenburg-entry-left";
       stadiumFightFighterBFrameIndex = 0;
       stadiumFightFighterBNextFrameAt = now + STADIUM.fightIntro.frameDuration;
-      setStadiumFightSpriteB(STADIUM.fightIntro.neuensteinWalkLeftFrames[0]);
+      setStadiumFightSpriteB(STADIUM.fightIntro.schauenburgWalkLeftFrames[0]);
       for (const img of stadiumFightFighterB.images) img.style.transform = "translateX(-50%) scaleX(-1)";
       return;
     }
 
-    if (stadiumState === "neuenstein-entry-left") {
-      updateStadiumFighterBWalkAnimation(now, STADIUM.fightIntro.neuensteinWalkLeftFrames, true);
-      if (moveStadiumFighterBToward(STADIUM.fightIntro.neuensteinLeftPoint, STADIUM.fightIntro.neuensteinSpeedLeft, deltaSeconds)) {
-        stadiumState = "neuenstein-ready";
-        setStadiumFightSpriteB(STADIUM.fightIntro.neuensteinReadyFrame);
+    if (stadiumState === "schauenburg-entry-left") {
+      updateStadiumFighterBWalkAnimation(now, STADIUM.fightIntro.schauenburgWalkLeftFrames, true);
+      if (moveStadiumFighterBToward(STADIUM.fightIntro.schauenburgLeftPoint, STADIUM.fightIntro.schauenburgSpeedLeft, deltaSeconds)) {
+        stadiumState = "schauenburg-ready";
+        setStadiumFightSpriteB(STADIUM.fightIntro.schauenburgReadyFrame);
         for (const img of stadiumFightFighterB.images) img.style.transform = "translateX(-50%)";
       }
       return;
@@ -10147,6 +10232,7 @@
 
   function beginStadiumArrival() {
     if (MAP.id !== STADIUM.mapId) return;
+    stadiumBattleMusicStarted = false;
     resetStadiumFightIntro();
     stadiumState = "arrival-walk";
     keys.clear();
@@ -10232,6 +10318,7 @@
     await switchMap(MAPS.oberkirch, MAP_EXIT_CONFIG.oberkirchFromStadiumSpawn, true);
     stadiumState = "inactive";
     stadiumArrivalFromOberkirch = false;
+    stadiumBattleMusicStarted = false;
     resetStadiumFightIntro();
     setStadiumBookmakerVisibility();
     setStadiumGateVisibility();
@@ -11972,8 +12059,13 @@
     overlay.style.maskImage = "none";
     overlay.style.opacity = "1";
 
-    // R33: music begins changing at the SAME moment as the visual map fade.
-    crossfadeMapMusic(nextMap.id);
+    // R79: OBERKIRCH -> RENCHTALSTADION keeps the exact same OBERKIRCH
+    // track running seamlessly. The dedicated stadium battle track begins
+    // only once "Wette abschließen" starts the fight.
+    const nextMusicId = scriptedStadiumArrival
+      ? "oberkirch-zentrum"
+      : nextMap.id;
+    crossfadeMapMusic(nextMusicId);
 
     await waitMs(200);
 
