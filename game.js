@@ -9332,9 +9332,8 @@
 
       if (event.target.closest("#stadiumBetSubmit")) {
         // R73: close the bookmaker panel and begin the first scripted arena intro.
-        if (!stadiumBetSelectedTeam) return;
-        const stakeValue = Number.parseInt(stake.value || "0", 10);
-        if (!Number.isFinite(stakeValue) || stakeValue <= 0) return;
+        // R73 FIX: during the current arena-intro test, submitting always starts
+        // the scripted fight sequence. Bet validation will be restored later.
         closeStadiumBetUI();
         beginStadiumFightIntro();
         return;
