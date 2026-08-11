@@ -8826,7 +8826,13 @@
         dustPoint: Object.freeze({ x: 5090, y: 3380 }),
         neuensteinAttack: "assets/stadium/fighters/FLEGEL N2.png",
         sharedRest: "assets/stadium/fighters/DERBY REST.png",
-        schauenburgAttack: "assets/stadium/fighters/SCHAUENBURG ATTACK.png"
+        schauenburgAttack: "assets/stadium/fighters/SCHAUENBURG ATTACK.png",
+
+        // R84 — alternating hit-chance frames replace ONLY the shared rest slot.
+        // Chances reuse the exact bookmaker probabilities; no outcome logic is changed.
+        neuensteinHitFrame: "assets/stadium/fighters/DERBY HIT NEUENSTEIN.png",
+        schauenburgHitFrame: "assets/stadium/fighters/DERBY HIT SCHAUENBURG 1.png",
+        schauenburgHitFourthFrame: "assets/stadium/fighters/DERBY HIT SCHAUENBURG 4.png"
       })
     }),
 
@@ -8885,6 +8891,10 @@
   let stadiumBrawlApproachStartB = null;
   let stadiumBrawlVisuals = null;
   let stadiumBrawlDust = null;
+
+  // R84 — rest slots alternate: Neuenstein first, then Schauenburg.
+  let stadiumBrawlRestTurn = "neuenstein";
+  let stadiumBrawlSchauenburgSuccessfulHits = 0;
 
   // R77 — normalize each movement direction to ITS OWN matching stand pose.
   // WALK UP uses FLEGEL VICTORY as its size reference at the green circle.
@@ -9747,6 +9757,27 @@
       false
     );
 
+    // R84 — these are full two-fighter hit compositions and therefore live at
+    // the exact same shared world anchor as DERBY REST. All three are mirrored.
+    const brawlHitNeuenstein = makeBrawlLayer(
+      "stadiumBrawlHitNeuenstein",
+      STADIUM.fightIntro.brawl.neuensteinHitFrame,
+      STADIUM.fightIntro.brawl.sharedPoint,
+      true
+    );
+    const brawlHitSchauenburg = makeBrawlLayer(
+      "stadiumBrawlHitSchauenburg",
+      STADIUM.fightIntro.brawl.schauenburgHitFrame,
+      STADIUM.fightIntro.brawl.sharedPoint,
+      true
+    );
+    const brawlHitSchauenburgFourth = makeBrawlLayer(
+      "stadiumBrawlHitSchauenburgFourth",
+      STADIUM.fightIntro.brawl.schauenburgHitFourthFrame,
+      STADIUM.fightIntro.brawl.sharedPoint,
+      true
+    );
+
     const brawlDust = document.createElement("div");
     brawlDust.id = "stadiumBrawlDust";
     brawlDust.className = "stadium-brawl-dust";
@@ -9754,13 +9785,23 @@
     brawlDust.style.top = `${STADIUM.fightIntro.brawl.dustPoint.y}px`;
     world.appendChild(brawlDust);
 
-    stadiumBrawlVisuals = { attackA: brawlAttackA, shared: brawlShared, attackB: brawlAttackB };
+    stadiumBrawlVisuals = {
+      attackA: brawlAttackA,
+      shared: brawlShared,
+      attackB: brawlAttackB,
+      hitNeuenstein: brawlHitNeuenstein,
+      hitSchauenburg: brawlHitSchauenburg,
+      hitSchauenburgFourth: brawlHitSchauenburgFourth
+    };
     stadiumBrawlDust = brawlDust;
 
     for (const brawlSrc of [
       STADIUM.fightIntro.brawl.neuensteinAttack,
       STADIUM.fightIntro.brawl.sharedRest,
-      STADIUM.fightIntro.brawl.schauenburgAttack
+      STADIUM.fightIntro.brawl.schauenburgAttack,
+      STADIUM.fightIntro.brawl.neuensteinHitFrame,
+      STADIUM.fightIntro.brawl.schauenburgHitFrame,
+      STADIUM.fightIntro.brawl.schauenburgHitFourthFrame
     ]) {
       const preload = new Image();
       preload.src = encodeURI(brawlSrc);
@@ -10308,21 +10349,64 @@
     setStadiumBrawlLayerVisible(stadiumBrawlVisuals.attackA, false);
     setStadiumBrawlLayerVisible(stadiumBrawlVisuals.shared, false);
     setStadiumBrawlLayerVisible(stadiumBrawlVisuals.attackB, false);
+    setStadiumBrawlLayerVisible(stadiumBrawlVisuals.hitNeuenstein, false);
+    setStadiumBrawlLayerVisible(stadiumBrawlVisuals.hitSchauenburg, false);
+    setStadiumBrawlLayerVisible(stadiumBrawlVisuals.hitSchauenburgFourth, false);
   }
 
   function showStadiumBrawlAttack() {
     if (!stadiumBrawlVisuals) return;
     setStadiumBrawlLayerVisible(stadiumBrawlVisuals.shared, false);
+    setStadiumBrawlLayerVisible(stadiumBrawlVisuals.hitNeuenstein, false);
+    setStadiumBrawlLayerVisible(stadiumBrawlVisuals.hitSchauenburg, false);
+    setStadiumBrawlLayerVisible(stadiumBrawlVisuals.hitSchauenburgFourth, false);
     setStadiumBrawlLayerVisible(stadiumBrawlVisuals.attackA, true);
     setStadiumBrawlLayerVisible(stadiumBrawlVisuals.attackB, true);
     spawnStadiumBrawlDust();
   }
 
-  function showStadiumBrawlRest() {
+  function showStadiumBrawlRest(allowHitRoll = true) {
     if (!stadiumBrawlVisuals) return;
+
     setStadiumBrawlLayerVisible(stadiumBrawlVisuals.attackA, false);
     setStadiumBrawlLayerVisible(stadiumBrawlVisuals.attackB, false);
-    setStadiumBrawlLayerVisible(stadiumBrawlVisuals.shared, true);
+    setStadiumBrawlLayerVisible(stadiumBrawlVisuals.shared, false);
+    setStadiumBrawlLayerVisible(stadiumBrawlVisuals.hitNeuenstein, false);
+    setStadiumBrawlLayerVisible(stadiumBrawlVisuals.hitSchauenburg, false);
+    setStadiumBrawlLayerVisible(stadiumBrawlVisuals.hitSchauenburgFourth, false);
+
+    // Final/result holds remain neutral and must never consume another hit slot.
+    if (!allowHitRoll) {
+      setStadiumBrawlLayerVisible(stadiumBrawlVisuals.shared, true);
+      return;
+    }
+
+    if (stadiumBrawlRestTurn === "neuenstein") {
+      // First shared slot is always Neuenstein's 30% opportunity.
+      const landed = Math.random() < STADIUM.derby.neuensteinChance;
+      setStadiumBrawlLayerVisible(
+        landed ? stadiumBrawlVisuals.hitNeuenstein : stadiumBrawlVisuals.shared,
+        true
+      );
+      stadiumBrawlRestTurn = "schauenburg";
+      return;
+    }
+
+    // Next shared slot is Schauenburg's 70% opportunity.
+    const landed = Math.random() < STADIUM.derby.schauenburgChance;
+    if (!landed) {
+      setStadiumBrawlLayerVisible(stadiumBrawlVisuals.shared, true);
+    } else {
+      stadiumBrawlSchauenburgSuccessfulHits += 1;
+      const fourthSuccessfulHit = stadiumBrawlSchauenburgSuccessfulHits % 4 === 0;
+      setStadiumBrawlLayerVisible(
+        fourthSuccessfulHit
+          ? stadiumBrawlVisuals.hitSchauenburgFourth
+          : stadiumBrawlVisuals.hitSchauenburg,
+        true
+      );
+    }
+    stadiumBrawlRestTurn = "neuenstein";
   }
 
   function clearStadiumBrawlDust() {
@@ -10366,6 +10450,8 @@
     stadiumBrawlCyclesTarget = STADIUM.fightIntro.brawl.minCycles +
       Math.floor(Math.random() * (STADIUM.fightIntro.brawl.maxCycles - STADIUM.fightIntro.brawl.minCycles + 1));
     stadiumBrawlCyclesDone = 0;
+    stadiumBrawlRestTurn = "neuenstein";
+    stadiumBrawlSchauenburgSuccessfulHits = 0;
     stadiumBrawlApproachStartedAt = now;
     stadiumBrawlApproachStartA = { x: stadiumFightFighter.x, y: stadiumFightFighter.y };
     stadiumBrawlApproachStartB = { x: stadiumFightFighterB.x, y: stadiumFightFighterB.y };
@@ -10433,8 +10519,8 @@
       if (now < stadiumBrawlPhaseEndAt) return true;
       stadiumBrawlCyclesDone += 1;
       if (stadiumBrawlCyclesDone >= stadiumBrawlCyclesTarget) {
-        // R82 stops on the neutral shared frame. R83 can attach victory/defeat/payout here.
-        showStadiumBrawlRest();
+        // R82/R83 result remains the neutral shared frame; R84 hit rolls stop here.
+        showStadiumBrawlRest(false);
         stadiumState = "fight-brawl-result";
         return true;
       }
@@ -10554,6 +10640,8 @@
     stadiumBrawlWinner = null;
     stadiumBrawlCyclesTarget = 0;
     stadiumBrawlCyclesDone = 0;
+    stadiumBrawlRestTurn = "neuenstein";
+    stadiumBrawlSchauenburgSuccessfulHits = 0;
     stadiumBrawlPhaseEndAt = 0;
     stadiumBrawlApproachStartedAt = 0;
     stadiumBrawlApproachStartA = null;
