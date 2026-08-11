@@ -8688,6 +8688,38 @@
       height: 520
     }),
 
+    // R73 — first arena fighter / scripted derby intro.
+    fightIntro: Object.freeze({
+      countdownStepMs: 1000,
+      pruegelMs: 980,
+      frameDuration: 210,
+      victoryDuration: 2000,
+
+      // World-space foot anchors derived from the marked stadium reference.
+      start: Object.freeze({ x: 5000, y: 5585 }),
+      linePoint: Object.freeze({ x: 5035, y: 2910 }),
+      readyPoint: Object.freeze({ x: 7820, y: 3485 }),
+
+      speedUp: 620,
+      speedRight: 620,
+
+      fighterWidth: 700,
+      fighterHeight: 1080,
+
+      walkUpFrames: Object.freeze([
+        "assets/stadium/fighters/FLEGEL WALK UP 1.png",
+        "assets/stadium/fighters/FLEGEL WALK UP 2.png"
+      ]),
+      victoryFrame: "assets/stadium/fighters/FLEGEL VICTORY.png",
+      walkRightFrames: Object.freeze([
+        "assets/stadium/fighters/FLEGEL WALK RIGHT 1.png",
+        "assets/stadium/fighters/FLEGEL WALK RIGHT 2.png",
+        "assets/stadium/fighters/FLEGEL WALK RIGHT 3.png",
+        "assets/stadium/fighters/FLEGEL WALK RIGHT 2.png"
+      ]),
+      readyFrame: "assets/stadium/fighters/FLEGEL READY.png"
+    }),
+
     arena: Object.freeze({
       cx: 5090,
       cy: 3422,
@@ -8713,6 +8745,15 @@
   let stadiumBookmakerAlphaMask = null;
   let stadiumBookmakerHovered = false;
   let stadiumGateForeground = null;
+
+  // R73 — scripted fight intro.
+  let stadiumFightOverlay = null;
+  let stadiumFightFighter = null;
+  let stadiumFightPhaseEndAt = 0;
+  let stadiumFightFrameIndex = 0;
+  let stadiumFightNextFrameAt = 0;
+  let stadiumFightLastState = "";
+  let stadiumFightStarted = false;
 
   function stadiumActive() {
     return MAP.id === STADIUM.mapId && stadiumState !== "inactive";
@@ -9055,6 +9096,106 @@
         transform: scale(1.025);
       }
 
+      .stadium-fight-overlay {
+        position: fixed;
+        inset: 0;
+        z-index: 24250;
+        display: grid;
+        place-items: center;
+        pointer-events: none;
+        user-select: none;
+        opacity: 0;
+        visibility: hidden;
+      }
+
+      .stadium-fight-overlay--visible {
+        opacity: 1;
+        visibility: visible;
+      }
+
+      .stadium-fight-countdown {
+        color: #9e1717;
+        font-family: "Old English Text MT", "Lucida Blackletter", "UnifrakturCook", Georgia, serif;
+        font-size: clamp(92px, 12vw, 190px);
+        font-weight: 900;
+        line-height: 1;
+        text-shadow:
+          0 4px 2px rgba(0,0,0,.98),
+          0 0 10px rgba(0,0,0,.95),
+          0 0 22px rgba(116,0,0,.62);
+      }
+
+      .stadium-fight-pruegel {
+        color: #a91818;
+        font-family: "Old English Text MT", "Lucida Blackletter", "UnifrakturCook", Georgia, serif;
+        font-size: clamp(78px, 11vw, 180px);
+        font-weight: 900;
+        line-height: .9;
+        letter-spacing: 2px;
+        text-shadow:
+          0 5px 2px rgba(0,0,0,.98),
+          0 0 13px rgba(0,0,0,.9),
+          0 0 28px rgba(126,0,0,.72);
+        animation: stadiumPruegelBurst ${STADIUM.fightIntro.pruegelMs}ms both;
+        will-change: transform, opacity, filter;
+      }
+
+      @keyframes stadiumPruegelBurst {
+        0% {
+          opacity: 0;
+          transform: scale(.05);
+          filter: blur(2px);
+        }
+        42% {
+          opacity: 1;
+          transform: scale(1.08);
+          filter: blur(0);
+        }
+        58% {
+          opacity: 1;
+          transform: scale(1);
+          filter: blur(0);
+        }
+        72% {
+          opacity: 1;
+          transform: scale(1);
+          filter: blur(0);
+        }
+        100% {
+          opacity: 0;
+          transform: scale(1.36);
+          filter: blur(4px);
+        }
+      }
+
+      .stadium-fighter {
+        position: absolute;
+        z-index: 17;
+        width: ${STADIUM.fightIntro.fighterWidth}px;
+        height: ${STADIUM.fightIntro.fighterHeight}px;
+        transform: translate(-50%, -100%);
+        transform-origin: 50% 100%;
+        pointer-events: none;
+        user-select: none;
+        display: none;
+        will-change: left, top;
+      }
+
+      .stadium-fighter--visible {
+        display: block;
+      }
+
+      .stadium-fighter__sprite {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+        object-position: 50% 100%;
+        filter: drop-shadow(0 8px 5px rgba(0,0,0,.28));
+        transform-origin: 50% 100%;
+      }
+
       .stadium-gate-foreground {
         position: absolute;
         z-index: 18;
@@ -9190,10 +9331,47 @@
       }
 
       if (event.target.closest("#stadiumBetSubmit")) {
-        // Phase 2 only: intentionally no wager execution yet.
+        // R73: close the bookmaker panel and begin the first scripted arena intro.
+        if (!stadiumBetSelectedTeam) return;
+        const stakeValue = Number.parseInt(stake.value || "0", 10);
+        if (!Number.isFinite(stakeValue) || stakeValue <= 0) return;
+        closeStadiumBetUI();
+        beginStadiumFightIntro();
         return;
       }
     });
+
+    // R73 — screen-space countdown / PRÜGEL overlay.
+    const fightOverlay = document.createElement("div");
+    fightOverlay.id = "stadiumFightOverlay";
+    fightOverlay.className = "stadium-fight-overlay";
+    game.appendChild(fightOverlay);
+
+    // R73 — world-space arena fighter. The existing gate foreground remains above it
+    // so the fighter is progressively hidden while passing through the south gate.
+    const fighterRoot = document.createElement("div");
+    fighterRoot.id = "stadiumFighterA";
+    fighterRoot.className = "stadium-fighter";
+    fighterRoot.style.left = `${STADIUM.fightIntro.start.x}px`;
+    fighterRoot.style.top = `${STADIUM.fightIntro.start.y}px`;
+
+    const fighterImage = document.createElement("img");
+    fighterImage.className = "stadium-fighter__sprite";
+    fighterImage.src = encodeURI(STADIUM.fightIntro.walkUpFrames[0]);
+    fighterImage.alt = "";
+    fighterImage.draggable = false;
+    fighterRoot.appendChild(fighterImage);
+    world.appendChild(fighterRoot);
+
+    for (const fighterSrc of [
+      ...STADIUM.fightIntro.walkUpFrames,
+      STADIUM.fightIntro.victoryFrame,
+      ...STADIUM.fightIntro.walkRightFrames,
+      STADIUM.fightIntro.readyFrame
+    ]) {
+      const preload = new Image();
+      preload.src = encodeURI(fighterSrc);
+    }
 
     const gate = document.createElement("img");
     gate.id = "stadiumGateForeground";
@@ -9210,6 +9388,13 @@
     stadiumUI = { root, curtain };
     stadiumBookmaker = { root: bookmaker, base, action };
     stadiumBetUI = { root: betRoot, stake };
+    stadiumFightOverlay = fightOverlay;
+    stadiumFightFighter = {
+      root: fighterRoot,
+      image: fighterImage,
+      x: STADIUM.fightIntro.start.x,
+      y: STADIUM.fightIntro.start.y
+    };
     stadiumGateForeground = gate;
 
     if (base.complete && base.naturalWidth > 0) {
@@ -9329,6 +9514,212 @@
     if (document.activeElement === stadiumBetUI.stake) stadiumBetUI.stake.blur();
   }
 
+  function setStadiumFightOverlay(kind, text = "") {
+    if (!stadiumFightOverlay) return;
+    stadiumFightOverlay.innerHTML = "";
+
+    if (!kind) {
+      stadiumFightOverlay.classList.remove("stadium-fight-overlay--visible");
+      return;
+    }
+
+    const node = document.createElement("div");
+    node.className = kind === "pruegel"
+      ? "stadium-fight-pruegel"
+      : "stadium-fight-countdown";
+    node.textContent = text;
+    stadiumFightOverlay.appendChild(node);
+    stadiumFightOverlay.classList.add("stadium-fight-overlay--visible");
+  }
+
+  function setStadiumFightSprite(src) {
+    if (!stadiumFightFighter) return;
+    stadiumFightFighter.image.src = encodeURI(src);
+  }
+
+  function setStadiumFightPosition(x, y) {
+    if (!stadiumFightFighter) return;
+    stadiumFightFighter.x = x;
+    stadiumFightFighter.y = y;
+    stadiumFightFighter.root.style.left = `${x}px`;
+    stadiumFightFighter.root.style.top = `${y}px`;
+  }
+
+  function resetStadiumFightIntro() {
+    stadiumFightStarted = false;
+    stadiumFightPhaseEndAt = 0;
+    stadiumFightFrameIndex = 0;
+    stadiumFightNextFrameAt = 0;
+    stadiumFightLastState = "";
+    setStadiumFightOverlay(null);
+
+    if (stadiumFightFighter) {
+      stadiumFightFighter.root.classList.remove("stadium-fighter--visible");
+      setStadiumFightPosition(STADIUM.fightIntro.start.x, STADIUM.fightIntro.start.y);
+      setStadiumFightSprite(STADIUM.fightIntro.walkUpFrames[0]);
+    }
+  }
+
+  function beginStadiumFightIntro(now = performance.now()) {
+    if (
+      MAP.id !== STADIUM.mapId ||
+      stadiumState !== "spectator" ||
+      stadiumFightStarted
+    ) return;
+
+    stadiumFightStarted = true;
+    keys.clear();
+    clearStadiumBookmakerHover();
+    closeStadiumBetUI();
+
+    if (stadiumFightFighter) {
+      stadiumFightFighter.root.classList.remove("stadium-fighter--visible");
+      setStadiumFightPosition(STADIUM.fightIntro.start.x, STADIUM.fightIntro.start.y);
+      setStadiumFightSprite(STADIUM.fightIntro.walkUpFrames[0]);
+    }
+
+    stadiumState = "fight-countdown-3";
+    stadiumFightPhaseEndAt = now + STADIUM.fightIntro.countdownStepMs;
+    setStadiumFightOverlay("countdown", "3");
+  }
+
+  function advanceStadiumFightCountdown(now) {
+    if (stadiumState === "fight-countdown-3") {
+      stadiumState = "fight-countdown-2";
+      stadiumFightPhaseEndAt = now + STADIUM.fightIntro.countdownStepMs;
+      setStadiumFightOverlay("countdown", "2");
+      return true;
+    }
+
+    if (stadiumState === "fight-countdown-2") {
+      stadiumState = "fight-countdown-1";
+      stadiumFightPhaseEndAt = now + STADIUM.fightIntro.countdownStepMs;
+      setStadiumFightOverlay("countdown", "1");
+      return true;
+    }
+
+    if (stadiumState === "fight-countdown-1") {
+      stadiumState = "fight-countdown-0";
+      stadiumFightPhaseEndAt = now + STADIUM.fightIntro.countdownStepMs;
+      setStadiumFightOverlay("countdown", "0");
+      return true;
+    }
+
+    if (stadiumState === "fight-countdown-0") {
+      stadiumState = "fight-pruegel";
+      stadiumFightPhaseEndAt = now + STADIUM.fightIntro.pruegelMs;
+      setStadiumFightOverlay("pruegel", "PRÜGEL!");
+      return true;
+    }
+
+    return false;
+  }
+
+  function beginStadiumFighterWalkUp(now) {
+    stadiumState = "fighter-entry-up";
+    stadiumFightFrameIndex = 0;
+    stadiumFightNextFrameAt = now + STADIUM.fightIntro.frameDuration;
+    setStadiumFightOverlay(null);
+    setStadiumFightPosition(STADIUM.fightIntro.start.x, STADIUM.fightIntro.start.y);
+    setStadiumFightSprite(STADIUM.fightIntro.walkUpFrames[0]);
+    if (stadiumFightFighter) {
+      stadiumFightFighter.root.classList.add("stadium-fighter--visible");
+    }
+  }
+
+  function updateStadiumFighterWalkAnimation(now, frames) {
+    if (!stadiumFightFighter || !frames.length) return;
+    if (now < stadiumFightNextFrameAt) return;
+
+    while (now >= stadiumFightNextFrameAt) {
+      stadiumFightFrameIndex = (stadiumFightFrameIndex + 1) % frames.length;
+      stadiumFightNextFrameAt += STADIUM.fightIntro.frameDuration;
+    }
+    setStadiumFightSprite(frames[stadiumFightFrameIndex]);
+  }
+
+  function moveStadiumFighterToward(target, speed, deltaSeconds) {
+    if (!stadiumFightFighter) return true;
+
+    const dx = target.x - stadiumFightFighter.x;
+    const dy = target.y - stadiumFightFighter.y;
+    const distance = Math.hypot(dx, dy);
+
+    if (distance <= 4) {
+      setStadiumFightPosition(target.x, target.y);
+      return true;
+    }
+
+    const step = Math.min(distance, speed * deltaSeconds);
+    setStadiumFightPosition(
+      stadiumFightFighter.x + (dx / distance) * step,
+      stadiumFightFighter.y + (dy / distance) * step
+    );
+
+    if (step >= distance) {
+      setStadiumFightPosition(target.x, target.y);
+      return true;
+    }
+    return false;
+  }
+
+  function updateStadiumFightIntro(deltaSeconds, now) {
+    if (!stadiumFightStarted || MAP.id !== STADIUM.mapId) return;
+
+    if (stadiumState.startsWith("fight-countdown-")) {
+      if (now >= stadiumFightPhaseEndAt) advanceStadiumFightCountdown(now);
+      return;
+    }
+
+    if (stadiumState === "fight-pruegel") {
+      if (now >= stadiumFightPhaseEndAt) beginStadiumFighterWalkUp(now);
+      return;
+    }
+
+    if (stadiumState === "fighter-entry-up") {
+      updateStadiumFighterWalkAnimation(now, STADIUM.fightIntro.walkUpFrames);
+
+      if (
+        moveStadiumFighterToward(
+          STADIUM.fightIntro.linePoint,
+          STADIUM.fightIntro.speedUp,
+          deltaSeconds
+        )
+      ) {
+        stadiumState = "fighter-victory";
+        stadiumFightPhaseEndAt = now + STADIUM.fightIntro.victoryDuration;
+        setStadiumFightSprite(STADIUM.fightIntro.victoryFrame);
+      }
+      return;
+    }
+
+    if (stadiumState === "fighter-victory") {
+      if (now < stadiumFightPhaseEndAt) return;
+
+      stadiumState = "fighter-entry-right";
+      stadiumFightFrameIndex = 0;
+      stadiumFightNextFrameAt = now + STADIUM.fightIntro.frameDuration;
+      setStadiumFightSprite(STADIUM.fightIntro.walkRightFrames[0]);
+      return;
+    }
+
+    if (stadiumState === "fighter-entry-right") {
+      updateStadiumFighterWalkAnimation(now, STADIUM.fightIntro.walkRightFrames);
+
+      if (
+        moveStadiumFighterToward(
+          STADIUM.fightIntro.readyPoint,
+          STADIUM.fightIntro.speedRight,
+          deltaSeconds
+        )
+      ) {
+        stadiumState = "fighter-ready";
+        setStadiumFightSprite(STADIUM.fightIntro.readyFrame);
+      }
+      return;
+    }
+  }
+
   function setStadiumBookmakerVisibility() {
     if (!stadiumBookmaker) return;
     stadiumBookmaker.root.style.display = MAP.id === STADIUM.mapId ? "block" : "none";
@@ -9386,6 +9777,7 @@
 
   function beginStadiumArrival() {
     if (MAP.id !== STADIUM.mapId) return;
+    resetStadiumFightIntro();
     stadiumState = "arrival-walk";
     keys.clear();
     cancelAttackImmediately();
@@ -9470,6 +9862,7 @@
     await switchMap(MAPS.oberkirch, MAP_EXIT_CONFIG.oberkirchFromStadiumSpawn, true);
     stadiumState = "inactive";
     stadiumArrivalFromOberkirch = false;
+    resetStadiumFightIntro();
     setStadiumBookmakerVisibility();
     setStadiumGateVisibility();
   }
@@ -9500,7 +9893,13 @@
     setStadiumBookmakerVisibility();
     setStadiumGateVisibility();
     updateStadiumBookmaker(now);
-    if (stadiumState === "arrival-walk") updateStadiumArrival(deltaSeconds);
+
+    if (stadiumState === "arrival-walk") {
+      updateStadiumArrival(deltaSeconds);
+      return;
+    }
+
+    updateStadiumFightIntro(deltaSeconds, now);
   }
 
   function installStartFlowStyles() {
