@@ -8813,12 +8813,12 @@
 
       // R82 — actual derby brawl. Existing R79-R81 intro values above stay untouched.
       brawl: Object.freeze({
-        approachDurationMs: 1800,
-        attackMs: 330,
-        restMs: 250,
+        approachDurationMs: 3200,
+        attackMs: 650,
+        restMs: 500,
         crossfadeMs: 85,
-        minCycles: 5,
-        maxCycles: 9,
+        minCycles: 50,
+        maxCycles: 90,
         targetOpaqueHeight: 900,
         neuensteinContact: Object.freeze({ x: 5480, y: 3540 }),
         schauenburgContact: Object.freeze({ x: 4700, y: 3540 }),
