@@ -8809,7 +8809,25 @@
         "assets/stadium/fighters/NEUENSTEIN WALK LEFT 1.png",
         "assets/stadium/fighters/NEUENSTEIN WALK LEFT 2.png"
       ]),
-      schauenburgReadyFrame: "assets/stadium/fighters/NEUENSTEIN READY.png"
+      schauenburgReadyFrame: "assets/stadium/fighters/NEUENSTEIN READY.png",
+
+      // R82 — actual derby brawl. Existing R79-R81 intro values above stay untouched.
+      brawl: Object.freeze({
+        approachDurationMs: 1800,
+        attackMs: 330,
+        restMs: 250,
+        crossfadeMs: 85,
+        minCycles: 5,
+        maxCycles: 9,
+        targetOpaqueHeight: 900,
+        neuensteinContact: Object.freeze({ x: 5480, y: 3540 }),
+        schauenburgContact: Object.freeze({ x: 4700, y: 3540 }),
+        sharedPoint: Object.freeze({ x: 5090, y: 3540 }),
+        dustPoint: Object.freeze({ x: 5090, y: 3380 }),
+        neuensteinAttack: "assets/stadium/fighters/FLEGEL N2.png",
+        sharedRest: "assets/stadium/fighters/DERBY REST.png",
+        schauenburgAttack: "assets/stadium/fighters/SCHAUENBURG ATTACK.png"
+      })
     }),
 
     arena: Object.freeze({
@@ -8855,6 +8873,18 @@
   let stadiumArenaAnnouncer = null;
   let stadiumFinalSequenceStartedAt = 0;
   let stadiumFinalSequenceStep = -1;
+
+  // R82 — isolated spectator derby brawl state.
+  let stadiumBrawlStarted = false;
+  let stadiumBrawlWinner = null;
+  let stadiumBrawlCyclesTarget = 0;
+  let stadiumBrawlCyclesDone = 0;
+  let stadiumBrawlPhaseEndAt = 0;
+  let stadiumBrawlApproachStartedAt = 0;
+  let stadiumBrawlApproachStartA = null;
+  let stadiumBrawlApproachStartB = null;
+  let stadiumBrawlVisuals = null;
+  let stadiumBrawlDust = null;
 
   // R77 — normalize each movement direction to ITS OWN matching stand pose.
   // WALK UP uses FLEGEL VICTORY as its size reference at the green circle.
@@ -9344,6 +9374,77 @@
         visibility: visible;
       }
 
+      .stadium-brawl-layer {
+        position: absolute;
+        z-index: 19;
+        transform: translate(-50%, -100%);
+        transform-origin: 50% 100%;
+        pointer-events: none;
+        user-select: none;
+        opacity: 0;
+        visibility: hidden;
+        transition: opacity ${STADIUM.fightIntro.brawl.crossfadeMs}ms linear,
+                    visibility ${STADIUM.fightIntro.brawl.crossfadeMs}ms linear;
+        will-change: opacity;
+      }
+
+      .stadium-brawl-layer--visible {
+        opacity: 1;
+        visibility: visible;
+      }
+
+      .stadium-brawl-layer__sprite {
+        position: absolute;
+        left: 50%;
+        bottom: 0;
+        width: auto;
+        height: auto;
+        max-width: none;
+        max-height: none;
+        transform-origin: 50% 100%;
+        filter: drop-shadow(0 8px 5px rgba(0,0,0,.30));
+        backface-visibility: hidden;
+        -webkit-backface-visibility: hidden;
+      }
+
+      .stadium-brawl-dust {
+        position: absolute;
+        z-index: 20;
+        width: 1px;
+        height: 1px;
+        pointer-events: none;
+        user-select: none;
+      }
+
+      .stadium-brawl-dust__puff {
+        position: absolute;
+        width: var(--dust-size, 120px);
+        height: calc(var(--dust-size, 120px) * .58);
+        left: var(--dust-x, 0px);
+        top: var(--dust-y, 0px);
+        margin-left: calc(var(--dust-size, 120px) * -.5);
+        margin-top: calc(var(--dust-size, 120px) * -.29);
+        border-radius: 48% 52% 44% 56%;
+        background: radial-gradient(ellipse at center,
+          rgba(214,196,157,.58) 0%,
+          rgba(178,154,113,.34) 45%,
+          rgba(120,95,64,.08) 72%,
+          rgba(90,70,46,0) 100%);
+        opacity: 0;
+        transform: scale(.28) translate(0, 0);
+        animation: stadiumBrawlDustPuff var(--dust-life, 330ms) ease-out forwards;
+        filter: blur(1.5px);
+      }
+
+      @keyframes stadiumBrawlDustPuff {
+        0% { opacity: 0; transform: scale(.28) translate(0, 0); }
+        18% { opacity: .92; }
+        100% {
+          opacity: 0;
+          transform: scale(1.55) translate(var(--dust-dx, 0px), var(--dust-dy, -18px));
+        }
+      }
+
       .stadium-gate-foreground {
         position: absolute;
         z-index: 18;
@@ -9603,6 +9704,68 @@
 
     fighterBRoot.append(fighterBImageA, fighterBImageB);
     world.appendChild(fighterBRoot);
+
+    // R82 — three isolated brawl layers: A attack, ONE shared rest image, B attack.
+    // Keeping these separate from the proven entry sprites prevents R79-R81 size/mirror regressions.
+    function makeBrawlLayer(id, src, point, mirror) {
+      const layer = document.createElement("div");
+      layer.id = id;
+      layer.className = "stadium-brawl-layer";
+      layer.style.left = `${point.x}px`;
+      layer.style.top = `${point.y}px`;
+
+      const img = document.createElement("img");
+      img.className = "stadium-brawl-layer__sprite";
+      img.src = encodeURI(src);
+      img.alt = "";
+      img.draggable = false;
+      layer.appendChild(img);
+      world.appendChild(layer);
+
+      const layout = () => layoutStadiumBrawlSprite(img, mirror);
+      img.addEventListener("load", layout);
+      if (img.complete && img.naturalWidth > 0) layout();
+      return { root: layer, image: img, src, mirror };
+    }
+
+    const brawlAttackA = makeBrawlLayer(
+      "stadiumBrawlAttackA",
+      STADIUM.fightIntro.brawl.neuensteinAttack,
+      STADIUM.fightIntro.brawl.neuensteinContact,
+      true
+    );
+    const brawlShared = makeBrawlLayer(
+      "stadiumBrawlShared",
+      STADIUM.fightIntro.brawl.sharedRest,
+      STADIUM.fightIntro.brawl.sharedPoint,
+      true
+    );
+    const brawlAttackB = makeBrawlLayer(
+      "stadiumBrawlAttackB",
+      STADIUM.fightIntro.brawl.schauenburgAttack,
+      STADIUM.fightIntro.brawl.schauenburgContact,
+      false
+    );
+
+    const brawlDust = document.createElement("div");
+    brawlDust.id = "stadiumBrawlDust";
+    brawlDust.className = "stadium-brawl-dust";
+    brawlDust.style.left = `${STADIUM.fightIntro.brawl.dustPoint.x}px`;
+    brawlDust.style.top = `${STADIUM.fightIntro.brawl.dustPoint.y}px`;
+    world.appendChild(brawlDust);
+
+    stadiumBrawlVisuals = { attackA: brawlAttackA, shared: brawlShared, attackB: brawlAttackB };
+    stadiumBrawlDust = brawlDust;
+
+    for (const brawlSrc of [
+      STADIUM.fightIntro.brawl.neuensteinAttack,
+      STADIUM.fightIntro.brawl.sharedRest,
+      STADIUM.fightIntro.brawl.schauenburgAttack
+    ]) {
+      const preload = new Image();
+      preload.src = encodeURI(brawlSrc);
+      if (typeof preload.decode === "function") preload.decode().catch(() => {});
+    }
 
     // R81 — announcer appears at the same arena presentation point.
     const announcerRoot = document.createElement("div");
@@ -10123,6 +10286,168 @@
     }
   }
 
+  function layoutStadiumBrawlSprite(image, mirror = false) {
+    if (!image || !image.naturalWidth || !image.naturalHeight) return;
+    const metrics = getStadiumFightOpaqueMetrics(image);
+    if (!metrics) return;
+    const scale = STADIUM.fightIntro.brawl.targetOpaqueHeight / Math.max(1, metrics.height);
+    const footGap = (metrics.naturalHeight - 1 - metrics.footBottomY) * scale;
+    image.style.width = `${(metrics.naturalWidth * scale).toFixed(3)}px`;
+    image.style.height = `${(metrics.naturalHeight * scale).toFixed(3)}px`;
+    image.style.bottom = `${(-footGap).toFixed(3)}px`;
+    image.style.transform = mirror ? "translateX(-50%) scaleX(-1)" : "translateX(-50%)";
+  }
+
+  function setStadiumBrawlLayerVisible(layer, visible) {
+    if (!layer || !layer.root) return;
+    layer.root.classList.toggle("stadium-brawl-layer--visible", visible);
+  }
+
+  function hideAllStadiumBrawlLayers() {
+    if (!stadiumBrawlVisuals) return;
+    setStadiumBrawlLayerVisible(stadiumBrawlVisuals.attackA, false);
+    setStadiumBrawlLayerVisible(stadiumBrawlVisuals.shared, false);
+    setStadiumBrawlLayerVisible(stadiumBrawlVisuals.attackB, false);
+  }
+
+  function showStadiumBrawlAttack() {
+    if (!stadiumBrawlVisuals) return;
+    setStadiumBrawlLayerVisible(stadiumBrawlVisuals.shared, false);
+    setStadiumBrawlLayerVisible(stadiumBrawlVisuals.attackA, true);
+    setStadiumBrawlLayerVisible(stadiumBrawlVisuals.attackB, true);
+    spawnStadiumBrawlDust();
+  }
+
+  function showStadiumBrawlRest() {
+    if (!stadiumBrawlVisuals) return;
+    setStadiumBrawlLayerVisible(stadiumBrawlVisuals.attackA, false);
+    setStadiumBrawlLayerVisible(stadiumBrawlVisuals.attackB, false);
+    setStadiumBrawlLayerVisible(stadiumBrawlVisuals.shared, true);
+  }
+
+  function clearStadiumBrawlDust() {
+    if (stadiumBrawlDust) stadiumBrawlDust.replaceChildren();
+  }
+
+  function spawnStadiumBrawlDust() {
+    if (!stadiumBrawlDust) return;
+    const count = 4 + Math.floor(Math.random() * 2);
+    for (let i = 0; i < count; i += 1) {
+      const puff = document.createElement("span");
+      puff.className = "stadium-brawl-dust__puff";
+      puff.style.setProperty("--dust-size", `${90 + Math.round(Math.random() * 95)}px`);
+      puff.style.setProperty("--dust-x", `${Math.round((Math.random() - .5) * 260)}px`);
+      puff.style.setProperty("--dust-y", `${Math.round((Math.random() - .5) * 105)}px`);
+      puff.style.setProperty("--dust-dx", `${Math.round((Math.random() - .5) * 95)}px`);
+      puff.style.setProperty("--dust-dy", `${-10 - Math.round(Math.random() * 42)}px`);
+      puff.style.setProperty("--dust-life", `${270 + Math.round(Math.random() * 120)}ms`);
+      stadiumBrawlDust.appendChild(puff);
+      puff.addEventListener("animationend", () => puff.remove(), { once: true });
+    }
+  }
+
+  function setStadiumFighterAMirrored(mirrored) {
+    if (!stadiumFightFighter) return;
+    for (const img of stadiumFightFighter.images) {
+      img.style.transform = mirrored
+        ? "translateX(-50%) scaleX(-1)"
+        : "translateX(-50%)";
+    }
+  }
+
+  function beginStadiumBrawl(now = performance.now()) {
+    if (stadiumBrawlStarted || !stadiumFightFighter || !stadiumFightFighterB) return;
+    stadiumBrawlStarted = true;
+
+    // One and only one outcome roll. Uses the exact existing bookmaker chance.
+    stadiumBrawlWinner = Math.random() < STADIUM.derby.schauenburgChance
+      ? "schauenburg"
+      : "neuenstein";
+    stadiumBrawlCyclesTarget = STADIUM.fightIntro.brawl.minCycles +
+      Math.floor(Math.random() * (STADIUM.fightIntro.brawl.maxCycles - STADIUM.fightIntro.brawl.minCycles + 1));
+    stadiumBrawlCyclesDone = 0;
+    stadiumBrawlApproachStartedAt = now;
+    stadiumBrawlApproachStartA = { x: stadiumFightFighter.x, y: stadiumFightFighter.y };
+    stadiumBrawlApproachStartB = { x: stadiumFightFighterB.x, y: stadiumFightFighterB.y };
+    stadiumFightFrameIndex = 0;
+    stadiumFightFighterBFrameIndex = 0;
+    stadiumFightNextFrameAt = now + STADIUM.fightIntro.frameDuration;
+    stadiumFightFighterBNextFrameAt = now + STADIUM.fightIntro.frameDuration;
+    hideAllStadiumBrawlLayers();
+    clearStadiumBrawlDust();
+
+    // Reuse the already-proven side-run animation groups in the reverse direction.
+    setStadiumFightSprite(STADIUM.fightIntro.walkRightFrames[0], true);
+    setStadiumFightSpriteB(STADIUM.fightIntro.schauenburgWalkLeftFrames[0], true);
+    setStadiumFighterAMirrored(true);
+    for (const img of stadiumFightFighterB.images) img.style.transform = "translateX(-50%)";
+    stadiumState = "fight-brawl-approach";
+  }
+
+  function updateStadiumBrawlApproach(now) {
+    if (!stadiumBrawlApproachStartA || !stadiumBrawlApproachStartB) return;
+    updateStadiumFighterWalkAnimation(now, STADIUM.fightIntro.walkRightFrames);
+    updateStadiumFighterBWalkAnimation(now, STADIUM.fightIntro.schauenburgWalkLeftFrames, false);
+    setStadiumFighterAMirrored(true);
+
+    const duration = Math.max(1, STADIUM.fightIntro.brawl.approachDurationMs);
+    const t = Math.min(1, Math.max(0, (now - stadiumBrawlApproachStartedAt) / duration));
+    const eased = t * t * (3 - 2 * t);
+    const aTarget = STADIUM.fightIntro.brawl.neuensteinContact;
+    const bTarget = STADIUM.fightIntro.brawl.schauenburgContact;
+
+    setStadiumFightPosition(
+      stadiumBrawlApproachStartA.x + (aTarget.x - stadiumBrawlApproachStartA.x) * eased,
+      stadiumBrawlApproachStartA.y + (aTarget.y - stadiumBrawlApproachStartA.y) * eased
+    );
+    setStadiumFightPositionB(
+      stadiumBrawlApproachStartB.x + (bTarget.x - stadiumBrawlApproachStartB.x) * eased,
+      stadiumBrawlApproachStartB.y + (bTarget.y - stadiumBrawlApproachStartB.y) * eased
+    );
+
+    if (t < 1) return;
+
+    // The entry roots are replaced only now; the actual hit images are isolated R82 layers.
+    stadiumFightFighter.root.classList.remove("stadium-fighter--visible");
+    stadiumFightFighterB.root.classList.remove("stadium-fighter--visible");
+    showStadiumBrawlAttack();
+    stadiumBrawlPhaseEndAt = now + STADIUM.fightIntro.brawl.attackMs;
+    stadiumState = "fight-brawl-attack";
+  }
+
+  function updateStadiumBrawl(now) {
+    if (stadiumState === "fight-brawl-approach") {
+      updateStadiumBrawlApproach(now);
+      return true;
+    }
+
+    if (stadiumState === "fight-brawl-attack") {
+      if (now < stadiumBrawlPhaseEndAt) return true;
+      showStadiumBrawlRest();
+      stadiumBrawlPhaseEndAt = now + STADIUM.fightIntro.brawl.restMs;
+      stadiumState = "fight-brawl-rest";
+      return true;
+    }
+
+    if (stadiumState === "fight-brawl-rest") {
+      if (now < stadiumBrawlPhaseEndAt) return true;
+      stadiumBrawlCyclesDone += 1;
+      if (stadiumBrawlCyclesDone >= stadiumBrawlCyclesTarget) {
+        // R82 stops on the neutral shared frame. R83 can attach victory/defeat/payout here.
+        showStadiumBrawlRest();
+        stadiumState = "fight-brawl-result";
+        return true;
+      }
+      showStadiumBrawlAttack();
+      stadiumBrawlPhaseEndAt = now + STADIUM.fightIntro.brawl.attackMs;
+      stadiumState = "fight-brawl-attack";
+      return true;
+    }
+
+    if (stadiumState === "fight-brawl-result") return true;
+    return false;
+  }
+
   function setStadiumArenaAnnouncerFrame(index, visible = true) {
     if (!stadiumArenaAnnouncer) return;
     const safeIndex = Math.max(0, Math.min(stadiumArenaAnnouncer.images.length - 1, index));
@@ -10225,6 +10550,16 @@
     stadiumBattleHornPlayed = false;
     stadiumFinalSequenceStartedAt = 0;
     stadiumFinalSequenceStep = -1;
+    stadiumBrawlStarted = false;
+    stadiumBrawlWinner = null;
+    stadiumBrawlCyclesTarget = 0;
+    stadiumBrawlCyclesDone = 0;
+    stadiumBrawlPhaseEndAt = 0;
+    stadiumBrawlApproachStartedAt = 0;
+    stadiumBrawlApproachStartA = null;
+    stadiumBrawlApproachStartB = null;
+    hideAllStadiumBrawlLayers();
+    clearStadiumBrawlDust();
     try {
       stadiumFightAnnouncerAudio.pause();
       stadiumFightAnnouncerAudio.currentTime = 0;
@@ -10244,6 +10579,7 @@
       stadiumFightFighter.root.classList.remove("stadium-fighter--visible");
       setStadiumFightPosition(STADIUM.fightIntro.start.x, STADIUM.fightIntro.start.y);
       setStadiumFightSprite(STADIUM.fightIntro.walkUpFrames[0], true);
+      setStadiumFighterAMirrored(false);
     }
     if (stadiumFightFighterB) {
       stadiumFightFighterB.root.classList.remove("stadium-fighter--visible");
@@ -10387,6 +10723,17 @@
     }
 
     if (stadiumState === "fight-await-brawl") {
+      beginStadiumBrawl(now);
+      return;
+    }
+
+    if (
+      stadiumState === "fight-brawl-approach" ||
+      stadiumState === "fight-brawl-attack" ||
+      stadiumState === "fight-brawl-rest" ||
+      stadiumState === "fight-brawl-result"
+    ) {
+      updateStadiumBrawl(now);
       return;
     }
 
