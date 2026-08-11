@@ -1,75 +1,31 @@
-HDR R67 – TIERBANNSTEIN LEVEL 1
+HDR MMO – R67 SCHWEINEKEULE / WAFFE 1
 
-PATCH-INHALT
-- game.js
-- assets/events/TIERBANNSTEIN LEVEL 1.png
+GitHub-Patch: Dateien im Repository-Stamm entpacken/überschreiben.
+index.html und alle bestehenden Karten-/Tier-/Audio-Dateien bleiben unverändert.
 
-BETROFFENE KARTEN
-- MAP 2 WINTERBACH · RANGLEHEN
-- MAP 3 LAUTENBACH
-Keine andere Map erhält Tierbannsteine.
+Neu:
+- Schweinekeule als 1x2-Inventaritem (senkrecht)
+- Teststart direkt im ersten freien vertikalen 1x2-Bereich auf Inventarseite I
+- Rechtsklick auf Keule: Ausrüsten in oberen linken Waffenplatz
+- Rechtsklick auf ausgerüstete Keule: Zurück ins erste freie 1x2-Inventarfeld
+- Drag & Drop Inventar -> Waffenplatz
+- Drag & Drop Waffenplatz -> Inventarraster
+- Drag & Drop der Keule innerhalb des Rasters
+- Levelgrenze vorbereitet: Level 1 bis 10
+- Ohne Keule: bestehender Faustkampf unverändert
+- Mit Keule: 4 fertige Charakter+Waffe-Angriffsframes je Richtung
+- RIGHT ist die horizontale Spiegelung von LEFT
+- keine Lauf-/Stand-Overlays, keine separate Waffenebene
+- bestehender Angriffssound, Damage, Crit, Knockback und Trefferpipeline bleiben erhalten
 
-SPAWN
-- Pro Karte eigener Timer.
-- Alle 120 Sekunden eigener unabhängiger 25%-Wurf.
-- Bei Erfolg wird EIN freier blauer Spawnpunkt der betreffenden Karte gewählt.
-- Ein bereits belegter Punkt kann niemals einen zweiten Stein bekommen.
-- Ein nicht zerstörter Stein blockiert nur seinen eigenen Spawnpunkt.
-- Nach zwei weiteren Minuten kann deshalb theoretisch ein weiterer Stein
-  an einem ANDEREN freien Punkt erscheinen.
-- Nach Zerstörung wird sein Spawnpunkt wieder frei.
+Sprite-QA:
+- 16 Dateien, je 1024x1536, Alpha vorhanden
+- genau eine große zusammenhängende Figur pro Datei
+- kein Sprite berührt den Bildrand
+- kein Nachbarcharakter in den Exporten
+- Keule/Charakter vollständig innerhalb der exportierten Silhouette soweit im gelieferten Quellbild vorhanden
+- RIGHT sichtbare Pixel sind exakte Spiegelung von LEFT
 
-EXAKTE BLAUE PUNKTE
-WINTERBACH:
-(2502,656), (8368,1349), (4274,2097), (2085,2666), (4781,3530), (3121,4169)
-
-LAUTENBACH:
-(8822,1026), (8599,2412), (8614,5049)
-
-STEIN
-- 2000 HP.
-- Spieler verursacht exakt seine vorhandenen 20/20/20/40 Treffer.
-- Kritischer 4. Schlag bleibt kritisch + Staub, aber KEIN Knockback am Stein.
-- Jeder Treffer lässt den starren Stein kurz wackeln.
-- Spawn: kleine Fallbewegung von oben, Aufprallstaub, zweimaliges Hin-/Herwackeln.
-- 0 HP: großer Staub-/Fade-Abgang; Spawnpunkt wird wieder frei.
-
-WELLEN
-1900 HP -> 10 Hasen
-1700 HP -> 1 Wildschwein
-1500 HP -> 10 Hasen
-1300 HP -> 3 Wildschweine
-1000 HP -> 10 Hasen
- 800 HP -> 3 Wildschweine
- 500 HP -> 15 Hasen
- 300 HP -> 2 Wildschweine
- 100 HP -> 1 Wolf
-
-HASEN
-- Spawnen direkt aus der Steinmitte.
-- Fliehen sofort radial in unterschiedliche Richtungen.
-- Nach einigen Metern stoppen sie und gehen in freie normale Bewegung über.
-- Für ihre Sonderbewegung wird die vorhandene Landschaft-/Fluss-/Gebäudekollision benutzt.
-- HP, Treffer, Sounds und vorhandener Hasenloot bleiben gleich.
-- Eventhasen respawnen nach Tod nicht erneut, damit sich die Welt nicht endlos vervielfacht.
-
-WILDSCHWEINE / WOLF
-- Spawnen verteilt in einem größeren Kreis um den Stein, nicht auf einem Fleck.
-- Gültige Spawnpunkte werden gegen bestehende Landschaftskollision geprüft.
-- Kandidaten weiter vom Spieler werden bevorzugt, damit nichts direkt auf ihm erscheint.
-- Danach verfolgen sie den Spieler unmittelbar.
-- Bestehende HP, Treffer, Death-Bilder, Sounds und Lootsysteme bleiben erhalten.
-- Eventtiere respawnen nach Tod nicht erneut.
-
-NICHT VERÄNDERT
-- vorhandene Tierpopulationen/Habitate
-- Maps und Mapwechsel
-- Spieleranimationen
-- Schaden
-- Inventar
-- Lootchancen
-- Musik
-- Startscreen
-- Gebäude
-
-node --check: OK
+Hinweis:
+Die einzige Zeile, die später entfernt werden muss, wenn die Keule als Weltbelohnung erhältlich wird,
+ist im initialize()-Block mit "R67 TEST" markiert.

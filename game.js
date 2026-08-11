@@ -328,6 +328,78 @@
     { sprite: PLAYER.standUp, duration: 400 }
   ]);
 
+  // ------------------------------------------------------------------
+  // R67 WAFFE 1 — SCHWEINEKEULE (LV 1-10)
+  // Finished character+weapon sprites; NO runtime weapon overlay.
+  // ------------------------------------------------------------------
+  const WEAPONS = Object.freeze({
+    pinkPigClub: Object.freeze({
+      id: "pink-pig-club",
+      name: "SCHWEINEKEULE",
+      icon: "assets/items/weapons/PINK PIG CLUB.png",
+      inventoryWidth: 1,
+      inventoryHeight: 2,
+      levelMin: 1,
+      levelMax: 10,
+      attacks: Object.freeze({
+        left: Object.freeze([
+          "assets/player/weapons/pink-pig-club/PLAYER CLUB LEFT 1.webp",
+          "assets/player/weapons/pink-pig-club/PLAYER CLUB LEFT 2.webp",
+          "assets/player/weapons/pink-pig-club/PLAYER CLUB LEFT 3.webp",
+          "assets/player/weapons/pink-pig-club/PLAYER CLUB LEFT 4.webp"
+        ]),
+        right: Object.freeze([
+          "assets/player/weapons/pink-pig-club/PLAYER CLUB RIGHT 1.webp",
+          "assets/player/weapons/pink-pig-club/PLAYER CLUB RIGHT 2.webp",
+          "assets/player/weapons/pink-pig-club/PLAYER CLUB RIGHT 3.webp",
+          "assets/player/weapons/pink-pig-club/PLAYER CLUB RIGHT 4.webp"
+        ]),
+        down: Object.freeze([
+          "assets/player/weapons/pink-pig-club/PLAYER CLUB DOWN 1.webp",
+          "assets/player/weapons/pink-pig-club/PLAYER CLUB DOWN 2.webp",
+          "assets/player/weapons/pink-pig-club/PLAYER CLUB DOWN 3.webp",
+          "assets/player/weapons/pink-pig-club/PLAYER CLUB DOWN 4.webp"
+        ]),
+        up: Object.freeze([
+          "assets/player/weapons/pink-pig-club/PLAYER CLUB UP 1.webp",
+          "assets/player/weapons/pink-pig-club/PLAYER CLUB UP 2.webp",
+          "assets/player/weapons/pink-pig-club/PLAYER CLUB UP 3.webp",
+          "assets/player/weapons/pink-pig-club/PLAYER CLUB UP 4.webp"
+        ])
+      })
+    })
+  });
+
+  // Weapon combo keeps the EXACT existing hit beat and total cycle length.
+  // The tiny fist-combat stand gaps are represented by holding the same club pose,
+  // so only the four supplied weapon images are ever visible.
+  function makeClubSequence(direction) {
+    const f = WEAPONS.pinkPigClub.attacks[direction];
+    const entries = [];
+
+    if (direction === "down") {
+      entries.push({ sprite: f[0], duration: 100 });
+    }
+
+    entries.push(
+      { sprite: f[0], duration: 400, hit: true, damage: 20, strike: 1 },
+      { sprite: f[0], duration: 100 },
+      { sprite: f[1], duration: 500, hit: true, damage: 20, strike: 2 },
+      { sprite: f[1], duration: 100 },
+      { sprite: f[2], duration: 400, hit: true, damage: 20, strike: 4 },
+      { sprite: f[2], duration: 100 },
+      { sprite: f[3], duration: 500, hit: true, damage: 40, strike: 3, critical: true },
+      { sprite: f[3], duration: 400 }
+    );
+
+    return Object.freeze(entries.map((entry) => Object.freeze(entry)));
+  }
+
+  const CLUB_ATTACK_RIGHT = makeClubSequence("right");
+  const CLUB_ATTACK_LEFT = makeClubSequence("left");
+  const CLUB_ATTACK_DOWN = makeClubSequence("down");
+  const CLUB_ATTACK_UP = makeClubSequence("up");
+
   const ZOOM_MULTIPLIERS = [1, 1.75, 3, 4.5];
   const ZOOM_DURATION = 300;
 
@@ -3545,8 +3617,8 @@
   function playBoarHitSound() { playInterruptibleAnimalHitSound("boar"); }
 
   function rabbitAttackDirection() {
-    if (attackSequence === ATTACK_DOWN) return "down";
-    if (attackSequence === ATTACK_LEFT) return "left";
+    if (attackSequence === ATTACK_DOWN || attackSequence === CLUB_ATTACK_DOWN) return "down";
+    if (attackSequence === ATTACK_LEFT || attackSequence === CLUB_ATTACK_LEFT) return "left";
     return "right";
   }
 
@@ -5112,6 +5184,19 @@
   const CABBAGE_ITEM = Object.freeze({ id: "cabbage", name: "KOHL", description: "KEILERLOOT", icon: "assets/items/KOHL.svg", stackable: true });
   const LETTUCE_ITEM = Object.freeze({ id: "lettuce", name: "SALATKOPF", description: "KEILERLOOT", icon: "assets/items/SALATKOPF.svg", stackable: true });
   const BOAR_TUSK_ITEM = Object.freeze({ id: "boar-tusk", name: "KEILERSTOSSZAHN", description: "SELTENER KEILERLOOT", icon: "assets/items/KEILERSTOSSZAHN.svg", stackable: true });
+
+  const PINK_PIG_CLUB_ITEM = Object.freeze({
+    id: WEAPONS.pinkPigClub.id,
+    name: WEAPONS.pinkPigClub.name,
+    description: "PRIMITIVE HOLZKEULE · LEVEL 1–10",
+    icon: WEAPONS.pinkPigClub.icon,
+    stackable: false,
+    width: WEAPONS.pinkPigClub.inventoryWidth,
+    height: WEAPONS.pinkPigClub.inventoryHeight,
+    type: "weapon",
+    levelMin: WEAPONS.pinkPigClub.levelMin,
+    levelMax: WEAPONS.pinkPigClub.levelMax
+  });
 
   const WOLF_LOOT_CONFIG = Object.freeze({ peltChance: .05, clawChance: .02, bagChance: .01 });
   const BOAR_LOOT_CONFIG = Object.freeze({ radishChance: .20, cabbageChance: .10, lettuceChance: .05, tuskChance: .02 });
@@ -9085,8 +9170,15 @@
     // Invisible mouse hit areas over the painted controls.
     closeRect: Object.freeze({ x1: 430, y1: 16, x2: 490, y2: 77 }),
     page1Rect: Object.freeze({ x1: 18, y1: 713, x2: 246, y2: 772 }),
-    page2Rect: Object.freeze({ x1: 252, y1: 713, x2: 490, y2: 772 })
+    page2Rect: Object.freeze({ x1: 252, y1: 713, x2: 490, y2: 772 }),
+
+    // Painted top-left weapon equipment slot on the supplied inventory artwork.
+    weaponEquipRect: Object.freeze({ x1: 45, y1: 196, x2: 125, y2: 300 })
   });
+
+  let playerLevel = 1;
+  let equippedWeapon = null;
+  let equippedWeaponItem = null;
 
   const inventoryState = {
     open: false,
@@ -9100,7 +9192,8 @@
     image: null,
     slotsLayer: null,
     closeButton: null,
-    pageButtons: []
+    pageButtons: [],
+    weaponEquipZone: null
   };
 
   function installInventoryStyles() {
@@ -9278,6 +9371,54 @@
           0 2px 3px #000;
       }
 
+      .inventory-item--weapon {
+        cursor: grab;
+      }
+
+      .inventory-item--weapon:active {
+        cursor: grabbing;
+      }
+
+      .inventory-item--equipped {
+        filter:
+          drop-shadow(0 0 4px rgba(255,245,195,.96))
+          drop-shadow(0 0 8px rgba(255,218,130,.72));
+      }
+
+      .inventory-item--equipped::after {
+        content: "E";
+        position: absolute;
+        z-index: 8;
+        right: 2px;
+        top: 2px;
+        color: #fff7d6;
+        font: 900 clamp(10px, 1.35vh, 16px)/1 Georgia, serif;
+        text-shadow: 0 1px 2px #000, 0 0 4px #000;
+        pointer-events: none;
+      }
+
+      .inventory-weapon-equip-zone {
+        position: absolute;
+        z-index: 7;
+        box-sizing: border-box;
+        pointer-events: auto;
+        background: transparent;
+      }
+
+      .inventory-weapon-equip-zone.inventory-weapon-equip-zone--dragover {
+        filter: drop-shadow(0 0 7px rgba(255,245,195,.9));
+      }
+
+      .inventory-weapon-equip-icon {
+        position: absolute;
+        inset: 5%;
+        width: 90%;
+        height: 90%;
+        object-fit: contain;
+        pointer-events: none;
+        filter: drop-shadow(0 2px 2px rgba(0,0,0,.75));
+      }
+
       @media (max-width: 680px) {
         .inventory-panel {
           height: min(89vh, 900px);
@@ -9319,6 +9460,231 @@
     };
   }
 
+  function inventoryItemRect(slotIndex, width = 1, height = 1) {
+    const start = inventorySlotRect(slotIndex);
+    const col = slotIndex % INVENTORY_CONFIG.columns;
+    const row = Math.floor(slotIndex / INVENTORY_CONFIG.columns);
+    const endIndex =
+      (row + height - 1) * INVENTORY_CONFIG.columns + (col + width - 1);
+    const end = inventorySlotRect(endIndex);
+
+    return {
+      x: start.x,
+      y: start.y,
+      width: (end.x + end.width) - start.x,
+      height: (end.y + end.height) - start.y
+    };
+  }
+
+  function isInventoryOccupancyMarker(value) {
+    return Boolean(value && value.occupiedBy !== undefined);
+  }
+
+  function clearInventoryItem(pageIndex, slotIndex) {
+    const page = inventoryState.pages[pageIndex];
+    if (!page) return null;
+
+    let anchorIndex = slotIndex;
+    const found = page[slotIndex];
+    if (isInventoryOccupancyMarker(found)) {
+      anchorIndex = found.occupiedBy;
+    }
+
+    const stack = page[anchorIndex];
+    if (!stack || isInventoryOccupancyMarker(stack)) return null;
+
+    const width = Math.max(1, Number(stack.width) || 1);
+    const height = Math.max(1, Number(stack.height) || 1);
+    const col = anchorIndex % INVENTORY_CONFIG.columns;
+    const row = Math.floor(anchorIndex / INVENTORY_CONFIG.columns);
+
+    for (let dy = 0; dy < height; dy += 1) {
+      for (let dx = 0; dx < width; dx += 1) {
+        const index = (row + dy) * INVENTORY_CONFIG.columns + (col + dx);
+        if (page[index] && (
+          index === anchorIndex ||
+          page[index].occupiedBy === anchorIndex
+        )) {
+          page[index] = null;
+        }
+      }
+    }
+
+    return stack;
+  }
+
+  function canPlaceInventoryItem(pageIndex, slotIndex, width = 1, height = 1) {
+    const page = inventoryState.pages[pageIndex];
+    if (!page) return false;
+
+    const col = slotIndex % INVENTORY_CONFIG.columns;
+    const row = Math.floor(slotIndex / INVENTORY_CONFIG.columns);
+    if (col + width > INVENTORY_CONFIG.columns) return false;
+    if (row + height > INVENTORY_CONFIG.rows) return false;
+
+    for (let dy = 0; dy < height; dy += 1) {
+      for (let dx = 0; dx < width; dx += 1) {
+        const index = (row + dy) * INVENTORY_CONFIG.columns + (col + dx);
+        if (page[index]) return false;
+      }
+    }
+    return true;
+  }
+
+  function placeInventoryItem(pageIndex, slotIndex, stack) {
+    if (!stack) return false;
+    const width = Math.max(1, Number(stack.width) || 1);
+    const height = Math.max(1, Number(stack.height) || 1);
+    if (!canPlaceInventoryItem(pageIndex, slotIndex, width, height)) return false;
+
+    const page = inventoryState.pages[pageIndex];
+    const col = slotIndex % INVENTORY_CONFIG.columns;
+    const row = Math.floor(slotIndex / INVENTORY_CONFIG.columns);
+
+    page[slotIndex] = stack;
+    for (let dy = 0; dy < height; dy += 1) {
+      for (let dx = 0; dx < width; dx += 1) {
+        if (dx === 0 && dy === 0) continue;
+        const index = (row + dy) * INVENTORY_CONFIG.columns + (col + dx);
+        page[index] = { occupiedBy: slotIndex };
+      }
+    }
+    return true;
+  }
+
+  function findFirstFreeInventoryArea(width = 1, height = 1) {
+    for (let pageIndex = 0; pageIndex < inventoryState.pages.length; pageIndex += 1) {
+      for (let slotIndex = 0; slotIndex < INVENTORY_CONFIG.slotCount; slotIndex += 1) {
+        if (canPlaceInventoryItem(pageIndex, slotIndex, width, height)) {
+          return { pageIndex, slotIndex };
+        }
+      }
+    }
+    return null;
+  }
+
+  function inventorySlotIndexFromClientPoint(clientX, clientY) {
+    if (!inventoryState.panel) return -1;
+    const box = inventoryState.panel.getBoundingClientRect();
+    if (!box.width || !box.height) return -1;
+
+    const px = ((clientX - box.left) / box.width) * 507;
+    const py = ((clientY - box.top) / box.height) * 1241;
+
+    for (let slotIndex = 0; slotIndex < INVENTORY_CONFIG.slotCount; slotIndex += 1) {
+      const rect = inventorySlotRect(slotIndex);
+      if (
+        px >= rect.x && px <= rect.x + rect.width &&
+        py >= rect.y && py <= rect.y + rect.height
+      ) {
+        return slotIndex;
+      }
+    }
+    return -1;
+  }
+
+  function moveInventoryWeaponToSlot(fromPage, fromSlot, toPage, toSlot) {
+    const page = inventoryState.pages[fromPage];
+    if (!page) return false;
+    let anchorIndex = fromSlot;
+    if (isInventoryOccupancyMarker(page[fromSlot])) anchorIndex = page[fromSlot].occupiedBy;
+    const original = page[anchorIndex];
+    if (!original || original.type !== "weapon") return false;
+
+    const removed = clearInventoryItem(fromPage, anchorIndex);
+    if (!removed) return false;
+    if (placeInventoryItem(toPage, toSlot, removed)) {
+      renderInventory();
+      return true;
+    }
+
+    placeInventoryItem(fromPage, anchorIndex, removed);
+    renderInventory();
+    return false;
+  }
+
+  function placeEquippedWeaponAtInventorySlot(pageIndex, slotIndex) {
+    if (!equippedWeaponItem) return false;
+    const item = equippedWeaponItem;
+    if (!canPlaceInventoryItem(pageIndex, slotIndex, item.width || 1, item.height || 1)) return false;
+    if (!placeInventoryItem(pageIndex, slotIndex, item)) return false;
+    equippedWeaponItem = null;
+    equippedWeapon = null;
+    renderInventory();
+    return true;
+  }
+
+  function weaponCanBeEquipped(stack) {
+    if (!stack || stack.type !== "weapon") return false;
+    const min = Number(stack.levelMin ?? 1);
+    const max = Number(stack.levelMax ?? Infinity);
+    return playerLevel >= min && playerLevel <= max;
+  }
+
+  function equipWeaponFromInventory(pageIndex, slotIndex) {
+    const page = inventoryState.pages[pageIndex];
+    if (!page) return false;
+
+    let anchorIndex = slotIndex;
+    if (isInventoryOccupancyMarker(page[slotIndex])) {
+      anchorIndex = page[slotIndex].occupiedBy;
+    }
+
+    const stack = page[anchorIndex];
+    if (!weaponCanBeEquipped(stack)) return false;
+
+    // Only one weapon slot exists. Put the previous weapon back first.
+    if (equippedWeaponItem) {
+      const old = equippedWeaponItem;
+      equippedWeaponItem = null;
+      equippedWeapon = null;
+      const freeOld = findFirstFreeInventoryArea(old.width || 1, old.height || 1);
+      if (!freeOld || !placeInventoryItem(freeOld.pageIndex, freeOld.slotIndex, old)) {
+        equippedWeaponItem = old;
+        equippedWeapon = old.id;
+        return false;
+      }
+    }
+
+    const removed = clearInventoryItem(pageIndex, anchorIndex);
+    if (!removed) return false;
+
+    equippedWeaponItem = removed;
+    equippedWeapon = removed.id;
+    renderInventory();
+    return true;
+  }
+
+  function unequipWeaponToInventory() {
+    if (!equippedWeaponItem) return false;
+    const item = equippedWeaponItem;
+    const free = findFirstFreeInventoryArea(item.width || 1, item.height || 1);
+    if (!free) return false;
+
+    if (!placeInventoryItem(free.pageIndex, free.slotIndex, item)) return false;
+    equippedWeaponItem = null;
+    equippedWeapon = null;
+    inventoryState.currentPage = free.pageIndex;
+    renderInventory();
+    return true;
+  }
+
+  function renderEquippedWeapon() {
+    const zone = inventoryState.weaponEquipZone;
+    if (!zone) return;
+    zone.replaceChildren();
+    zone.classList.remove("inventory-weapon-equip-zone--dragover");
+
+    zone.draggable = Boolean(equippedWeaponItem);
+    if (!equippedWeaponItem) return;
+    const icon = document.createElement("img");
+    icon.className = "inventory-weapon-equip-icon";
+    icon.src = encodeURI(equippedWeaponItem.icon || WEAPONS.pinkPigClub.icon);
+    icon.alt = "";
+    icon.draggable = false;
+    zone.appendChild(icon);
+  }
+
   function renderInventory() {
     if (!inventoryState.root || !inventoryState.image || !inventoryState.slotsLayer) return;
 
@@ -9328,11 +9694,8 @@
 
     inventoryState.pageButtons.forEach((button, index) => {
       if (!button) return;
-      if (index === inventoryState.currentPage) {
-        button.setAttribute("aria-current", "page");
-      } else {
-        button.removeAttribute("aria-current");
-      }
+      if (index === inventoryState.currentPage) button.setAttribute("aria-current", "page");
+      else button.removeAttribute("aria-current");
     });
 
     inventoryState.slotsLayer.replaceChildren();
@@ -9340,19 +9703,21 @@
     const page = inventoryState.pages[inventoryState.currentPage];
     for (let slotIndex = 0; slotIndex < page.length; slotIndex += 1) {
       const stack = page[slotIndex];
-      if (!stack) continue;
+      if (!stack || isInventoryOccupancyMarker(stack)) continue;
 
-      const rect = inventorySlotRect(slotIndex);
+      const width = Math.max(1, Number(stack.width) || 1);
+      const height = Math.max(1, Number(stack.height) || 1);
+      const rect = inventoryItemRect(slotIndex, width, height);
       const item = document.createElement("div");
-      item.className = "inventory-item";
+      item.className = "inventory-item" + (stack.type === "weapon" ? " inventory-item--weapon" : "");
       item.dataset.itemId = stack.id;
       item.dataset.slotIndex = String(slotIndex);
+      item.dataset.pageIndex = String(inventoryState.currentPage);
       item.style.left = `${inventoryPercentX(rect.x)}%`;
       item.style.top = `${inventoryPercentY(rect.y)}%`;
       item.style.width = `${inventoryPercentX(rect.width)}%`;
       item.style.height = `${inventoryPercentY(rect.height)}%`;
 
-      // V1: the black penny is the first real inventory item.
       if (stack.id === "black-penny") {
         const icon = document.createElement("div");
         icon.className = "inventory-item__penny";
@@ -9363,21 +9728,38 @@
         icon.src = encodeURI(stack.icon);
         icon.alt = "";
         icon.draggable = false;
-        icon.width = 64;
-        icon.height = 64;
-        icon.addEventListener("error", () => {
-          console.warn("Inventory icon failed to load:", stack.icon);
-        });
+        icon.addEventListener("error", () => console.warn("Inventory icon failed to load:", stack.icon));
         item.appendChild(icon);
       }
 
-      const quantity = document.createElement("span");
-      quantity.className = "inventory-item__quantity";
-      quantity.textContent = String(stack.quantity || 1);
-      item.appendChild(quantity);
+      if (stack.stackable || (stack.quantity || 1) > 1) {
+        const quantity = document.createElement("span");
+        quantity.className = "inventory-item__quantity";
+        quantity.textContent = String(stack.quantity || 1);
+        item.appendChild(quantity);
+      }
+
+      if (stack.type === "weapon") {
+        item.draggable = true;
+        item.addEventListener("contextmenu", (event) => {
+          event.preventDefault();
+          equipWeaponFromInventory(inventoryState.currentPage, slotIndex);
+        });
+        item.addEventListener("dragstart", (event) => {
+          if (!event.dataTransfer) return;
+          event.dataTransfer.effectAllowed = "move";
+          event.dataTransfer.setData("text/plain", JSON.stringify({
+            kind: "inventory-weapon",
+            pageIndex: inventoryState.currentPage,
+            slotIndex
+          }));
+        });
+      }
 
       inventoryState.slotsLayer.appendChild(item);
     }
+
+    renderEquippedWeapon();
   }
 
   function setInventoryPage(pageIndex) {
@@ -9389,15 +9771,12 @@
 
   function openInventory() {
     if (!inventoryState.root) return;
-
-    // Every fresh I-open starts on Roman page I, as requested.
     inventoryState.currentPage = 0;
     inventoryState.open = true;
     keys.clear();
     attackHeld = false;
     cancelAttackImmediately();
     if (blocking) stopBlocking();
-
     renderInventory();
     inventoryState.root.classList.add("inventory-ui--open");
     inventoryState.root.setAttribute("aria-hidden", "false");
@@ -9412,11 +9791,8 @@
   }
 
   function toggleInventory() {
-    if (inventoryState.open) {
-      closeInventory();
-    } else {
-      openInventory();
-    }
+    if (inventoryState.open) closeInventory();
+    else openInventory();
   }
 
   function findInventoryStack(itemId) {
@@ -9424,7 +9800,7 @@
       const page = inventoryState.pages[pageIndex];
       for (let slotIndex = 0; slotIndex < page.length; slotIndex += 1) {
         const stack = page[slotIndex];
-        if (stack && stack.id === itemId) {
+        if (stack && !isInventoryOccupancyMarker(stack) && stack.id === itemId) {
           return { pageIndex, slotIndex, stack };
         }
       }
@@ -9433,19 +9809,12 @@
   }
 
   function findFirstFreeInventorySlot() {
-    for (let pageIndex = 0; pageIndex < inventoryState.pages.length; pageIndex += 1) {
-      const page = inventoryState.pages[pageIndex];
-      for (let slotIndex = 0; slotIndex < page.length; slotIndex += 1) {
-        if (!page[slotIndex]) return { pageIndex, slotIndex };
-      }
-    }
-    return null;
+    return findFirstFreeInventoryArea(1, 1);
   }
 
   function addItemToInventory(item) {
     if (!item || !item.id) return false;
 
-    // R61: loot resources stack cleanly in one exact raster slot.
     if (item.id === "black-penny" || item.stackable) {
       const existing = findInventoryStack(item.id);
       if (existing) {
@@ -9455,19 +9824,26 @@
       }
     }
 
-    const free = findFirstFreeInventorySlot();
+    const width = Math.max(1, Number(item.width) || 1);
+    const height = Math.max(1, Number(item.height) || 1);
+    const free = findFirstFreeInventoryArea(width, height);
     if (!free) return false;
 
-    inventoryState.pages[free.pageIndex][free.slotIndex] = {
+    const stack = {
       id: item.id,
       name: item.name || item.id,
       description: item.description || "",
       icon: item.icon || "",
-      width: 1,
-      height: 1,
-      quantity: 1
+      width,
+      height,
+      quantity: 1,
+      stackable: Boolean(item.stackable),
+      type: item.type || "resource",
+      levelMin: item.levelMin,
+      levelMax: item.levelMax
     };
 
+    if (!placeInventoryItem(free.pageIndex, free.slotIndex, stack)) return false;
     if (inventoryState.open) renderInventory();
     return true;
   }
@@ -9484,7 +9860,8 @@
     for (const src of [
       CARROT_ITEM.icon, RABBIT_FOOT_ITEM.icon,
       WOLF_PELT_ITEM.icon, WOLF_CLAW_ITEM.icon, WANDERER_BAG_ITEM.icon,
-      RADISH_ITEM.icon, CABBAGE_ITEM.icon, LETTUCE_ITEM.icon, BOAR_TUSK_ITEM.icon
+      RADISH_ITEM.icon, CABBAGE_ITEM.icon, LETTUCE_ITEM.icon, BOAR_TUSK_ITEM.icon,
+      PINK_PIG_CLUB_ITEM.icon
     ]) {
       const preload = new Image();
       preload.src = encodeURI(src);
@@ -9505,6 +9882,42 @@
 
     const slotsLayer = document.createElement("div");
     slotsLayer.className = "inventory-slots-layer";
+
+    const weaponEquipZone = document.createElement("div");
+    weaponEquipZone.className = "inventory-weapon-equip-zone";
+    setInventoryRect(weaponEquipZone, INVENTORY_CONFIG.weaponEquipRect);
+    weaponEquipZone.setAttribute("aria-label", "Waffenplatz");
+    weaponEquipZone.addEventListener("dragstart", (event) => {
+      if (!equippedWeaponItem || !event.dataTransfer) {
+        event.preventDefault();
+        return;
+      }
+      event.dataTransfer.effectAllowed = "move";
+      event.dataTransfer.setData("text/plain", JSON.stringify({ kind: "equipped-weapon" }));
+    });
+    weaponEquipZone.addEventListener("contextmenu", (event) => {
+      event.preventDefault();
+      if (equippedWeaponItem) unequipWeaponToInventory();
+    });
+    weaponEquipZone.addEventListener("dragover", (event) => {
+      event.preventDefault();
+      weaponEquipZone.classList.add("inventory-weapon-equip-zone--dragover");
+      if (event.dataTransfer) event.dataTransfer.dropEffect = "move";
+    });
+    weaponEquipZone.addEventListener("dragleave", () => {
+      weaponEquipZone.classList.remove("inventory-weapon-equip-zone--dragover");
+    });
+    weaponEquipZone.addEventListener("drop", (event) => {
+      event.preventDefault();
+      weaponEquipZone.classList.remove("inventory-weapon-equip-zone--dragover");
+      if (!event.dataTransfer) return;
+      try {
+        const payload = JSON.parse(event.dataTransfer.getData("text/plain") || "{}");
+        if (payload.kind === "inventory-weapon") {
+          equipWeaponFromInventory(Number(payload.pageIndex), Number(payload.slotIndex));
+        }
+      } catch (_) {}
+    });
 
     const closeButton = document.createElement("button");
     closeButton.type = "button";
@@ -9527,7 +9940,34 @@
     setInventoryRect(page2Button, INVENTORY_CONFIG.page2Rect);
     page2Button.addEventListener("click", () => setInventoryPage(1));
 
-    panel.append(image, slotsLayer, closeButton, page1Button, page2Button);
+    panel.addEventListener("dragover", (event) => {
+      const slotIndex = inventorySlotIndexFromClientPoint(event.clientX, event.clientY);
+      if (slotIndex < 0) return;
+      event.preventDefault();
+      if (event.dataTransfer) event.dataTransfer.dropEffect = "move";
+    });
+
+    panel.addEventListener("drop", (event) => {
+      const slotIndex = inventorySlotIndexFromClientPoint(event.clientX, event.clientY);
+      if (slotIndex < 0 || !event.dataTransfer) return;
+      event.preventDefault();
+
+      try {
+        const payload = JSON.parse(event.dataTransfer.getData("text/plain") || "{}");
+        if (payload.kind === "equipped-weapon") {
+          placeEquippedWeaponAtInventorySlot(inventoryState.currentPage, slotIndex);
+        } else if (payload.kind === "inventory-weapon") {
+          moveInventoryWeaponToSlot(
+            Number(payload.pageIndex),
+            Number(payload.slotIndex),
+            inventoryState.currentPage,
+            slotIndex
+          );
+        }
+      } catch (_) {}
+    });
+
+    panel.append(image, slotsLayer, weaponEquipZone, closeButton, page1Button, page2Button);
     root.appendChild(panel);
     document.body.appendChild(root);
 
@@ -9537,6 +9977,7 @@
     inventoryState.slotsLayer = slotsLayer;
     inventoryState.closeButton = closeButton;
     inventoryState.pageButtons = [page1Button, page2Button];
+    inventoryState.weaponEquipZone = weaponEquipZone;
 
     renderInventory();
   }
@@ -10136,6 +10577,11 @@
     PLAYER.attackUp3,
     PLAYER.attackUp4,
 
+    ...WEAPONS.pinkPigClub.attacks.left,
+    ...WEAPONS.pinkPigClub.attacks.right,
+    ...WEAPONS.pinkPigClub.attacks.down,
+    ...WEAPONS.pinkPigClub.attacks.up,
+
     PLAYER.attackFinish,
     PLAYER.attackFinishLeft,
     PLAYER.blockRight,
@@ -10371,7 +10817,21 @@
 
     let spriteScale = 1;
 
-    if (src === PLAYER.standUp || isUpAttack) {
+    const club = WEAPONS.pinkPigClub.attacks;
+    const isClubLeft = club.left.includes(src);
+    const isClubRight = club.right.includes(src);
+    const isClubDown = club.down.includes(src);
+    const isClubUp = club.up.includes(src);
+
+    if (isClubLeft || isClubRight) {
+      // Source sheet is a wide 2x2 composition; normalized 2:3 canvases need
+      // this fixed bottom-center scale to match the existing player's world size.
+      spriteScale = 2.50;
+    } else if (isClubDown) {
+      spriteScale = 1.25;
+    } else if (isClubUp) {
+      spriteScale = 1.75;
+    } else if (src === PLAYER.standUp || isUpAttack) {
       spriteScale = 1.16;
     } else if (isRightAttack || isLeftAttack) {
       spriteScale = 1.20;
@@ -10460,6 +10920,14 @@
   }
 
   function chooseAttackSequence() {
+    if (equippedWeapon === WEAPONS.pinkPigClub.id) {
+      if (facing === "down") return CLUB_ATTACK_DOWN;
+      if (facing === "up") return CLUB_ATTACK_UP;
+      if (facing === "left") return CLUB_ATTACK_LEFT;
+      if (facing === "right") return CLUB_ATTACK_RIGHT;
+      return lastHorizontalFacing === "left" ? CLUB_ATTACK_LEFT : CLUB_ATTACK_RIGHT;
+    }
+
     if (facing === "down") return ATTACK_DOWN;
     if (facing === "up") return ATTACK_UP;
     if (facing === "left") return ATTACK_LEFT;
@@ -10914,6 +11382,10 @@
     startBackgroundMusic();
     installMapTransitionUI();
     createInventorySystem();
+
+    // R67 TEST: first weapon starts in page I at the first free vertical 1x2 area.
+    // Later this single line can be removed when the weapon becomes a world reward.
+    addItemToInventory(PINK_PIG_CLUB_ITEM);
 
     // Install immediately as a black curtain so OBERKIRCH never flashes before
     // the new-game sequence. It is screen UI only; no map state is changed.
