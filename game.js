@@ -8755,11 +8755,12 @@
   let stadiumFightLastState = "";
   let stadiumFightStarted = false;
 
-  // R74 — normalize every fighter frame to one visual body height + one foot line.
-  // The source PNGs may contain different transparent margins; without this, swapping
-  // frames makes the fighter appear to grow/shrink or bounce even though the CSS box is fixed.
+  // R77 — normalize each movement direction to ITS OWN matching stand pose.
+  // WALK UP uses FLEGEL VICTORY as its size reference at the green circle.
+  // WALK RIGHT uses FLEGEL READY as its size reference at the green box.
+  // This keeps the already-correct stand-pose sizes while eliminating bounce inside each walk cycle.
   const stadiumFightFrameMetrics = new Map();
-  let stadiumFightTargetOpaqueHeight = null;
+  const stadiumFightReferenceOpaqueHeights = { up: null, right: null };
   let stadiumFightSpriteToken = 0;
 
   function stadiumActive() {
@@ -9403,16 +9404,19 @@
     ]) {
       const preload = new Image();
       preload.onload = () => {
-        getStadiumFightOpaqueMetrics(preload);
-        if (fighterSrc === STADIUM.fightIntro.readyFrame) {
-          const metrics = getStadiumFightOpaqueMetrics(preload);
-          if (metrics) {
-            const fit = Math.min(
-              STADIUM.fightIntro.fighterWidth / metrics.naturalWidth,
-              STADIUM.fightIntro.fighterHeight / metrics.naturalHeight
-            );
-            stadiumFightTargetOpaqueHeight = metrics.height * fit;
-          }
+        const metrics = getStadiumFightOpaqueMetrics(preload);
+        if (!metrics) return;
+
+        let referenceKey = null;
+        if (fighterSrc === STADIUM.fightIntro.victoryFrame) referenceKey = "up";
+        if (fighterSrc === STADIUM.fightIntro.readyFrame) referenceKey = "right";
+
+        if (referenceKey) {
+          const fit = Math.min(
+            STADIUM.fightIntro.fighterWidth / metrics.naturalWidth,
+            STADIUM.fightIntro.fighterHeight / metrics.naturalHeight
+          );
+          stadiumFightReferenceOpaqueHeights[referenceKey] = metrics.height * fit;
         }
       };
       preload.src = encodeURI(fighterSrc);
@@ -9640,41 +9644,59 @@
     }
   }
 
-  function ensureStadiumFightReadyReference() {
-    if (stadiumFightTargetOpaqueHeight != null) return true;
+  function stadiumFightReferenceKeyForSrc(src) {
+    if (
+      src === STADIUM.fightIntro.victoryFrame ||
+      STADIUM.fightIntro.walkUpFrames.includes(src)
+    ) {
+      return "up";
+    }
+    return "right";
+  }
+
+  function ensureStadiumFightReference(referenceKey) {
+    if (stadiumFightReferenceOpaqueHeights[referenceKey] != null) return true;
+
+    const referenceSrc = referenceKey === "up"
+      ? STADIUM.fightIntro.victoryFrame
+      : STADIUM.fightIntro.readyFrame;
+
     const reference = new Image();
-    reference.src = encodeURI(STADIUM.fightIntro.readyFrame);
+    reference.src = encodeURI(referenceSrc);
     if (!reference.complete || !reference.naturalWidth) return false;
+
     const metrics = getStadiumFightOpaqueMetrics(reference);
     if (!metrics) return false;
+
     const fit = Math.min(
       STADIUM.fightIntro.fighterWidth / metrics.naturalWidth,
       STADIUM.fightIntro.fighterHeight / metrics.naturalHeight
     );
-    stadiumFightTargetOpaqueHeight = metrics.height * fit;
+    stadiumFightReferenceOpaqueHeights[referenceKey] = metrics.height * fit;
     return true;
   }
 
-  function layoutStadiumFightSprite(image) {
+  function layoutStadiumFightSprite(image, src) {
     if (!stadiumFightFighter || !image || !image.naturalWidth || !image.naturalHeight) return;
     const metrics = getStadiumFightOpaqueMetrics(image);
     if (!metrics) return;
 
-    // R75 BOUNCE FIX:
-    // Do NOT use object-fit and do NOT scale the existing fixed box. Different
-    // source PNG canvas sizes (for example 1024x1536 vs 1254x1254) otherwise
-    // produce different rendered character sizes. Instead every frame receives
-    // one explicit pixel size derived from the actual opaque figure height.
-    if (stadiumFightTargetOpaqueHeight == null) ensureStadiumFightReadyReference();
-    if (stadiumFightTargetOpaqueHeight == null) return;
+    // R77 SIZE FIX:
+    // Backward/up walking is scaled to the exact visual size of FLEGEL VICTORY.
+    // Right walking is scaled to the exact visual size of FLEGEL READY.
+    // The stand poses themselves therefore do NOT change size when reached.
+    const referenceKey = stadiumFightReferenceKeyForSrc(src);
+    if (stadiumFightReferenceOpaqueHeights[referenceKey] == null) {
+      ensureStadiumFightReference(referenceKey);
+    }
+    const targetOpaqueHeight = stadiumFightReferenceOpaqueHeights[referenceKey];
+    if (targetOpaqueHeight == null) return;
 
-    const scale = stadiumFightTargetOpaqueHeight / Math.max(1, metrics.height);
+    const scale = targetOpaqueHeight / Math.max(1, metrics.height);
     const renderedWidth = metrics.naturalWidth * scale;
     const renderedHeight = metrics.naturalHeight * scale;
 
-    // Pin the actual lower character silhouette to the root's world-space foot
-    // anchor. Canvas padding and differing source aspect ratios can no longer
-    // create vertical bouncing.
+    // Preserve the proven anti-bounce foot anchor exactly.
     const footGap = (metrics.naturalHeight - 1 - metrics.footBottomY) * scale;
 
     image.style.width = `${renderedWidth.toFixed(3)}px`;
@@ -9695,7 +9717,7 @@
 
     const reveal = () => {
       if (token !== stadiumFightSpriteToken) return;
-      layoutStadiumFightSprite(nextImage);
+      layoutStadiumFightSprite(nextImage, src);
       nextImage.classList.add("stadium-fighter__sprite--active");
       oldImage.classList.remove("stadium-fighter__sprite--active");
       stadiumFightFighter.activeIndex = nextIndex;
@@ -9721,7 +9743,8 @@
     stadiumFightFrameIndex = 0;
     stadiumFightNextFrameAt = 0;
     stadiumFightLastState = "";
-    ensureStadiumFightReadyReference();
+    ensureStadiumFightReference("up");
+    ensureStadiumFightReference("right");
     setStadiumFightOverlay(null);
 
     if (stadiumFightFighter) {
