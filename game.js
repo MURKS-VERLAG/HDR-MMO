@@ -341,6 +341,15 @@
       inventoryHeight: 2,
       levelMin: 1,
       levelMax: 10,
+
+      // R68 SAUKEULE — weapon-specific combat values.
+      damage: 40,
+      criticalDamage: 80,
+      saustarkChance: 0.05,
+      saustarkDamage: 120,
+      tooltipName: "SAUKEULE",
+      tooltipDescription: "Für eine Keule Eures Ranges wirklich saustark!",
+
       attacks: Object.freeze({
         left: Object.freeze([
           "assets/player/weapons/pink-pig-club/PLAYER CLUB LEFT 1.webp",
@@ -382,13 +391,13 @@
     }
 
     entries.push(
-      { sprite: f[0], duration: 400, hit: true, damage: 20, strike: 1 },
+      { sprite: f[0], duration: 400, hit: true, damage: WEAPONS.pinkPigClub.damage, strike: 1 },
       { sprite: f[0], duration: 100 },
-      { sprite: f[1], duration: 500, hit: true, damage: 20, strike: 2 },
+      { sprite: f[1], duration: 500, hit: true, damage: WEAPONS.pinkPigClub.damage, strike: 2 },
       { sprite: f[1], duration: 100 },
-      { sprite: f[2], duration: 400, hit: true, damage: 20, strike: 4 },
+      { sprite: f[2], duration: 400, hit: true, damage: WEAPONS.pinkPigClub.damage, strike: 4 },
       { sprite: f[2], duration: 100 },
-      { sprite: f[3], duration: 500, hit: true, damage: 40, strike: 3, critical: true },
+      { sprite: f[3], duration: 500, hit: true, damage: WEAPONS.pinkPigClub.criticalDamage, strike: 3, critical: true },
       { sprite: f[3], duration: 400 }
     );
 
@@ -3280,6 +3289,28 @@
         text-align: center;
       }
 
+      /* R68 SAUKEULE: damage stays red; SAUSTARK appears beside it in pink. */
+      .rabbit-damage--saustark {
+        display: flex;
+        align-items: center;
+        gap: 34px;
+      }
+
+      .rabbit-damage__value {
+        color: #ff2020;
+      }
+
+      .rabbit-damage__saustark {
+        color: #ff5fb7;
+        font-size: 108px;
+        letter-spacing: 5px;
+        text-shadow:
+          0 0 4px #ff4fae,
+          0 0 10px #ff4fae,
+          0 0 22px rgba(255,79,174,.92),
+          0 5px 3px rgba(0,0,0,.8);
+      }
+
       @keyframes rabbitDamageFloat {
         0%   { opacity: 0; transform: translate(-50%, -25%) scale(.72); }
         16%  { opacity: 1; transform: translate(-50%, -75%) scale(1.10); }
@@ -3651,14 +3682,26 @@
     );
   }
 
-  function createRabbitDamageText(actor, amount, critical) {
+  function createRabbitDamageText(actor, amount, critical, saustark = false) {
     const popup = document.createElement("div");
     popup.className =
-      "rabbit-damage" + (critical ? " rabbit-damage--crit" : "");
+      "rabbit-damage" +
+      (critical && !saustark ? " rabbit-damage--crit" : "") +
+      (saustark ? " rabbit-damage--saustark" : "");
     popup.style.left = `${actor.x}px`;
     popup.style.top = `${actor.y - 215}px`;
 
-    if (critical) {
+    if (saustark) {
+      const value = document.createElement("span");
+      value.className = "rabbit-damage__value";
+      value.textContent = `-${amount}`;
+
+      const special = document.createElement("span");
+      special.className = "rabbit-damage__saustark";
+      special.textContent = "SAUSTARK";
+
+      popup.append(value, special);
+    } else if (critical) {
       const crit = document.createElement("span");
       crit.className = "rabbit-damage__crit";
       crit.textContent = "KRIT";
@@ -3911,12 +3954,12 @@
     rabbitPickFrame(actor, false);
   }
 
-  function damageRabbit(actor, amount, critical, direction, now) {
+  function damageRabbit(actor, amount, critical, direction, now, saustark = false) {
     if (actor.dead || actor.away) return;
 
     actor.hp = Math.max(0, actor.hp - amount);
 
-    createRabbitDamageText(actor, amount, critical);
+    createRabbitDamageText(actor, amount, critical, saustark);
     playRabbitHitSound();
 
     if (critical) {
@@ -4013,10 +4056,10 @@
     wolfShowStaticLayer(actor, 0);
   }
 
-  function damageWolf(actor, amount, critical, direction, now) {
+  function damageWolf(actor, amount, critical, direction, now, saustark = false) {
     if (!actor || actor.dead || actor.away) return;
     actor.hp = Math.max(0, actor.hp - amount);
-    createRabbitDamageText(actor, amount, critical);
+    createRabbitDamageText(actor, amount, critical, saustark);
     playWolfHitSound();
     actor.moving = false;
     actor.howling = false;
@@ -4038,7 +4081,7 @@
     for (const actor of wolfActors) {
       if (actor.mapId !== MAP.id || actor.dead || actor.away || !actor.ready) continue;
       if (!rabbitInsideAttackHitbox(actor, direction)) continue;
-      damageWolf(actor, frame.damage || 20, Boolean(frame.critical), direction, now);
+      damageWolf(actor, frame.damage || 20, Boolean(frame.critical), direction, now, Boolean(frame.saustark));
     }
   }
 
@@ -4098,10 +4141,10 @@
     boarShowLayer(actor, 0);
   }
 
-  function damageBoar(actor, amount, critical, direction, now) {
+  function damageBoar(actor, amount, critical, direction, now, saustark = false) {
     if (!actor || actor.dead || actor.away) return;
     actor.hp = Math.max(0, actor.hp - amount);
-    createRabbitDamageText(actor, amount, critical);
+    createRabbitDamageText(actor, amount, critical, saustark);
     playBoarHitSound();
     actor.moving = false;
     if (critical) {
@@ -4120,7 +4163,7 @@
       const actorMapId = actor.zone.mapId || BOAR_CONFIG.mapId;
       if (actorMapId !== MAP.id || actor.dead || actor.away || !actor.ready) continue;
       if (!rabbitInsideAttackHitbox(actor, direction)) continue;
-      damageBoar(actor, frame.damage || 20, Boolean(frame.critical), direction, now);
+      damageBoar(actor, frame.damage || 20, Boolean(frame.critical), direction, now, Boolean(frame.saustark));
     }
   }
 
@@ -4140,7 +4183,8 @@
           frame.damage || 20,
           Boolean(frame.critical),
           direction,
-          now
+          now,
+          Boolean(frame.saustark)
         );
       }
     }
@@ -4874,14 +4918,14 @@
     }, 540);
   }
 
-  function damageTierbannstein(stone, amount, critical, now) {
+  function damageTierbannstein(stone, amount, critical, now, saustark = false) {
     if (!stone || stone.dead || stone.removed) return;
 
     const oldHp = stone.hp;
     stone.hp = Math.max(0, stone.hp - amount);
 
     // Same damage readout and critical label as all current animals.
-    createRabbitDamageText(stone, amount, critical);
+    createRabbitDamageText(stone, amount, critical, saustark);
 
     // The rock NEVER receives knockback. It only wobbles in place.
     tierbannStoneWobble(stone);
@@ -4929,7 +4973,8 @@
         stone,
         frame.damage || 20,
         Boolean(frame.critical),
-        now
+        now,
+        Boolean(frame.saustark)
       );
     }
   }
@@ -5687,7 +5732,7 @@
     moleEvent.hp = Math.max(0, moleEvent.hp - amount);
 
     // Same damage popup and same hit sound as rabbits.
-    createRabbitDamageText(moleEvent, amount, critical);
+    createRabbitDamageText(moleEvent, amount, critical, Boolean(frame.saustark));
     playRabbitHitSound();
 
     if (moleEvent.hp <= 0) {
@@ -9379,6 +9424,63 @@
         cursor: grabbing;
       }
 
+      /* R68 SAUKEULE hover tooltip. */
+      .inventory-weapon-tooltip {
+        position: absolute;
+        z-index: 40;
+        left: calc(100% + 14px);
+        top: 50%;
+        width: clamp(250px, 25vw, 390px);
+        transform: translateY(-50%);
+        box-sizing: border-box;
+        padding: 18px 20px;
+        border: 1px solid rgba(218,174,72,.72);
+        border-radius: 7px;
+        background: rgba(10,10,10,.94);
+        box-shadow: 0 10px 28px rgba(0,0,0,.72);
+        color: #f2f2f2;
+        font-family: Georgia, "Times New Roman", serif;
+        pointer-events: none;
+        opacity: 0;
+        visibility: hidden;
+        transition: opacity 100ms ease, visibility 100ms ease;
+        white-space: normal;
+      }
+
+      .inventory-item--weapon:hover .inventory-weapon-tooltip,
+      .inventory-weapon-equip-zone:hover .inventory-weapon-tooltip {
+        opacity: 1;
+        visibility: visible;
+      }
+
+      .inventory-weapon-tooltip__title {
+        margin-bottom: 10px;
+        color: #e6bd55;
+        font-size: clamp(18px, 2.1vh, 27px);
+        font-weight: 900;
+        letter-spacing: 1px;
+      }
+
+      .inventory-weapon-tooltip__description {
+        margin-bottom: 14px;
+        color: #f0eadb;
+        font-size: clamp(13px, 1.55vh, 18px);
+        font-style: italic;
+        line-height: 1.3;
+      }
+
+      .inventory-weapon-tooltip__stat {
+        margin-top: 5px;
+        color: #ffffff;
+        font-size: clamp(13px, 1.55vh, 18px);
+        font-weight: 800;
+        line-height: 1.25;
+      }
+
+      .inventory-weapon-tooltip__stat--saustark {
+        color: #ff6fbd;
+      }
+
       .inventory-item--equipped {
         filter:
           drop-shadow(0 0 4px rgba(255,245,195,.96))
@@ -9669,6 +9771,36 @@
     return true;
   }
 
+  function createSaukeuleTooltip() {
+    const weapon = WEAPONS.pinkPigClub;
+    const tooltip = document.createElement("div");
+    tooltip.className = "inventory-weapon-tooltip";
+
+    const title = document.createElement("div");
+    title.className = "inventory-weapon-tooltip__title";
+    title.textContent = weapon.tooltipName;
+
+    const description = document.createElement("div");
+    description.className = "inventory-weapon-tooltip__description";
+    description.textContent = weapon.tooltipDescription;
+
+    const damage = document.createElement("div");
+    damage.className = "inventory-weapon-tooltip__stat";
+    damage.textContent = `${weapon.damage} DMG`;
+
+    const critical = document.createElement("div");
+    critical.className = "inventory-weapon-tooltip__stat";
+    critical.textContent = `${weapon.criticalDamage} KRIT`;
+
+    const special = document.createElement("div");
+    special.className = "inventory-weapon-tooltip__stat inventory-weapon-tooltip__stat--saustark";
+    special.textContent = `${Math.round(weapon.saustarkChance * 100)}% CHANCE SAUSTARKER TREFFER`;
+
+    tooltip.append(title, description, damage, critical, special);
+    return tooltip;
+  }
+
+
   function renderEquippedWeapon() {
     const zone = inventoryState.weaponEquipZone;
     if (!zone) return;
@@ -9683,6 +9815,10 @@
     icon.alt = "";
     icon.draggable = false;
     zone.appendChild(icon);
+
+    if (equippedWeaponItem.id === WEAPONS.pinkPigClub.id) {
+      zone.appendChild(createSaukeuleTooltip());
+    }
   }
 
   function renderInventory() {
@@ -9740,6 +9876,10 @@
       }
 
       if (stack.type === "weapon") {
+        if (stack.id === WEAPONS.pinkPigClub.id) {
+          item.appendChild(createSaukeuleTooltip());
+        }
+
         item.draggable = true;
         item.addEventListener("contextmenu", (event) => {
           event.preventDefault();
@@ -10937,6 +11077,34 @@
   }
 
 
+  // R68 SAUKEULE — resolve one combat result per strike, not once per target.
+  // A SAUSTARKER TREFFER overrides the strike's normal/critical damage with 120.
+  function resolvePlayerAttackFrame(frame) {
+    if (!frame) return;
+
+    let resolvedFrame = frame;
+
+    if (
+      frame.hit &&
+      equippedWeapon === WEAPONS.pinkPigClub.id &&
+      Math.random() < WEAPONS.pinkPigClub.saustarkChance
+    ) {
+      resolvedFrame = {
+        ...frame,
+        damage: WEAPONS.pinkPigClub.saustarkDamage,
+        critical: false,
+        saustark: true
+      };
+    }
+
+    resolveRabbitAttackFrame(resolvedFrame);
+    resolveWolfAttackFrame(resolvedFrame);
+    resolveBoarAttackFrame(resolvedFrame);
+    resolveTierbannsteinAttackFrame(resolvedFrame);
+    resolveMoleAttackFrame(resolvedFrame);
+  }
+
+
   function startAttackSound() {
     // Hard restart from the beginning of the trimmed attack sound.
     // This is called at the first attack frame of EVERY combo cycle.
@@ -10982,11 +11150,7 @@
     attackTimer = 0;
 
     setSprite(attackSequence[0].sprite);
-    resolveRabbitAttackFrame(attackSequence[0]);
-    resolveWolfAttackFrame(attackSequence[0]);
-    resolveBoarAttackFrame(attackSequence[0]);
-    resolveTierbannsteinAttackFrame(attackSequence[0]);
-    resolveMoleAttackFrame(attackSequence[0]);
+    resolvePlayerAttackFrame(attackSequence[0]);
   }
 
   function finishAttackState() {
@@ -11017,10 +11181,7 @@
           attackTimer = 0;
           startAttackSound();
           setSprite(attackSequence[0].sprite);
-          resolveRabbitAttackFrame(attackSequence[0]);
-          resolveWolfAttackFrame(attackSequence[0]);
-          resolveBoarAttackFrame(attackSequence[0]);
-          resolveMoleAttackFrame(attackSequence[0]);
+          resolvePlayerAttackFrame(attackSequence[0]);
         } else {
           finishAttackState();
         }
@@ -11028,11 +11189,7 @@
       }
 
       setSprite(attackSequence[attackStep].sprite);
-      resolveRabbitAttackFrame(attackSequence[attackStep]);
-      resolveWolfAttackFrame(attackSequence[attackStep]);
-      resolveBoarAttackFrame(attackSequence[attackStep]);
-      resolveTierbannsteinAttackFrame(attackSequence[attackStep]);
-      resolveMoleAttackFrame(attackSequence[attackStep]);
+      resolvePlayerAttackFrame(attackSequence[attackStep]);
     }
   }
 
