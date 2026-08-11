@@ -8862,7 +8862,7 @@
 
   function setStadiumBookmakerVisibility() {
     if (!stadiumBookmaker) return;
-    stadiumBookmaker.root.style.display = MAP.id === STADIUM.mapId ? "" : "none";
+    stadiumBookmaker.root.style.display = MAP.id === STADIUM.mapId ? "block" : "none";
   }
 
   function resetStadiumBookmaker(now = performance.now()) {
