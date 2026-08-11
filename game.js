@@ -8665,6 +8665,29 @@
     bookmakerWaitMs: 2000,
     bookmakerActionMs: 1000,
     bookmakerFadeMs: 190,
+
+    // R72 PHASE 2 — bookmaker interaction / derby betting UI.
+    bookmakerHoverAlphaThreshold: 24,
+    derby: Object.freeze({
+      schauenburgName: "DIE HERREN VON SCHAUENBURG",
+      neuensteinName: "DIE HERREN ROHART-NEUENSTEIN",
+      schauenburgChance: 0.70,
+      neuensteinChance: 0.30,
+      schauenburgOdds: 1 / 0.70,
+      neuensteinOdds: 1 / 0.30,
+      schauenburgCrest: "assets/ui/renchtalstadion/WAPPEN SCHAUENBURG.png",
+      neuensteinCrest: "assets/ui/renchtalstadion/WAPPEN ROHART-NEUENSTEIN.png"
+    }),
+
+    // Foreground slice from the existing 10K stadium map.
+    gateForeground: Object.freeze({
+      src: "assets/maps/foreground/RENCHTALSTADION TOR VORDERGRUND.png",
+      x: 4450,
+      y: 4250,
+      width: 1120,
+      height: 520
+    }),
+
     arena: Object.freeze({
       cx: 5090,
       cy: 3422,
@@ -8681,6 +8704,15 @@
   let stadiumBookmakerNextAt = 0;
   let stadiumBookmakerActionEndAt = 0;
   let stadiumBookmakerShowingAction = false;
+
+  // R72 PHASE 2
+  let stadiumMenuOpen = false;
+  let stadiumBetUI = null;
+  let stadiumBetOpen = false;
+  let stadiumBetSelectedTeam = null;
+  let stadiumBookmakerAlphaMask = null;
+  let stadiumBookmakerHovered = false;
+  let stadiumGateForeground = null;
 
   function stadiumActive() {
     return MAP.id === STADIUM.mapId && stadiumState !== "inactive";
@@ -8781,6 +8813,15 @@
         pointer-events: none;
         user-select: none;
         display: none;
+        transition: filter 150ms ease, transform 150ms ease;
+      }
+
+      .stadium-bookmaker--hovered {
+        transform: translate(-50%, -100%) scale(1.018);
+        filter:
+          brightness(1.16)
+          drop-shadow(0 0 12px rgba(236,190,91,.70))
+          drop-shadow(0 0 24px rgba(236,190,91,.34));
       }
 
       .stadium-bookmaker__sprite {
@@ -8796,6 +8837,214 @@
       }
 
       .stadium-bookmaker__sprite--visible { opacity: 1; }
+
+      #game.stadium-bookmaker-cursor {
+        cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 32 32'%3E%3Cpath fill='%23e4d2a2' stroke='%235b4023' stroke-width='1.5' d='M8 5h17c2 0 3 1 3 3s-1 3-3 3H11v13c0 2-1 3-3 3s-3-1-3-3V8c0-2 1-3 3-3Z'/%3E%3Cpath fill='none' stroke='%2384663b' stroke-width='1.4' d='M11 13h12M11 17h10M11 21h8'/%3E%3C/svg%3E") 7 7, pointer;
+      }
+
+      #stadiumBetUI {
+        position: fixed;
+        inset: 0;
+        z-index: 24100;
+        display: grid;
+        place-items: center;
+        pointer-events: none;
+        opacity: 0;
+        visibility: hidden;
+        transition: opacity 260ms ease, visibility 260ms ease;
+      }
+
+      #stadiumBetUI.stadium-bet--visible {
+        opacity: 1;
+        visibility: visible;
+        pointer-events: auto;
+      }
+
+      .stadium-bet__panel {
+        width: min(760px, 86vw);
+        max-height: 90vh;
+        overflow: auto;
+        box-sizing: border-box;
+        padding: 28px 38px 32px;
+        border: 1px solid rgba(198,151,60,.62);
+        background: rgba(4,4,4,.84);
+        box-shadow: 0 20px 70px rgba(0,0,0,.78), inset 0 0 30px rgba(158,108,33,.10);
+        backdrop-filter: blur(3px);
+        text-align: center;
+        color: #f4eddd;
+      }
+
+      .stadium-bet__title,
+      .stadium-bet__today,
+      .stadium-bet__odds-title {
+        font-family: "Old English Text MT", "Lucida Blackletter", "UnifrakturCook", Georgia, serif;
+        color: #ddb45d;
+        font-weight: 900;
+        text-shadow: 0 2px 2px #000, 0 0 12px rgba(221,180,93,.28);
+      }
+
+      .stadium-bet__title {
+        font-size: clamp(32px, 4vw, 55px);
+        letter-spacing: 1.8px;
+      }
+
+      .stadium-bet__today {
+        margin-top: 9px;
+        font-size: clamp(23px, 2.4vw, 34px);
+      }
+
+      .stadium-bet__matchup {
+        display: grid;
+        grid-template-columns: 1fr auto 1fr;
+        gap: 18px;
+        align-items: center;
+        margin: 22px 0 18px;
+        font-family: Georgia, "Times New Roman", serif;
+        font-size: clamp(17px, 1.65vw, 24px);
+        font-weight: 900;
+        line-height: 1.16;
+      }
+
+      .stadium-bet__team--schauenburg {
+        color: #d9463f;
+        text-shadow: 0 0 9px rgba(217,70,63,.25);
+      }
+
+      .stadium-bet__team--neuenstein {
+        color: #70dce3;
+        text-shadow: 0 0 9px rgba(112,220,227,.25);
+      }
+
+      .stadium-bet__swords {
+        color: #e7dfce;
+        font-size: 36px;
+        text-shadow: 0 2px 3px #000;
+      }
+
+      .stadium-bet__odds-title {
+        margin-top: 4px;
+        font-size: 26px;
+      }
+
+      .stadium-bet__odds {
+        display: flex;
+        justify-content: center;
+        gap: 42px;
+        margin: 8px 0 18px;
+        color: #ddb45d;
+        font-family: Georgia, "Times New Roman", serif;
+        font-size: 20px;
+        font-weight: 800;
+      }
+
+      .stadium-bet__crests {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        gap: 78px;
+        min-height: 180px;
+        margin: 8px 0 14px;
+      }
+
+      .stadium-bet__crest {
+        width: 150px;
+        height: 170px;
+        border: 0;
+        padding: 7px;
+        background: transparent;
+        cursor: pointer;
+        transition: transform 150ms ease, filter 150ms ease;
+      }
+
+      .stadium-bet__crest img {
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+        pointer-events: none;
+      }
+
+      .stadium-bet__crest:hover {
+        transform: scale(1.055);
+        filter: brightness(1.13) drop-shadow(0 0 10px rgba(237,199,108,.52));
+      }
+
+      .stadium-bet__crest--selected {
+        transform: scale(1.065);
+        filter:
+          brightness(1.18)
+          drop-shadow(0 0 11px rgba(237,199,108,.95))
+          drop-shadow(0 0 24px rgba(237,199,108,.42));
+      }
+
+      .stadium-bet__stake-label {
+        margin-top: 4px;
+        color: #fff;
+        font-family: Georgia, "Times New Roman", serif;
+        font-size: 21px;
+        font-weight: 800;
+      }
+
+      .stadium-bet__stake-row {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        gap: 10px;
+        margin: 9px 0 18px;
+      }
+
+      .stadium-bet__stake {
+        width: 190px;
+        box-sizing: border-box;
+        padding: 9px 12px;
+        border: 1px solid rgba(216,174,85,.58);
+        background: rgba(0,0,0,.64);
+        color: #fff7e8;
+        font-family: Georgia, "Times New Roman", serif;
+        font-size: 22px;
+        text-align: center;
+        outline: none;
+      }
+
+      .stadium-bet__penny {
+        width: 34px;
+        height: 34px;
+        border-radius: 50%;
+        display: grid;
+        place-items: center;
+        color: #d8ae55;
+        border: 2px solid #a67d31;
+        background: radial-gradient(circle at 35% 30%, #7d622f, #19150e 74%);
+        font-family: Georgia, serif;
+        font-weight: 900;
+        box-shadow: 0 2px 4px rgba(0,0,0,.65);
+      }
+
+      .stadium-bet__submit {
+        border: 0;
+        background: transparent;
+        color: #fff;
+        padding: 8px 18px;
+        font-family: Georgia, "Times New Roman", serif;
+        font-size: 22px;
+        font-weight: 800;
+        cursor: pointer;
+        transition: color 150ms ease, text-shadow 150ms ease, transform 150ms ease;
+      }
+
+      .stadium-bet__submit:hover {
+        color: #fff1c9;
+        text-shadow: 0 0 11px rgba(237,199,108,.75);
+        transform: scale(1.025);
+      }
+
+      .stadium-gate-foreground {
+        position: absolute;
+        z-index: 18;
+        pointer-events: none;
+        user-select: none;
+        object-fit: fill;
+        display: none;
+      }
     `;
     document.head.appendChild(style);
   }
@@ -8821,10 +9070,15 @@
 
     root.addEventListener("click", (event) => {
       const button = event.target.closest("[data-stadium-choice]");
-      if (!button || stadiumState !== "entrance-menu") return;
+      if (!button || !stadiumMenuOpen || MAP.id !== STADIUM.mapId) return;
       const choice = button.dataset.stadiumChoice;
+
       if (choice === "spectator") {
-        stadiumMoveToSpectator();
+        if (stadiumState === "spectator") {
+          hideStadiumMenu();
+        } else if (stadiumState === "entrance-menu") {
+          stadiumMoveToSpectator();
+        }
       } else if (choice === "oberkirch") {
         stadiumReturnToOberkirch();
       }
@@ -8851,18 +9105,218 @@
     bookmaker.append(base, action);
     world.appendChild(bookmaker);
 
+    base.addEventListener("load", () => prepareStadiumBookmakerAlphaMask(base));
+
     for (const src of [STADIUM.bookmakerBase, ...STADIUM.bookmakerActions]) {
       const preload = new Image();
       preload.src = encodeURI(src);
     }
 
+    const betRoot = document.createElement("div");
+    betRoot.id = "stadiumBetUI";
+    betRoot.innerHTML = `
+      <div class="stadium-bet__panel" role="dialog" aria-modal="true" aria-label="BUCHMACHER DON FREDO">
+        <div class="stadium-bet__title">BUCHMACHER DON FREDO</div>
+        <div class="stadium-bet__today">HEUTE: DERBY!</div>
+
+        <div class="stadium-bet__matchup">
+          <div class="stadium-bet__team stadium-bet__team--schauenburg">${STADIUM.derby.schauenburgName}</div>
+          <div class="stadium-bet__swords" aria-label="fehdet gegen">⚔</div>
+          <div class="stadium-bet__team stadium-bet__team--neuenstein">${STADIUM.derby.neuensteinName}</div>
+        </div>
+
+        <div class="stadium-bet__odds-title">QUOTE</div>
+        <div class="stadium-bet__odds">
+          <span>SCHAUENBURG&nbsp;&nbsp;${STADIUM.derby.schauenburgOdds.toFixed(2).replace(".", ",")}</span>
+          <span>ROHART-NEUENSTEIN&nbsp;&nbsp;${STADIUM.derby.neuensteinOdds.toFixed(2).replace(".", ",")}</span>
+        </div>
+
+        <div class="stadium-bet__crests">
+          <button type="button" class="stadium-bet__crest" data-bet-team="schauenburg" aria-label="Auf Schauenburg setzen">
+            <img src="${encodeURI(STADIUM.derby.schauenburgCrest)}" alt="">
+          </button>
+          <button type="button" class="stadium-bet__crest" data-bet-team="neuenstein" aria-label="Auf Rohart-Neuenstein setzen">
+            <img src="${encodeURI(STADIUM.derby.neuensteinCrest)}" alt="">
+          </button>
+        </div>
+
+        <div class="stadium-bet__stake-label">EINSATZ</div>
+        <div class="stadium-bet__stake-row">
+          <input id="stadiumBetStake" class="stadium-bet__stake" type="text" inputmode="numeric" maxlength="9" autocomplete="off" aria-label="Einsatz in Pfennig">
+          <span class="stadium-bet__penny" aria-hidden="true">₰</span>
+        </div>
+
+        <button type="button" class="stadium-bet__submit" id="stadiumBetSubmit">Wette abschließen</button>
+      </div>`;
+    game.appendChild(betRoot);
+
+    const stake = betRoot.querySelector("#stadiumBetStake");
+    stake.addEventListener("input", () => {
+      stake.value = stake.value.replace(/\D+/g, "").replace(/^0+(?=\d)/, "");
+    });
+
+    betRoot.addEventListener("click", (event) => {
+      const crest = event.target.closest("[data-bet-team]");
+      if (crest) {
+        stadiumBetSelectedTeam = crest.dataset.betTeam;
+        for (const node of betRoot.querySelectorAll("[data-bet-team]")) {
+          node.classList.toggle(
+            "stadium-bet__crest--selected",
+            node.dataset.betTeam === stadiumBetSelectedTeam
+          );
+        }
+        return;
+      }
+
+      if (event.target.closest("#stadiumBetSubmit")) {
+        // Phase 2 only: intentionally no wager execution yet.
+        return;
+      }
+    });
+
+    const gate = document.createElement("img");
+    gate.id = "stadiumGateForeground";
+    gate.className = "stadium-gate-foreground";
+    gate.src = encodeURI(STADIUM.gateForeground.src);
+    gate.alt = "";
+    gate.draggable = false;
+    gate.style.left = `${STADIUM.gateForeground.x}px`;
+    gate.style.top = `${STADIUM.gateForeground.y}px`;
+    gate.style.width = `${STADIUM.gateForeground.width}px`;
+    gate.style.height = `${STADIUM.gateForeground.height}px`;
+    world.appendChild(gate);
+
     stadiumUI = { root, curtain };
     stadiumBookmaker = { root: bookmaker, base, action };
+    stadiumBetUI = { root: betRoot, stake };
+    stadiumGateForeground = gate;
+
+    if (base.complete && base.naturalWidth > 0) {
+      prepareStadiumBookmakerAlphaMask(base);
+    }
+
+    game.addEventListener("pointermove", updateStadiumBookmakerHoverFromPointer);
+    game.addEventListener("pointerleave", clearStadiumBookmakerHover);
+    game.addEventListener("click", (event) => {
+      if (
+        stadiumBookmakerHovered &&
+        stadiumState === "spectator" &&
+        !stadiumMenuOpen &&
+        !stadiumBetOpen &&
+        !event.target.closest("#stadiumBetUI")
+      ) {
+        openStadiumBetUI();
+      }
+    });
+  }
+
+  function prepareStadiumBookmakerAlphaMask(image) {
+    if (!image || !image.naturalWidth || !image.naturalHeight) return;
+
+    try {
+      const canvas = document.createElement("canvas");
+      canvas.width = image.naturalWidth;
+      canvas.height = image.naturalHeight;
+      const ctx = canvas.getContext("2d", { willReadFrequently: true });
+      if (!ctx) return;
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(image, 0, 0);
+      const pixels = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+      const alpha = new Uint8Array(canvas.width * canvas.height);
+
+      for (let srcIndex = 3, dst = 0; srcIndex < pixels.length; srcIndex += 4, dst += 1) {
+        alpha[dst] = pixels[srcIndex];
+      }
+
+      stadiumBookmakerAlphaMask = {
+        width: canvas.width,
+        height: canvas.height,
+        alpha
+      };
+    } catch (error) {
+      stadiumBookmakerAlphaMask = null;
+      console.warn("Stadium bookmaker alpha mask unavailable:", error);
+    }
+  }
+
+  function clientPointToStadiumWorld(clientX, clientY) {
+    const rect = world.getBoundingClientRect();
+    if (!rect.width || !rect.height) return null;
+
+    return {
+      x: ((clientX - rect.left) / rect.width) * MAP.width,
+      y: ((clientY - rect.top) / rect.height) * MAP.height
+    };
+  }
+
+  function stadiumBookmakerOpaqueAtWorldPoint(x, y) {
+    if (!stadiumBookmakerAlphaMask) return false;
+
+    const left = STADIUM.bookmakerPoint.x - STADIUM.bookmakerWidth / 2;
+    const top = STADIUM.bookmakerPoint.y - STADIUM.bookmakerHeight;
+    const u = (x - left) / STADIUM.bookmakerWidth;
+    const v = (y - top) / STADIUM.bookmakerHeight;
+
+    if (u < 0 || u > 1 || v < 0 || v > 1) return false;
+
+    const mask = stadiumBookmakerAlphaMask;
+    const px = Math.max(0, Math.min(mask.width - 1, Math.round(u * (mask.width - 1))));
+    const py = Math.max(0, Math.min(mask.height - 1, Math.round(v * (mask.height - 1))));
+    return mask.alpha[py * mask.width + px] >= STADIUM.bookmakerHoverAlphaThreshold;
+  }
+
+  function clearStadiumBookmakerHover() {
+    stadiumBookmakerHovered = false;
+    game.classList.remove("stadium-bookmaker-cursor");
+    if (stadiumBookmaker) {
+      stadiumBookmaker.root.classList.remove("stadium-bookmaker--hovered");
+    }
+  }
+
+  function updateStadiumBookmakerHoverFromPointer(event) {
+    if (
+      MAP.id !== STADIUM.mapId ||
+      stadiumState !== "spectator" ||
+      stadiumMenuOpen ||
+      stadiumBetOpen ||
+      !stadiumBookmaker ||
+      !stadiumBookmakerAlphaMask
+    ) {
+      clearStadiumBookmakerHover();
+      return;
+    }
+
+    const point = clientPointToStadiumWorld(event.clientX, event.clientY);
+    const hovered = !!point && stadiumBookmakerOpaqueAtWorldPoint(point.x, point.y);
+
+    stadiumBookmakerHovered = hovered;
+    game.classList.toggle("stadium-bookmaker-cursor", hovered);
+    stadiumBookmaker.root.classList.toggle("stadium-bookmaker--hovered", hovered);
+  }
+
+  function openStadiumBetUI() {
+    if (!stadiumBetUI || stadiumState !== "spectator" || stadiumMenuOpen) return;
+    stadiumBetOpen = true;
+    clearStadiumBookmakerHover();
+    stadiumBetUI.root.classList.add("stadium-bet--visible");
+  }
+
+  function closeStadiumBetUI() {
+    if (!stadiumBetUI) return;
+    stadiumBetOpen = false;
+    stadiumBetUI.root.classList.remove("stadium-bet--visible");
+    if (document.activeElement === stadiumBetUI.stake) stadiumBetUI.stake.blur();
   }
 
   function setStadiumBookmakerVisibility() {
     if (!stadiumBookmaker) return;
     stadiumBookmaker.root.style.display = MAP.id === STADIUM.mapId ? "block" : "none";
+    if (MAP.id !== STADIUM.mapId) clearStadiumBookmakerHover();
+  }
+
+  function setStadiumGateVisibility() {
+    if (!stadiumGateForeground) return;
+    stadiumGateForeground.style.display = MAP.id === STADIUM.mapId ? "block" : "none";
   }
 
   function resetStadiumBookmaker(now = performance.now()) {
@@ -8896,12 +9350,16 @@
   }
 
   function showStadiumMenu() {
-    if (!stadiumUI) return;
+    if (!stadiumUI || MAP.id !== STADIUM.mapId) return;
+    closeStadiumBetUI();
+    clearStadiumBookmakerHover();
+    stadiumMenuOpen = true;
     stadiumUI.root.classList.add("stadium-choice--visible");
   }
 
   function hideStadiumMenu() {
     if (!stadiumUI) return;
+    stadiumMenuOpen = false;
     stadiumUI.root.classList.remove("stadium-choice--visible");
   }
 
@@ -8984,13 +9442,15 @@
   }
 
   async function stadiumReturnToOberkirch() {
-    if (stadiumState !== "entrance-menu" || mapTransitioning) return;
+    if (MAP.id !== STADIUM.mapId || !stadiumMenuOpen || mapTransitioning) return;
     stadiumState = "spectator-transition";
     hideStadiumMenu();
+    closeStadiumBetUI();
     await switchMap(MAPS.oberkirch, MAP_EXIT_CONFIG.oberkirchFromStadiumSpawn, true);
     stadiumState = "inactive";
     stadiumArrivalFromOberkirch = false;
     setStadiumBookmakerVisibility();
+    setStadiumGateVisibility();
   }
 
   function setStadiumSpectatorFacing(code) {
@@ -9017,6 +9477,7 @@
 
   function updateStadiumPhase1(deltaSeconds, now) {
     setStadiumBookmakerVisibility();
+    setStadiumGateVisibility();
     updateStadiumBookmaker(now);
     if (stadiumState === "arrival-walk") updateStadiumArrival(deltaSeconds);
   }
@@ -10754,6 +11215,8 @@
         stadiumState = "inactive";
         stadiumArrivalFromOberkirch = false;
         hideStadiumMenu();
+        closeStadiumBetUI();
+        clearStadiumBookmakerHover();
       }
     }
     cameraX = playerX;
@@ -11803,9 +12266,34 @@
       return;
     }
 
-    // R70 RENCHTALSTADION: no normal gameplay input during the staged sequence.
+    // R72 RENCHTALSTADION: spectator input + ESC menu + bookmaker dialog.
     if (stadiumActive()) {
+      const isBetStakeField =
+        stadiumBetOpen &&
+        stadiumBetUI &&
+        event.target === stadiumBetUI.stake;
+
+      if (event.code === "Escape") {
+        event.preventDefault();
+
+        if (stadiumBetOpen) {
+          closeStadiumBetUI();
+          return;
+        }
+
+        if (stadiumState === "spectator" || stadiumState === "entrance-menu") {
+          if (stadiumMenuOpen) hideStadiumMenu();
+          else showStadiumMenu();
+        }
+        return;
+      }
+
+      if (isBetStakeField) return;
+
       event.preventDefault();
+
+      if (stadiumBetOpen || stadiumMenuOpen) return;
+
       if (stadiumState === "spectator") {
         setStadiumSpectatorFacing(event.code);
       }
