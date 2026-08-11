@@ -379,27 +379,38 @@
     })
   });
 
-  // Weapon combo keeps the EXACT existing hit beat and total cycle length.
-  // The tiny fist-combat stand gaps are represented by holding the same club pose,
-  // so only the four supplied weapon images are ever visible.
+  // ------------------------------------------------------------------
+  // R69 SAUKEULE — FINAL ANIMATION ORDER
+  // Hit timing is copied from the existing fist combo:
+  // HIT 400 -> AUSHOL 100 -> HIT 500 -> AUSHOL 100 ->
+  // HIT 400 -> AUSHOL 100 -> HIT 500 -> AUSHOL 400.
+  // AUSHOL frames are visual ONLY and NEVER deal damage.
+  // ------------------------------------------------------------------
   function makeClubSequence(direction) {
     const f = WEAPONS.pinkPigClub.attacks[direction];
-    const entries = [];
 
-    if (direction === "down") {
-      entries.push({ sprite: f[0], duration: 100 });
-    }
+    // LEFT / RIGHT / DOWN (S): 3 -> A1 -> 2 -> A1 -> 3 -> A1 -> 4 -> A1
+    // UP (W):                  3 -> A2 -> 1 -> A2 -> 3 -> A2 -> 4 -> A2
+    const isUp = direction === "up";
+    const hit1 = f[2]; // Bild 3
+    const pull = isUp ? f[1] : f[0]; // W = Bild 2; sonst Bild 1
+    const hit2 = isUp ? f[0] : f[1]; // W = Bild 1; sonst Bild 2
+    const hit3 = f[2]; // Bild 3
+    const hit4 = f[3]; // Bild 4
 
-    entries.push(
-      { sprite: f[0], duration: 400, hit: true, damage: WEAPONS.pinkPigClub.damage, strike: 1 },
-      { sprite: f[0], duration: 100 },
-      { sprite: f[1], duration: 500, hit: true, damage: WEAPONS.pinkPigClub.damage, strike: 2 },
-      { sprite: f[1], duration: 100 },
-      { sprite: f[2], duration: 400, hit: true, damage: WEAPONS.pinkPigClub.damage, strike: 4 },
-      { sprite: f[2], duration: 100 },
-      { sprite: f[3], duration: 500, hit: true, damage: WEAPONS.pinkPigClub.criticalDamage, strike: 3, critical: true },
-      { sprite: f[3], duration: 400 }
-    );
+    const entries = [
+      { sprite: hit1, duration: 400, hit: true, damage: WEAPONS.pinkPigClub.damage, strike: 1 },
+      { sprite: pull, duration: 100 },
+
+      { sprite: hit2, duration: 500, hit: true, damage: WEAPONS.pinkPigClub.damage, strike: 2 },
+      { sprite: pull, duration: 100 },
+
+      { sprite: hit3, duration: 400, hit: true, damage: WEAPONS.pinkPigClub.damage, strike: 4 },
+      { sprite: pull, duration: 100 },
+
+      { sprite: hit4, duration: 500, hit: true, damage: WEAPONS.pinkPigClub.criticalDamage, strike: 3, critical: true },
+      { sprite: pull, duration: 400 }
+    ];
 
     return Object.freeze(entries.map((entry) => Object.freeze(entry)));
   }
