@@ -428,6 +428,21 @@
   attackAudio.loop = false;
   attackAudio.volume = 1.0;
 
+  // R80 — one-shot stadium announcer. It is never looped and is never
+  // restarted during the countdown/fighter sequence.
+  const stadiumFightAnnouncerAudio = new Audio("assets/audio/stadium/ITS TIME UFC ANNOUNCER.mp3");
+  stadiumFightAnnouncerAudio.preload = "auto";
+  stadiumFightAnnouncerAudio.loop = false;
+  stadiumFightAnnouncerAudio.volume = 1.0;
+  let stadiumFightAnnouncerPlayed = false;
+
+  function playStadiumFightAnnouncerOnce() {
+    if (stadiumFightAnnouncerPlayed) return;
+    stadiumFightAnnouncerPlayed = true;
+    try { stadiumFightAnnouncerAudio.currentTime = 0; } catch (_) {}
+    stadiumFightAnnouncerAudio.play().catch(() => {});
+  }
+
   // ------------------------------------------------------------------
   // R33 MAP MUSIC — robust crossfade manager
   // OBERKIRCH keeps the ORIGINAL existing track.
@@ -8725,6 +8740,13 @@
       fighterWidth: 700,
       fighterHeight: 1080,
 
+      // R80 visual tuning.
+      // Fighter A = ROHART-NEUENSTEIN: backward/up and right run substantially smaller.
+      neuensteinWalkUpScale: 0.78,
+      neuensteinWalkRightScale: 0.76,
+      // Fighter B = SCHAUENBURG: left run is enlarged while keeping one fixed foot baseline.
+      schauenburgWalkLeftScale: 1.16,
+
       walkUpFrames: Object.freeze([
         "assets/stadium/fighters/FLEGEL WALK UP 1.png",
         "assets/stadium/fighters/FLEGEL WALK UP 2.png"
@@ -9086,7 +9108,7 @@
         display: flex;
         justify-content: center;
         align-items: center;
-        width: min(650px, 100%);
+        width: 260px;
         min-height: 44px;
         margin: 9px auto 10px;
       }
@@ -9125,32 +9147,26 @@
       }
 
       .stadium-bet__possible-win {
-        position: absolute;
-        left: calc(50% + 154px);
-        top: 50%;
-        transform: translateY(-50%);
+        display: block;
+        width: 100%;
+        margin: 8px auto 12px;
         white-space: nowrap;
         color: #b87333;
         font-family: Georgia, "Times New Roman", serif;
-        font-size: 17px;
+        font-size: 18px;
         font-weight: 900;
-        letter-spacing: .25px;
-        text-align: left;
+        letter-spacing: .35px;
+        line-height: 1.15;
+        text-align: center;
         text-shadow:
           0 2px 2px rgba(0,0,0,.95),
           0 0 8px rgba(184,115,51,.25);
       }
 
       @media (max-width: 760px) {
-        .stadium-bet__stake-row {
-          min-height: 82px;
-        }
-
         .stadium-bet__possible-win {
-          left: 50%;
-          top: 66px;
-          transform: translate(-50%, -50%);
           font-size: 15px;
+          white-space: normal;
         }
       }
 
@@ -9399,11 +9415,12 @@
           </button>
         </div>
 
+        <div id="stadiumBetPossibleWin" class="stadium-bet__possible-win">MÖGLICHER GEWINN: —</div>
+
         <div class="stadium-bet__stake-label">EINSATZ</div>
         <div class="stadium-bet__stake-row">
           <input id="stadiumBetStake" class="stadium-bet__stake" type="text" inputmode="numeric" maxlength="9" autocomplete="off" aria-label="Einsatz in Pfennig">
           <span class="stadium-bet__penny" aria-hidden="true">₰</span>
-          <span id="stadiumBetPossibleWin" class="stadium-bet__possible-win">MÖGLICHER GEWINN: —</span>
         </div>
 
         <button type="button" class="stadium-bet__submit" id="stadiumBetSubmit">Wette abschließen</button>
@@ -9581,6 +9598,8 @@
       x: STADIUM.fightIntro.schauenburgStart.x,
       y: STADIUM.fightIntro.schauenburgStart.y
     };
+    ensureStadiumFightBReference("up");
+    ensureStadiumFightBReference("left");
     stadiumGateForeground = gate;
 
     if (base.complete && base.naturalWidth > 0) {
@@ -9826,7 +9845,16 @@
     const targetOpaqueHeight = stadiumFightReferenceOpaqueHeights[referenceKey];
     if (targetOpaqueHeight == null) return;
 
-    const scale = targetOpaqueHeight / Math.max(1, metrics.height);
+    let scale = targetOpaqueHeight / Math.max(1, metrics.height);
+
+    // R80: Fighter A is ROHART-NEUENSTEIN.
+    // Only his moving sprites are reduced; victory/ready poses stay unchanged.
+    if (STADIUM.fightIntro.walkUpFrames.includes(src)) {
+      scale *= STADIUM.fightIntro.neuensteinWalkUpScale;
+    } else if (STADIUM.fightIntro.walkRightFrames.includes(src)) {
+      scale *= STADIUM.fightIntro.neuensteinWalkRightScale;
+    }
+
     const renderedWidth = metrics.naturalWidth * scale;
     const renderedHeight = metrics.naturalHeight * scale;
 
@@ -9871,17 +9899,70 @@
     stadiumFightFighter.root.style.top = `${y}px`;
   }
 
-  function layoutStadiumFightSpriteB(image) {
-    if (!stadiumFightFighterB || !image || !image.naturalWidth || !image.naturalHeight) return;
-    const metrics = getStadiumFightOpaqueMetrics(image);
-    if (!metrics) return;
+  const stadiumFightBReferenceOpaqueHeights = {
+    up: null,
+    left: null
+  };
+
+  function stadiumFightBGroupForSrc(src) {
+    return STADIUM.fightIntro.schauenburgWalkLeftFrames.includes(src) ? "left" : "up";
+  }
+
+  function ensureStadiumFightBReference(group) {
+    if (stadiumFightBReferenceOpaqueHeights[group] != null) return true;
+
+    const refSrc = group === "left"
+      ? STADIUM.fightIntro.schauenburgWalkLeftFrames[0]
+      : STADIUM.fightIntro.schauenburgVictoryFrame;
+
+    const reference = new Image();
+    reference.src = encodeURI(refSrc);
+    if (!reference.complete || !reference.naturalWidth) return false;
+
+    const metrics = getStadiumFightOpaqueMetrics(reference);
+    if (!metrics) return false;
+
     const fit = Math.min(
       STADIUM.fightIntro.fighterWidth / metrics.naturalWidth,
       STADIUM.fightIntro.fighterHeight / metrics.naturalHeight
     );
-    const footGap = (metrics.naturalHeight - 1 - metrics.footBottomY) * fit;
-    image.style.width = `${(metrics.naturalWidth * fit).toFixed(3)}px`;
-    image.style.height = `${(metrics.naturalHeight * fit).toFixed(3)}px`;
+
+    stadiumFightBReferenceOpaqueHeights[group] =
+      metrics.height * fit *
+      (group === "left" ? STADIUM.fightIntro.schauenburgWalkLeftScale : 1);
+
+    return true;
+  }
+
+  function layoutStadiumFightSpriteB(image, src) {
+    if (!stadiumFightFighterB || !image || !image.naturalWidth || !image.naturalHeight) return;
+    const metrics = getStadiumFightOpaqueMetrics(image);
+    if (!metrics) return;
+
+    const group = stadiumFightBGroupForSrc(src);
+    if (stadiumFightBReferenceOpaqueHeights[group] == null) {
+      ensureStadiumFightBReference(group);
+    }
+
+    let targetOpaqueHeight = stadiumFightBReferenceOpaqueHeights[group];
+
+    // Fallback is deterministic and still uses the requested left enlargement.
+    if (targetOpaqueHeight == null) {
+      const fit = Math.min(
+        STADIUM.fightIntro.fighterWidth / metrics.naturalWidth,
+        STADIUM.fightIntro.fighterHeight / metrics.naturalHeight
+      );
+      targetOpaqueHeight = metrics.height * fit *
+        (group === "left" ? STADIUM.fightIntro.schauenburgWalkLeftScale : 1);
+    }
+
+    // Every frame in a movement group gets the SAME visible opaque height.
+    // Combined with the opaque foot anchor this eliminates the left-run bounce.
+    const scale = targetOpaqueHeight / Math.max(1, metrics.height);
+    const footGap = (metrics.naturalHeight - 1 - metrics.footBottomY) * scale;
+
+    image.style.width = `${(metrics.naturalWidth * scale).toFixed(3)}px`;
+    image.style.height = `${(metrics.naturalHeight * scale).toFixed(3)}px`;
     image.style.bottom = `${(-footGap).toFixed(3)}px`;
     image.style.transform = "translateX(-50%)";
   }
@@ -9895,7 +9976,7 @@
     const oldImage = stadiumFightFighterB.images[stadiumFightFighterB.activeIndex];
     const reveal = () => {
       if (token !== stadiumFightFighterBSpriteToken) return;
-      layoutStadiumFightSpriteB(nextImage);
+      layoutStadiumFightSpriteB(nextImage, src);
       nextImage.classList.add("stadium-fighter__sprite--active");
       oldImage.classList.remove("stadium-fighter__sprite--active");
       stadiumFightFighterB.activeIndex = nextIndex;
@@ -9946,6 +10027,11 @@
 
   function resetStadiumFightIntro() {
     stadiumFightStarted = false;
+    stadiumFightAnnouncerPlayed = false;
+    try {
+      stadiumFightAnnouncerAudio.pause();
+      stadiumFightAnnouncerAudio.currentTime = 0;
+    } catch (_) {}
     stadiumFightPhaseEndAt = 0;
     stadiumFightFrameIndex = 0;
     stadiumFightNextFrameAt = 0;
@@ -9990,12 +10076,21 @@
       setStadiumFightSprite(STADIUM.fightIntro.walkUpFrames[0], true);
     }
 
-    stadiumState = "fight-countdown-3";
-    stadiumFightPhaseEndAt = now + STADIUM.fightIntro.countdownStepMs;
-    setStadiumFightOverlay("countdown", "3");
+    // R80: announcer starts a fraction BEFORE the red timer, exactly once.
+    playStadiumFightAnnouncerOnce();
+    stadiumState = "fight-pre-countdown";
+    stadiumFightPhaseEndAt = now + 180;
+    setStadiumFightOverlay(null);
   }
 
   function advanceStadiumFightCountdown(now) {
+    if (stadiumState === "fight-pre-countdown") {
+      stadiumState = "fight-countdown-3";
+      stadiumFightPhaseEndAt = now + STADIUM.fightIntro.countdownStepMs;
+      setStadiumFightOverlay("countdown", "3");
+      return true;
+    }
+
     if (stadiumState === "fight-countdown-3") {
       stadiumState = "fight-countdown-2";
       stadiumFightPhaseEndAt = now + STADIUM.fightIntro.countdownStepMs;
@@ -10078,7 +10173,10 @@
   function updateStadiumFightIntro(deltaSeconds, now) {
     if (!stadiumFightStarted || MAP.id !== STADIUM.mapId) return;
 
-    if (stadiumState.startsWith("fight-countdown-")) {
+    if (
+      stadiumState === "fight-pre-countdown" ||
+      stadiumState.startsWith("fight-countdown-")
+    ) {
       if (now >= stadiumFightPhaseEndAt) advanceStadiumFightCountdown(now);
       return;
     }
