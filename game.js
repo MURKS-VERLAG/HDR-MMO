@@ -974,6 +974,7 @@
       const t = config.trigger;
 
       const visible =
+        config.id !== "stadium-oberkirch" &&
         MAP.id === signMapId &&
         playerX >= t.x1 &&
         playerX <= t.x2 &&
@@ -8639,6 +8640,387 @@
     return startFlowState === "campaign";
   }
 
+
+  // ------------------------------------------------------------------
+  // R70 RENCHTALSTADION PHASE 1
+  // Scripted arrival -> choice menu -> locked spectator position.
+  // This is deliberately isolated from the normal campaign movement.
+  // ------------------------------------------------------------------
+  const STADIUM = Object.freeze({
+    mapId: "renchtalstadion",
+    arrivalStart: Object.freeze({ x: 5220, y: -40 }),
+    arrivalTarget: Object.freeze({ x: 6540, y: 725 }),
+    arrivalSpeed: 410,
+    spectatorPoint: Object.freeze({ x: 6910, y: 1680 }),
+    bookmakerPoint: Object.freeze({ x: 6380, y: 1440 }),
+    bookmakerWidth: 420,
+    bookmakerHeight: 630,
+    bookmakerBase: "assets/npcs/renchtalstadion/BUCHMACHER BASIS.png",
+    bookmakerActions: Object.freeze([
+      "assets/npcs/renchtalstadion/BUCHMACHER AKTION 1.png",
+      "assets/npcs/renchtalstadion/BUCHMACHER AKTION 2.png",
+      "assets/npcs/renchtalstadion/BUCHMACHER AKTION 3.png",
+      "assets/npcs/renchtalstadion/BUCHMACHER AKTION 4.png"
+    ]),
+    bookmakerWaitMs: 2000,
+    bookmakerActionMs: 1000,
+    bookmakerFadeMs: 190,
+    arena: Object.freeze({
+      cx: 5090,
+      cy: 3422,
+      rx: 3450,
+      ry: 992,
+      entrance: Object.freeze({ x: 5000, y: 4414 })
+    })
+  });
+
+  let stadiumState = "inactive";
+  let stadiumArrivalFromOberkirch = false;
+  let stadiumUI = null;
+  let stadiumBookmaker = null;
+  let stadiumBookmakerNextAt = 0;
+  let stadiumBookmakerActionEndAt = 0;
+  let stadiumBookmakerShowingAction = false;
+
+  function stadiumActive() {
+    return MAP.id === STADIUM.mapId && stadiumState !== "inactive";
+  }
+
+  function installStadiumStyles() {
+    if (document.getElementById("stadiumPhase1Styles")) return;
+
+    const style = document.createElement("style");
+    style.id = "stadiumPhase1Styles";
+    style.textContent = `
+      #stadiumChoiceUI {
+        position: fixed;
+        inset: 0;
+        z-index: 24000;
+        display: grid;
+        place-items: center;
+        pointer-events: none;
+        opacity: 0;
+        visibility: hidden;
+        transition: opacity 300ms ease, visibility 300ms ease;
+      }
+
+      #stadiumChoiceUI.stadium-choice--visible {
+        opacity: 1;
+        visibility: visible;
+        pointer-events: auto;
+      }
+
+      .stadium-choice__panel {
+        min-width: min(620px, 78vw);
+        padding: 30px 42px 34px;
+        border: 1px solid rgba(198, 151, 60, .55);
+        background: rgba(5, 5, 5, .80);
+        box-shadow: 0 18px 60px rgba(0,0,0,.72), inset 0 0 24px rgba(158,108,33,.10);
+        backdrop-filter: blur(3px);
+        text-align: center;
+        user-select: none;
+      }
+
+      .stadium-choice__title {
+        margin: 0 0 24px;
+        color: #d8ae55;
+        font-family: "Old English Text MT", "Lucida Blackletter", "UnifrakturCook", Georgia, serif;
+        font-size: clamp(34px, 4.1vw, 62px);
+        font-weight: 900;
+        letter-spacing: 2px;
+        text-shadow: 0 2px 2px #000, 0 0 13px rgba(216,174,85,.28);
+      }
+
+      .stadium-choice__item {
+        display: block;
+        width: 100%;
+        padding: 9px 14px;
+        border: 0;
+        background: transparent;
+        color: rgba(245,238,220,.76);
+        font-family: Georgia, "Times New Roman", serif;
+        font-size: clamp(18px, 1.75vw, 27px);
+        font-weight: 700;
+        letter-spacing: .8px;
+        text-align: center;
+        transition: color 150ms ease, text-shadow 150ms ease, transform 150ms ease;
+      }
+
+      .stadium-choice__item:hover {
+        color: #fff4d2;
+        text-shadow: 0 0 10px rgba(237,199,108,.72);
+        transform: scale(1.018);
+      }
+
+      .stadium-choice__item--active { cursor: pointer; }
+      .stadium-choice__item--locked { cursor: default; opacity: .58; }
+
+      #stadiumSoftCurtain {
+        position: fixed;
+        inset: 0;
+        z-index: 23990;
+        pointer-events: none;
+        background: #000;
+        opacity: 0;
+        visibility: hidden;
+        transition: opacity 360ms ease, visibility 360ms ease;
+      }
+
+      #stadiumSoftCurtain.stadium-curtain--visible {
+        opacity: 1;
+        visibility: visible;
+      }
+
+      .stadium-bookmaker {
+        position: absolute;
+        z-index: 9;
+        width: ${STADIUM.bookmakerWidth}px;
+        height: ${STADIUM.bookmakerHeight}px;
+        transform: translate(-50%, -100%);
+        transform-origin: 50% 100%;
+        pointer-events: none;
+        user-select: none;
+        display: none;
+      }
+
+      .stadium-bookmaker__sprite {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+        object-position: 50% 100%;
+        opacity: 0;
+        transition: opacity ${STADIUM.bookmakerFadeMs}ms ease;
+        filter: drop-shadow(0 8px 5px rgba(0,0,0,.30));
+      }
+
+      .stadium-bookmaker__sprite--visible { opacity: 1; }
+    `;
+    document.head.appendChild(style);
+  }
+
+  function createStadiumPhase1() {
+    installStadiumStyles();
+
+    const root = document.createElement("div");
+    root.id = "stadiumChoiceUI";
+    root.innerHTML = `
+      <div class="stadium-choice__panel" role="dialog" aria-modal="true" aria-label="RENCHTALSTADION">
+        <div class="stadium-choice__title">RENCHTALSTADION</div>
+        <button type="button" class="stadium-choice__item stadium-choice__item--active" data-stadium-choice="spectator">AUF TRIBÜNE PLATZNEHMEN</button>
+        <button type="button" class="stadium-choice__item stadium-choice__item--locked" data-stadium-choice="zusenhofen">WEITER NACH ZUSENHOFEN</button>
+        <button type="button" class="stadium-choice__item stadium-choice__item--locked" data-stadium-choice="nussbach">WEITER RICHTUNG NUSSBACH</button>
+        <button type="button" class="stadium-choice__item stadium-choice__item--active" data-stadium-choice="oberkirch">ZURÜCK NACH OBERKIRCH</button>
+      </div>`;
+    game.appendChild(root);
+
+    const curtain = document.createElement("div");
+    curtain.id = "stadiumSoftCurtain";
+    game.appendChild(curtain);
+
+    root.addEventListener("click", (event) => {
+      const button = event.target.closest("[data-stadium-choice]");
+      if (!button || stadiumState !== "entrance-menu") return;
+      const choice = button.dataset.stadiumChoice;
+      if (choice === "spectator") {
+        stadiumMoveToSpectator();
+      } else if (choice === "oberkirch") {
+        stadiumReturnToOberkirch();
+      }
+    });
+
+    const bookmaker = document.createElement("div");
+    bookmaker.id = "stadiumBookmaker";
+    bookmaker.className = "stadium-bookmaker";
+    bookmaker.style.left = `${STADIUM.bookmakerPoint.x}px`;
+    bookmaker.style.top = `${STADIUM.bookmakerPoint.y}px`;
+
+    const base = document.createElement("img");
+    base.className = "stadium-bookmaker__sprite stadium-bookmaker__sprite--visible";
+    base.src = encodeURI(STADIUM.bookmakerBase);
+    base.alt = "";
+    base.draggable = false;
+
+    const action = document.createElement("img");
+    action.className = "stadium-bookmaker__sprite";
+    action.src = encodeURI(STADIUM.bookmakerActions[0]);
+    action.alt = "";
+    action.draggable = false;
+
+    bookmaker.append(base, action);
+    world.appendChild(bookmaker);
+
+    for (const src of [STADIUM.bookmakerBase, ...STADIUM.bookmakerActions]) {
+      const preload = new Image();
+      preload.src = encodeURI(src);
+    }
+
+    stadiumUI = { root, curtain };
+    stadiumBookmaker = { root: bookmaker, base, action };
+  }
+
+  function setStadiumBookmakerVisibility() {
+    if (!stadiumBookmaker) return;
+    stadiumBookmaker.root.style.display = MAP.id === STADIUM.mapId ? "" : "none";
+  }
+
+  function resetStadiumBookmaker(now = performance.now()) {
+    if (!stadiumBookmaker) return;
+    stadiumBookmaker.base.classList.add("stadium-bookmaker__sprite--visible");
+    stadiumBookmaker.action.classList.remove("stadium-bookmaker__sprite--visible");
+    stadiumBookmakerShowingAction = false;
+    stadiumBookmakerActionEndAt = 0;
+    stadiumBookmakerNextAt = now + STADIUM.bookmakerWaitMs;
+  }
+
+  function updateStadiumBookmaker(now) {
+    if (!stadiumBookmaker || MAP.id !== STADIUM.mapId) return;
+
+    if (stadiumBookmakerShowingAction) {
+      if (now < stadiumBookmakerActionEndAt) return;
+      stadiumBookmaker.action.classList.remove("stadium-bookmaker__sprite--visible");
+      stadiumBookmaker.base.classList.add("stadium-bookmaker__sprite--visible");
+      stadiumBookmakerShowingAction = false;
+      stadiumBookmakerNextAt = now + STADIUM.bookmakerWaitMs;
+      return;
+    }
+
+    if (now < stadiumBookmakerNextAt) return;
+    const src = STADIUM.bookmakerActions[Math.floor(Math.random() * STADIUM.bookmakerActions.length)];
+    stadiumBookmaker.action.src = encodeURI(src);
+    stadiumBookmaker.base.classList.remove("stadium-bookmaker__sprite--visible");
+    stadiumBookmaker.action.classList.add("stadium-bookmaker__sprite--visible");
+    stadiumBookmakerShowingAction = true;
+    stadiumBookmakerActionEndAt = now + STADIUM.bookmakerActionMs;
+  }
+
+  function showStadiumMenu() {
+    if (!stadiumUI) return;
+    stadiumUI.root.classList.add("stadium-choice--visible");
+  }
+
+  function hideStadiumMenu() {
+    if (!stadiumUI) return;
+    stadiumUI.root.classList.remove("stadium-choice--visible");
+  }
+
+  function beginStadiumArrival() {
+    if (MAP.id !== STADIUM.mapId) return;
+    stadiumState = "arrival-walk";
+    keys.clear();
+    cancelAttackImmediately();
+    if (blocking) stopBlocking();
+    playerX = STADIUM.arrivalStart.x;
+    playerY = STADIUM.arrivalStart.y;
+    cameraX = playerX;
+    cameraY = playerY;
+    facing = "down";
+    moving = true;
+    playerEl.classList.add("player--moving");
+    playerEl.classList.remove("player--idle");
+    setAnimation("down");
+    resetStadiumBookmaker();
+    setStadiumBookmakerVisibility();
+    renderPlayer();
+  }
+
+  function finishStadiumArrival() {
+    playerX = STADIUM.arrivalTarget.x;
+    playerY = STADIUM.arrivalTarget.y;
+    cameraX = playerX;
+    cameraY = playerY;
+    moving = false;
+    facing = "down";
+    setAnimation("idle");
+    forceSprite(PLAYER.standDown);
+    playerEl.classList.remove("player--moving");
+    playerEl.classList.add("player--idle");
+    stadiumState = "entrance-menu";
+    showStadiumMenu();
+  }
+
+  function updateStadiumArrival(deltaSeconds) {
+    const dx = STADIUM.arrivalTarget.x - playerX;
+    const dy = STADIUM.arrivalTarget.y - playerY;
+    const distance = Math.hypot(dx, dy);
+
+    if (distance <= 8) {
+      finishStadiumArrival();
+      return;
+    }
+
+    const step = Math.min(distance, STADIUM.arrivalSpeed * deltaSeconds);
+    playerX += (dx / distance) * step;
+    playerY += (dy / distance) * step;
+    cameraX = playerX;
+    cameraY = playerY;
+    facing = "down";
+    setAnimation("down");
+    renderMovementFrame("down", deltaSeconds);
+  }
+
+  async function stadiumMoveToSpectator() {
+    if (!stadiumUI || stadiumState !== "entrance-menu") return;
+    stadiumState = "spectator-transition";
+    hideStadiumMenu();
+    stadiumUI.curtain.classList.add("stadium-curtain--visible");
+    await waitMs(380);
+
+    playerX = STADIUM.spectatorPoint.x;
+    playerY = STADIUM.spectatorPoint.y;
+    cameraX = playerX;
+    cameraY = playerY;
+    facing = "down";
+    lastHorizontalFacing = "right";
+    moving = false;
+    forceSprite(PLAYER.standDown);
+    renderPlayer();
+    renderWorld();
+
+    await waitMs(90);
+    stadiumUI.curtain.classList.remove("stadium-curtain--visible");
+    stadiumState = "spectator";
+  }
+
+  async function stadiumReturnToOberkirch() {
+    if (stadiumState !== "entrance-menu" || mapTransitioning) return;
+    stadiumState = "spectator-transition";
+    hideStadiumMenu();
+    await switchMap(MAPS.oberkirch, MAP_EXIT_CONFIG.oberkirchFromStadiumSpawn, true);
+    stadiumState = "inactive";
+    stadiumArrivalFromOberkirch = false;
+    setStadiumBookmakerVisibility();
+  }
+
+  function setStadiumSpectatorFacing(code) {
+    if (stadiumState !== "spectator") return false;
+    if (code === "KeyW" || code === "ArrowUp") {
+      facing = "up";
+      forceSprite(PLAYER.standUp);
+    } else if (code === "KeyS" || code === "ArrowDown") {
+      facing = "down";
+      forceSprite(PLAYER.standDown);
+    } else if (code === "KeyA" || code === "ArrowLeft") {
+      facing = "left";
+      lastHorizontalFacing = "left";
+      forceSprite(PLAYER.standLeft);
+    } else if (code === "KeyD" || code === "ArrowRight") {
+      facing = "right";
+      lastHorizontalFacing = "right";
+      forceSprite(PLAYER.standRight);
+    } else {
+      return false;
+    }
+    return true;
+  }
+
+  function updateStadiumPhase1(deltaSeconds, now) {
+    setStadiumBookmakerVisibility();
+    updateStadiumBookmaker(now);
+    if (stadiumState === "arrival-walk") updateStadiumArrival(deltaSeconds);
+  }
+
   function installStartFlowStyles() {
     if (document.getElementById("startFlowStyles")) return;
 
@@ -10322,6 +10704,9 @@
 
   async function switchMap(nextMap, spawn, showRegionTitle = false) {
     if (mapTransitioning) return;
+    const sourceMapId = MAP.id;
+    const scriptedStadiumArrival =
+      sourceMapId === "oberkirch-zentrum" && nextMap.id === STADIUM.mapId;
     mapTransitioning = true;
     keys.clear();
     cancelAttackImmediately();
@@ -10356,8 +10741,21 @@
       return;
     }
 
-    playerX = spawn.x;
-    playerY = spawn.y;
+    if (scriptedStadiumArrival) {
+      playerX = STADIUM.arrivalStart.x;
+      playerY = STADIUM.arrivalStart.y;
+      stadiumState = "inactive";
+      stadiumArrivalFromOberkirch = true;
+      hideStadiumMenu();
+    } else {
+      playerX = spawn.x;
+      playerY = spawn.y;
+      if (nextMap.id !== STADIUM.mapId) {
+        stadiumState = "inactive";
+        stadiumArrivalFromOberkirch = false;
+        hideStadiumMenu();
+      }
+    }
     cameraX = playerX;
     cameraY = playerY;
     activeBridge = null;
@@ -10412,6 +10810,11 @@
 
     lastFrame = performance.now();
     mapTransitioning = false;
+
+    setStadiumBookmakerVisibility();
+    if (scriptedStadiumArrival && stadiumArrivalFromOberkirch) {
+      beginStadiumArrival();
+    }
   }
 
   function playerInOberkirchNorthExitLane() {
@@ -10630,19 +11033,8 @@
       return true;
     }
 
-    // R51 MAP 5 red bottom arrow -> matching south lane on OBERKIRCH.
-    if (
-      playerInStadiumOberkirchSouthExitLane() &&
-      movingDown &&
-      playerY >= MAP.height + MAP_EXIT_CONFIG.stadiumOberkirchSouth.leavePadding
-    ) {
-      switchMap(
-        MAPS.oberkirch,
-        MAP_EXIT_CONFIG.oberkirchFromStadiumSpawn,
-        true
-      );
-      return true;
-    }
+    // R70: RENCHTALSTADION no longer has a physical south exit.
+    // Return to OBERKIRCH is now exclusively handled by the stadium choice menu.
 
     // R26 MAP 3 lower-left road -> corresponding MAP 2 north-left road.
     if (
@@ -11366,8 +11758,12 @@
 
     if (gameplayUnlocked() && !mapTransitioning) {
       if (!inventoryState.open) {
-        updatePlayer(deltaSeconds);
-        checkMapExit();
+        if (stadiumActive()) {
+          updateStadiumPhase1(deltaSeconds, now);
+        } else {
+          updatePlayer(deltaSeconds);
+          checkMapExit();
+        }
       }
       updateAreaSigns();
       updateTrunkenbold(deltaSeconds, now);
@@ -11404,6 +11800,15 @@
 
       // No gameplay key may leak into the campaign while either start screen is open.
       event.preventDefault();
+      return;
+    }
+
+    // R70 RENCHTALSTADION: no normal gameplay input during the staged sequence.
+    if (stadiumActive()) {
+      event.preventDefault();
+      if (stadiumState === "spectator") {
+        setStadiumSpectatorFacing(event.code);
+      }
       return;
     }
 
@@ -11587,6 +11992,7 @@
     createLautenbachBuildings();
     createHubackerBuildings();
     createTrunkenbold();
+    createStadiumPhase1();
 
     clampPlayer();
     updateAreaSigns();
