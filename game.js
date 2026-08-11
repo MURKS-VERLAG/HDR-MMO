@@ -9207,12 +9207,15 @@
         transform: translateX(-50%);
         transform-origin: 50% 100%;
         opacity: 0;
-        transition: opacity 85ms linear;
-        will-change: opacity;
+        visibility: hidden;
+        transition: none !important;
+        backface-visibility: hidden;
+        -webkit-backface-visibility: hidden;
       }
 
       .stadium-fighter__sprite--active {
         opacity: 1;
+        visibility: visible;
       }
 
       .stadium-gate-foreground {
@@ -9399,7 +9402,21 @@
       STADIUM.fightIntro.readyFrame
     ]) {
       const preload = new Image();
+      preload.onload = () => {
+        getStadiumFightOpaqueMetrics(preload);
+        if (fighterSrc === STADIUM.fightIntro.readyFrame) {
+          const metrics = getStadiumFightOpaqueMetrics(preload);
+          if (metrics) {
+            const fit = Math.min(
+              STADIUM.fightIntro.fighterWidth / metrics.naturalWidth,
+              STADIUM.fightIntro.fighterHeight / metrics.naturalHeight
+            );
+            stadiumFightTargetOpaqueHeight = metrics.height * fit;
+          }
+        }
+      };
       preload.src = encodeURI(fighterSrc);
+      if (preload.complete && preload.naturalWidth > 0) preload.onload();
     }
 
     const gate = document.createElement("img");
@@ -9623,6 +9640,21 @@
     }
   }
 
+  function ensureStadiumFightReadyReference() {
+    if (stadiumFightTargetOpaqueHeight != null) return true;
+    const reference = new Image();
+    reference.src = encodeURI(STADIUM.fightIntro.readyFrame);
+    if (!reference.complete || !reference.naturalWidth) return false;
+    const metrics = getStadiumFightOpaqueMetrics(reference);
+    if (!metrics) return false;
+    const fit = Math.min(
+      STADIUM.fightIntro.fighterWidth / metrics.naturalWidth,
+      STADIUM.fightIntro.fighterHeight / metrics.naturalHeight
+    );
+    stadiumFightTargetOpaqueHeight = metrics.height * fit;
+    return true;
+  }
+
   function layoutStadiumFightSprite(image) {
     if (!stadiumFightFighter || !image || !image.naturalWidth || !image.naturalHeight) return;
     const metrics = getStadiumFightOpaqueMetrics(image);
@@ -9633,13 +9665,8 @@
     // source PNG canvas sizes (for example 1024x1536 vs 1254x1254) otherwise
     // produce different rendered character sizes. Instead every frame receives
     // one explicit pixel size derived from the actual opaque figure height.
-    if (stadiumFightTargetOpaqueHeight == null) {
-      const fit = Math.min(
-        STADIUM.fightIntro.fighterWidth / metrics.naturalWidth,
-        STADIUM.fightIntro.fighterHeight / metrics.naturalHeight
-      );
-      stadiumFightTargetOpaqueHeight = metrics.height * fit;
-    }
+    if (stadiumFightTargetOpaqueHeight == null) ensureStadiumFightReadyReference();
+    if (stadiumFightTargetOpaqueHeight == null) return;
 
     const scale = stadiumFightTargetOpaqueHeight / Math.max(1, metrics.height);
     const renderedWidth = metrics.naturalWidth * scale;
@@ -9694,7 +9721,7 @@
     stadiumFightFrameIndex = 0;
     stadiumFightNextFrameAt = 0;
     stadiumFightLastState = "";
-    stadiumFightTargetOpaqueHeight = null;
+    ensureStadiumFightReadyReference();
     setStadiumFightOverlay(null);
 
     if (stadiumFightFighter) {
