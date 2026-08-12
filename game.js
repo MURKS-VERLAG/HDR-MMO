@@ -9663,6 +9663,99 @@
   const playerLabel = document.getElementById("playerLabel");
   const debugTitle = document.querySelector("#debug strong");
 
+
+  // ------------------------------------------------------------------
+  // R100 — PERMANENT PLAYER HUD
+  // Exact supplied HUD artwork, screen-space UI.
+  // Visible on every campaign map EXCEPT RENCHTALSTADION.
+  // No gameplay values are wired yet; this patch installs only the HUD base.
+  // ------------------------------------------------------------------
+  const PLAYER_HUD = Object.freeze({
+    image: "assets/ui/hud/PLAYER HUD MAIN.png"
+  });
+
+  let playerHud = null;
+
+  function installPlayerHudStyles() {
+    if (document.getElementById("playerHudStyles")) return;
+
+    const style = document.createElement("style");
+    style.id = "playerHudStyles";
+    style.textContent = `
+      #playerHud {
+        position: absolute;
+        z-index: 6100;
+        left: 0;
+        bottom: 0;
+        width: min(78vw, 1500px);
+        height: auto;
+        pointer-events: none;
+        user-select: none;
+        -webkit-user-drag: none;
+        opacity: 1;
+        visibility: visible;
+        transition: opacity 160ms ease, visibility 160ms ease;
+        filter: drop-shadow(0 4px 5px rgba(0,0,0,.24));
+      }
+
+      #playerHud.player-hud--hidden {
+        opacity: 0;
+        visibility: hidden;
+      }
+
+      #playerHud img {
+        display: block;
+        width: 100%;
+        height: auto;
+        object-fit: contain;
+        pointer-events: none;
+        user-select: none;
+        -webkit-user-drag: none;
+      }
+
+      @media (max-width: 1100px) {
+        #playerHud {
+          width: min(92vw, 1250px);
+        }
+      }
+    `;
+
+    document.head.appendChild(style);
+  }
+
+  function createPlayerHud() {
+    if (playerHud) return;
+
+    installPlayerHudStyles();
+
+    const root = document.createElement("div");
+    root.id = "playerHud";
+    root.setAttribute("aria-hidden", "true");
+
+    const image = document.createElement("img");
+    image.src = encodeURI(PLAYER_HUD.image);
+    image.alt = "";
+    image.draggable = false;
+
+    root.appendChild(image);
+    game.appendChild(root);
+
+    playerHud = { root, image };
+    updatePlayerHudVisibility();
+  }
+
+  function updatePlayerHudVisibility() {
+    if (!playerHud) return;
+
+    const visible =
+      typeof MAP !== "undefined" &&
+      MAP &&
+      MAP.id !== "renchtalstadion";
+
+    playerHud.root.classList.toggle("player-hud--hidden", !visible);
+  }
+
+
   if (!game || !world || !mapImage || !playerEl || !playerSprite) {
     throw new Error("Game DOM incomplete: map/player elements missing.");
   }
@@ -14289,6 +14382,7 @@
     setOedegardVisibility(MAP.id === "oedsbach");
     setOedsbachFogVisibility(MAP.id === "oedsbach");
     setOedsbachShadowVisibility(MAP.id === "oedsbach");
+    updatePlayerHudVisibility();
 
     // Sync map-specific animals while the transition overlay is still covering the map.
     updateRabbits(0, performance.now());
@@ -15356,6 +15450,7 @@
       updateMole(now);
       updateOedegard(now);
       updateOedsbachShadows(now);
+      updatePlayerHudVisibility();
     }
 
     renderPlayer();
@@ -15568,6 +15663,7 @@
     startBackgroundMusic();
     installMapTransitionUI();
     createInventorySystem();
+    createPlayerHud();
 
     // R67 TEST: first weapon starts in page I at the first free vertical 1x2 area.
     // Later this single line can be removed when the weapon becomes a world reward.
