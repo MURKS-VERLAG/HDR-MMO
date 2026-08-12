@@ -8714,6 +8714,10 @@
     bookmakerActionMs: 1000,
     bookmakerFadeMs: 190,
 
+    // R88 — final betting slip / bookmaker result artwork.
+    resultPlayerWin: "assets/npcs/renchtalstadion/BUCHMACHER AUSZAHLUNG.png",
+    resultBookmakerWin: "assets/npcs/renchtalstadion/BUCHMACHER GEWINN.png",
+
     // R72 PHASE 2 — bookmaker interaction / derby betting UI.
     bookmakerHoverAlphaThreshold: 24,
     derby: Object.freeze({
@@ -8869,6 +8873,10 @@
   let stadiumBetUI = null;
   let stadiumBetOpen = false;
   let stadiumBetSelectedTeam = null;
+  let stadiumLockedBet = null;
+  let stadiumResultUI = null;
+  let stadiumResultOpen = false;
+  let stadiumResultShown = false;
   let stadiumBookmakerAlphaMask = null;
   let stadiumBookmakerHovered = false;
   let stadiumGateForeground = null;
@@ -9048,6 +9056,36 @@
       #game.stadium-bookmaker-cursor {
         cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 32 32'%3E%3Cpath fill='%23e4d2a2' stroke='%235b4023' stroke-width='1.5' d='M8 5h17c2 0 3 1 3 3s-1 3-3 3H11v13c0 2-1 3-3 3s-3-1-3-3V8c0-2 1-3 3-3Z'/%3E%3Cpath fill='none' stroke='%2384663b' stroke-width='1.4' d='M11 13h12M11 17h10M11 21h8'/%3E%3C/svg%3E") 7 7, pointer;
       }
+
+      #stadiumResultUI {
+        position: fixed;
+        inset: 0;
+        z-index: 24250;
+        display: grid;
+        place-items: center;
+        pointer-events: none;
+        opacity: 0;
+        visibility: hidden;
+        transition: opacity 260ms ease, visibility 260ms ease;
+      }
+      #stadiumResultUI.stadium-result--visible { opacity: 1; visibility: visible; pointer-events: auto; }
+      .stadium-result__panel {
+        position: relative; width: min(820px, 90vw); max-height: 92vh; overflow: auto;
+        box-sizing: border-box; padding: 28px 42px 30px; text-align: center;
+        color: #f4eddd; border: 1px solid rgba(198,151,60,.66);
+        background: rgba(3,3,3,.88); box-shadow: 0 22px 80px rgba(0,0,0,.84), inset 0 0 34px rgba(158,108,33,.12);
+        backdrop-filter: blur(4px);
+      }
+      .stadium-result__close { position:absolute; right:14px; top:8px; border:0; background:transparent; color:#d7b35b; font:700 31px Georgia,serif; cursor:pointer; }
+      .stadium-result__title { color:#d8ad48; font-family:"Old English Text MT","Lucida Blackletter","UnifrakturCook",Georgia,serif; font-size:52px; font-weight:900; letter-spacing:3px; text-shadow:0 2px 8px #000; }
+      .stadium-result__crest { display:block; width:132px; height:132px; object-fit:contain; margin:15px auto 4px; filter:drop-shadow(0 7px 8px rgba(0,0,0,.65)); }
+      .stadium-result__team { font:700 20px Georgia,serif; letter-spacing:1px; margin-bottom:12px; }
+      .stadium-result__numbers { display:grid; grid-template-columns:1fr 1fr; gap:8px 28px; max-width:520px; margin:0 auto 12px; font:700 20px Georgia,serif; }
+      .stadium-result__outcome { margin:8px 0 4px; font-family:"Old English Text MT","Lucida Blackletter","UnifrakturCook",Georgia,serif; font-size:36px; font-weight:900; }
+      .stadium-result__outcome--win { color:#d8ad48; } .stadium-result__outcome--loss { color:#b53a32; }
+      .stadium-result__bookmaker { display:block; width:min(350px,55vw); max-height:330px; object-fit:contain; margin:2px auto -2px; }
+      .stadium-result__speech { max-width:650px; margin:0 auto; padding:13px 18px; border:1px solid rgba(255,255,255,.18); border-radius:18px; background:rgba(255,255,255,.055); font:700 19px/1.38 Georgia,serif; }
+      .stadium-result__it--g { color:#34a853; } .stadium-result__it--w { color:#f5f1e8; } .stadium-result__it--r { color:#e34a42; }
 
       #stadiumBetUI {
         position: fixed;
@@ -9691,6 +9729,13 @@
       </div>`;
     game.appendChild(betRoot);
 
+    const resultRoot = document.createElement("div");
+    resultRoot.id = "stadiumResultUI";
+    resultRoot.innerHTML = `<div class="stadium-result__panel" role="dialog" aria-modal="true" aria-label="Euer Wettschein"><button class="stadium-result__close" type="button" aria-label="Schließen">×</button><div class="stadium-result__body"></div></div>`;
+    game.appendChild(resultRoot);
+    stadiumResultUI = { root: resultRoot, body: resultRoot.querySelector(".stadium-result__body") };
+    resultRoot.addEventListener("click", (event) => { if (event.target.closest(".stadium-result__close")) closeStadiumResultUI(); });
+
     const stake = betRoot.querySelector("#stadiumBetStake");
     const possibleWin = betRoot.querySelector("#stadiumBetPossibleWin");
 
@@ -9738,9 +9783,14 @@
       }
 
       if (event.target.closest("#stadiumBetSubmit")) {
-        // R73: close the bookmaker panel and begin the first scripted arena intro.
-        // R73 FIX: during the current arena-intro test, submitting always starts
-        // the scripted fight sequence. Bet validation will be restored later.
+        const stakeValue = Number.parseInt(stake.value || "0", 10);
+        if (!stadiumBetSelectedTeam || !Number.isFinite(stakeValue) || stakeValue <= 0) return;
+        const odds = stadiumBetSelectedTeam === "schauenburg"
+          ? STADIUM.derby.schauenburgOdds : STADIUM.derby.neuensteinOdds;
+        stadiumLockedBet = Object.freeze({
+          team: stadiumBetSelectedTeam, stake: stakeValue, odds, payout: Math.floor(stakeValue * odds)
+        });
+        stadiumResultShown = false;
         closeStadiumBetUI();
         beginStadiumFightIntro();
         return;
@@ -10158,6 +10208,56 @@
     stadiumBetOpen = false;
     stadiumBetUI.root.classList.remove("stadium-bet--visible");
     if (document.activeElement === stadiumBetUI.stake) stadiumBetUI.stake.blur();
+  }
+
+  function stadiumItalianSpeech(text) {
+    const colors = ["g", "w", "r"];
+    let i = 0;
+    return text.split(/(\s+)/).map((part) => {
+      if (/^\s+$/.test(part)) return part;
+      const cls = colors[i++ % colors.length];
+      const safe = part.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+      return `<span class="stadium-result__it--${cls}">${safe}</span>`;
+    }).join("");
+  }
+
+  function showStadiumResultUI() {
+    if (!stadiumResultUI || !stadiumLockedBet || !stadiumBrawlWinner || stadiumResultShown) return;
+    stadiumResultShown = true;
+    stadiumResultOpen = true;
+    const won = stadiumLockedBet.team === stadiumBrawlWinner;
+    const crest = stadiumLockedBet.team === "schauenburg" ? STADIUM.derby.schauenburgCrest : STADIUM.derby.neuensteinCrest;
+    const teamName = stadiumLockedBet.team === "schauenburg" ? STADIUM.derby.schauenburgName : STADIUM.derby.neuensteinName;
+    const bookmakerImage = won ? STADIUM.resultPlayerWin : STADIUM.resultBookmakerWin;
+    const speech = won
+      ? "Vaffanculo! Da, nimm deine Pfennige. Und jetzt verschwinde! Arrivederci!"
+      : "Ahhh, mein aufrichtigstes Beileid! Wirklich tragisch. Für dich. Für mich war es ein ausgesprochen schöner Abend. Bis zum nächsten Mal!";
+    stadiumResultUI.body.innerHTML = `
+      <div class="stadium-result__title">EUER WETTSCHEIN</div>
+      <img class="stadium-result__crest" src="${encodeURI(crest)}" alt="">
+      <div class="stadium-result__team">${teamName}</div>
+      <div class="stadium-result__numbers"><span>QUOTE</span><span>${stadiumLockedBet.odds.toFixed(2).replace(".",",")}</span><span>EINSATZ</span><span>${stadiumLockedBet.stake.toLocaleString("de-DE")} ₰</span></div>
+      <div class="stadium-result__outcome ${won ? "stadium-result__outcome--win" : "stadium-result__outcome--loss"}">${won ? `GEWINN: ${stadiumLockedBet.payout.toLocaleString("de-DE")} ₰` : `VERLUST: ${stadiumLockedBet.stake.toLocaleString("de-DE")} ₰`}</div>
+      <img class="stadium-result__bookmaker" src="${encodeURI(bookmakerImage)}" alt="">
+      <div class="stadium-result__speech">${stadiumItalianSpeech(speech)}</div>`;
+    stadiumResultUI.root.classList.add("stadium-result--visible");
+  }
+
+  function closeStadiumResultUI() {
+    if (!stadiumResultUI || !stadiumResultOpen) return;
+    stadiumResultOpen = false;
+    stadiumResultUI.root.classList.remove("stadium-result--visible");
+    // The spectator remains on the stand; only the fight/bet state is reset for a new wager.
+    resetStadiumFightIntro();
+    stadiumState = "spectator";
+    stadiumLockedBet = null;
+    stadiumBetSelectedTeam = null;
+    if (stadiumBetUI) {
+      stadiumBetUI.stake.value = "";
+      for (const node of stadiumBetUI.root.querySelectorAll("[data-bet-team]")) node.classList.remove("stadium-bet__crest--selected");
+      const possible = stadiumBetUI.root.querySelector("#stadiumBetPossibleWin");
+      if (possible) possible.textContent = "MÖGLICHER GEWINN: —";
+    }
   }
 
   function setStadiumFightOverlay(kind, text = "") {
@@ -10816,6 +10916,7 @@
     ) {
       if (now < stadiumBrawlPhaseEndAt) return true;
       stadiumState = "fight-brawl-result";
+      showStadiumResultUI();
       return true;
     }
 
@@ -10927,6 +11028,7 @@
     stadiumFinalSequenceStep = -1;
     stadiumBrawlStarted = false;
     stadiumBrawlWinner = null;
+    stadiumResultShown = false;
     stadiumBrawlCyclesTarget = 0;
     stadiumBrawlCyclesDone = 0;
     stadiumBrawlRestTurn = "neuenstein";
@@ -14194,6 +14296,11 @@
 
       if (event.code === "Escape") {
         event.preventDefault();
+
+        if (stadiumResultOpen) {
+          closeStadiumResultUI();
+          return;
+        }
 
         if (stadiumBetOpen) {
           closeStadiumBetUI();
