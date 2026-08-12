@@ -9781,6 +9781,42 @@
         filter: drop-shadow(0 2px 2px rgba(0,0,0,.78));
       }
 
+      /* R106 CALIPH LAMP COOLDOWN:
+         grayscale base stays visible while a second full-color copy is revealed
+         clockwise from 12 o'clock until the 15-second cooldown is complete. */
+      .player-quickslot__icon--caliph-gray {
+        filter:
+          grayscale(1)
+          brightness(.55)
+          contrast(1.12)
+          drop-shadow(0 2px 2px rgba(0,0,0,.78));
+      }
+
+      .player-quickslot__cooldown-color {
+        position: absolute;
+        z-index: 3;
+        left: 50%;
+        top: 54%;
+        width: 92%;
+        height: 92%;
+        transform: translate(-50%, -50%);
+        object-fit: contain;
+        object-position: 50% 50%;
+        pointer-events: none;
+        user-select: none;
+        -webkit-user-drag: none;
+        filter: drop-shadow(0 2px 2px rgba(0,0,0,.78));
+        --caliph-cooldown-angle: 0deg;
+        -webkit-mask-image:
+          conic-gradient(from 0deg at 50% 50%,
+            #000 0deg var(--caliph-cooldown-angle),
+            transparent var(--caliph-cooldown-angle) 360deg);
+        mask-image:
+          conic-gradient(from 0deg at 50% 50%,
+            #000 0deg var(--caliph-cooldown-angle),
+            transparent var(--caliph-cooldown-angle) 360deg);
+      }
+
       @media (max-width: 1100px) {
         #playerHudMain { width: min(43vw, 560px); }
         #playerHudExp  { width: min(16.8vw, 210px); }
@@ -9837,6 +9873,143 @@
     layer: null,
     slots: []
   };
+
+  // ------------------------------------------------------------------
+  // R106 CALIPH LAMP — FIRST ULTIMATE STAGE
+  // Exactly 50/50 on every READY activation.
+  // Success = random supplied file 1–6.
+  // Failure = random supplied file 7–10.
+  // After either result the lamp is unavailable for exactly 15 seconds.
+  // ------------------------------------------------------------------
+  const CALIPH_LAMP_ULTIMATE = Object.freeze({
+    cooldownMs: 15000,
+    successChance: 0.5,
+    successSounds: Object.freeze([
+      "assets/audio/skills/caliph-lamp/CALIPH SUCCESS 1.mp3",
+      "assets/audio/skills/caliph-lamp/CALIPH SUCCESS 2.mp3",
+      "assets/audio/skills/caliph-lamp/CALIPH SUCCESS 3.mp3",
+      "assets/audio/skills/caliph-lamp/CALIPH SUCCESS 4.mp3",
+      "assets/audio/skills/caliph-lamp/CALIPH SUCCESS 5.mp3",
+      "assets/audio/skills/caliph-lamp/CALIPH SUCCESS 6.mp3"
+    ]),
+    failureSounds: Object.freeze([
+      "assets/audio/skills/caliph-lamp/CALIPH FAILURE 1.mp3",
+      "assets/audio/skills/caliph-lamp/CALIPH FAILURE 2.mp3",
+      "assets/audio/skills/caliph-lamp/CALIPH FAILURE 3.mp3",
+      "assets/audio/skills/caliph-lamp/CALIPH FAILURE 4.mp3"
+    ])
+  });
+
+  const caliphLampUltimateState = {
+    readyAt: 0,
+    cooldownFrame: 0,
+    activeAudio: null
+  };
+
+  const caliphLampUltimatePreloads = [];
+
+  function preloadCaliphLampUltimateSounds() {
+    if (caliphLampUltimatePreloads.length) return;
+
+    const all = [
+      ...CALIPH_LAMP_ULTIMATE.successSounds,
+      ...CALIPH_LAMP_ULTIMATE.failureSounds
+    ];
+
+    for (const src of all) {
+      const audio = new Audio(encodeURI(src));
+      audio.preload = "auto";
+      audio.load();
+      caliphLampUltimatePreloads.push(audio);
+    }
+  }
+
+  function playCaliphLampUltimateSound(src) {
+    if (!src) return;
+
+    const previous = caliphLampUltimateState.activeAudio;
+    if (previous) {
+      try {
+        previous.pause();
+        previous.currentTime = 0;
+      } catch (_) {}
+    }
+
+    const audio = new Audio(encodeURI(src));
+    audio.preload = "auto";
+    audio.volume = 1.0;
+    caliphLampUltimateState.activeAudio = audio;
+
+    const cleanup = () => {
+      if (caliphLampUltimateState.activeAudio === audio) {
+        caliphLampUltimateState.activeAudio = null;
+      }
+    };
+
+    audio.addEventListener("ended", cleanup, { once: true });
+    audio.addEventListener("error", cleanup, { once: true });
+    audio.play().catch(cleanup);
+  }
+
+  function caliphLampCooldownProgress(now = performance.now()) {
+    const readyAt = Number(caliphLampUltimateState.readyAt) || 0;
+    if (!readyAt || now >= readyAt) return 1;
+
+    const remaining = Math.max(0, readyAt - now);
+    return Math.max(
+      0,
+      Math.min(1, 1 - (remaining / CALIPH_LAMP_ULTIMATE.cooldownMs))
+    );
+  }
+
+  function caliphLampReady(now = performance.now()) {
+    return caliphLampCooldownProgress(now) >= 1;
+  }
+
+  function updateCaliphLampCooldownVisual(now = performance.now()) {
+    const lampIndex = findQuickSlotForItem("caliph-lamp");
+    if (lampIndex < 0) return;
+
+    const slot = quickSlotState.slots[lampIndex];
+    if (!slot) return;
+
+    const progress = caliphLampCooldownProgress(now);
+    const gray = slot.querySelector(".player-quickslot__icon--caliph-gray");
+    const color = slot.querySelector(".player-quickslot__cooldown-color");
+
+    if (progress >= 1) {
+      if (gray) gray.classList.remove("player-quickslot__icon--caliph-gray");
+      if (color) color.style.display = "none";
+      return;
+    }
+
+    if (gray) gray.classList.add("player-quickslot__icon--caliph-gray");
+    if (color) {
+      color.style.display = "";
+      color.style.setProperty(
+        "--caliph-cooldown-angle",
+        `${Math.max(0, Math.min(360, progress * 360))}deg`
+      );
+    }
+  }
+
+  function runCaliphLampCooldownVisual() {
+    if (caliphLampUltimateState.cooldownFrame) return;
+
+    const tick = (now) => {
+      updateCaliphLampCooldownVisual(now);
+
+      if (!caliphLampReady(now)) {
+        caliphLampUltimateState.cooldownFrame = requestAnimationFrame(tick);
+        return;
+      }
+
+      caliphLampUltimateState.cooldownFrame = 0;
+      updateCaliphLampCooldownVisual(now);
+    };
+
+    caliphLampUltimateState.cooldownFrame = requestAnimationFrame(tick);
+  }
 
   function quickbarPercentX(px) {
     return (px / QUICKBAR_SOURCE.width) * 100;
@@ -9935,7 +10108,28 @@
       icon.alt = "";
       icon.draggable = false;
       slot.appendChild(icon);
+
+      if (binding.itemId === "caliph-lamp") {
+        const progress = caliphLampCooldownProgress();
+
+        if (progress < 1) {
+          icon.classList.add("player-quickslot__icon--caliph-gray");
+
+          const color = document.createElement("img");
+          color.className = "player-quickslot__cooldown-color";
+          color.src = encodeURI(binding.icon);
+          color.alt = "";
+          color.draggable = false;
+          color.style.setProperty(
+            "--caliph-cooldown-angle",
+            `${Math.max(0, Math.min(360, progress * 360))}deg`
+          );
+          slot.appendChild(color);
+        }
+      }
     }
+
+    updateCaliphLampCooldownVisual();
   }
 
   function createPlayerQuickSlots(mainHudRoot) {
@@ -10024,8 +10218,26 @@
   }
 
   function activateCaliphLamp() {
-    // R105 hook only. The actual genie/Caliph skill is wired in the next step.
-    return true;
+    const now = performance.now();
+
+    // During the 15-second cooldown: absolutely nothing happens.
+    if (!caliphLampReady(now)) return false;
+
+    // Cooldown starts immediately on the valid summon attempt,
+    // independent of whether the 50/50 roll succeeds or fails.
+    caliphLampUltimateState.readyAt = now + CALIPH_LAMP_ULTIMATE.cooldownMs;
+
+    const success = Math.random() < CALIPH_LAMP_ULTIMATE.successChance;
+    const pool = success
+      ? CALIPH_LAMP_ULTIMATE.successSounds
+      : CALIPH_LAMP_ULTIMATE.failureSounds;
+
+    const src = pool[Math.floor(Math.random() * pool.length)];
+    playCaliphLampUltimateSound(src);
+
+    renderQuickSlots();
+    runCaliphLampCooldownVisual();
+    return success;
   }
 
   function activateQuickSlot(index) {
@@ -16030,6 +16242,7 @@
     startBackgroundMusic();
     installMapTransitionUI();
     createInventorySystem();
+    preloadCaliphLampUltimateSounds();
 
     // R102: do NOT create the HUD here. The start flow is still active.
     // createPlayerHud() is called only when startFlowState becomes "campaign".
