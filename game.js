@@ -40,7 +40,7 @@
     oedsbach: Object.freeze({
       id: "oedsbach",
       name: "ÖDSBACH",
-      image: "assets/maps/MAP 6 ├ûDSBACH.png",
+      image: "assets/maps/MAP 6 OEDSBACH.png",
       width: 10000,
       height: 6655
     })
@@ -1209,9 +1209,9 @@
     interval: 2000,
     fade: 650,
     sprites: Object.freeze([
-      "assets/npcs/oedegard/├ûDEGARD 1.png",
-      "assets/npcs/oedegard/├ûDEGARD 2.png",
-      "assets/npcs/oedegard/├ûDEGARD 3.png"
+      "assets/npcs/oedegard/OEDEGARD 1.png",
+      "assets/npcs/oedegard/OEDEGARD 2.png",
+      "assets/npcs/oedegard/OEDEGARD 3.png"
     ])
   });
 
@@ -1251,7 +1251,16 @@
   }
 
   function setOedegardVisibility(visible) {
-    if (oedegard) oedegard.root.style.display = visible ? "" : "none";
+    if (!oedegard) return;
+    oedegard.root.style.display = visible ? "" : "none";
+
+    if (visible) {
+      oedegard.index = 0;
+      oedegard.imgs.forEach((img, index) => {
+        img.style.opacity = index === 0 ? "1" : "0";
+      });
+      oedegard.nextAt = performance.now() + OEDEGARD_CONFIG.interval;
+    }
   }
 
   function updateOedegard(now) {
@@ -13442,6 +13451,7 @@
 
   async function switchMap(nextMap, spawn, showRegionTitle = false) {
     if (mapTransitioning) return;
+    const sourceMap = MAP;
     const sourceMapId = MAP.id;
     const scriptedStadiumArrival =
       sourceMapId === "oberkirch-zentrum" && nextMap.id === STADIUM.mapId;
@@ -13479,7 +13489,23 @@
     mapImage.src = encodeURI(MAP.image);
     try {
       await waitForImage(mapImage);
-    } catch (_) {
+    } catch (error) {
+      // R94 HARD FAILSAFE:
+      // A missing/corrupt map asset must NEVER strand the game behind
+      // the black transition curtain. Restore the source map immediately.
+      console.error("Map image failed to load:", MAP.image, error);
+      MAP = sourceMap;
+      resizeWorldForCurrentMap();
+      mapImage.src = encodeURI(MAP.image);
+      try {
+        await waitForImage(mapImage);
+      } catch (_) {}
+
+      overlay.style.transition = "none";
+      overlay.style.opacity = "0";
+      overlay.style.webkitMaskImage = "none";
+      overlay.style.maskImage = "none";
+      overlay.style.setProperty("--iris-radius", "0%");
       mapTransitioning = false;
       return;
     }
