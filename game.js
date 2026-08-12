@@ -8826,12 +8826,15 @@
         dustPoint: Object.freeze({ x: 5090, y: 3380 }),
         neuensteinAttack: "assets/stadium/fighters/FLEGEL N2.png",
         sharedRest: "assets/stadium/fighters/DERBY REST.png",
+        // R86 — former normal Schauenburg-hit composition becomes neutral rest variant 2.
+        sharedRestAlt: "assets/stadium/fighters/DERBY HIT SCHAUENBURG 1.png",
         schauenburgAttack: "assets/stadium/fighters/SCHAUENBURG ATTACK.png",
 
-        // R84 — alternating hit-chance frames replace ONLY the shared rest slot.
-        // Chances reuse the exact bookmaker probabilities; no outcome logic is changed.
+        // R84/R86 — hit chances remain unchanged.
         neuensteinHitFrame: "assets/stadium/fighters/DERBY HIT NEUENSTEIN.png",
-        schauenburgHitFrame: "assets/stadium/fighters/DERBY HIT SCHAUENBURG 1.png",
+        // R86 — new supplied image is the normal Schauenburg hit for hits 1-3.
+        schauenburgHitFrame: "assets/stadium/fighters/DERBY HIT SCHAUENBURG NORMAL R86.png",
+        // The established special 4th hit remains untouched.
         schauenburgHitFourthFrame: "assets/stadium/fighters/DERBY HIT SCHAUENBURG 4.png",
 
         // R85 — fatality branch after Schauenburg's 4th successful hit.
@@ -8840,7 +8843,7 @@
         fatalityNeuensteinFrame: "assets/stadium/fighters/DERBY FATALITY NEUENSTEIN.png",
         fatalitySchauenburgFrame: "assets/stadium/fighters/DERBY FATALITY SCHAUENBURG.png",
         finishSetupMs: 750,
-        finishEvadeMs: 750,
+        finishEvadeMs: 1500, // R86 — sand-in-the-eye frame holds longer
         fatalityMs: 2100
       })
     }),
@@ -8904,6 +8907,8 @@
   // R84 — rest slots alternate: Neuenstein first, then Schauenburg.
   let stadiumBrawlRestTurn = "neuenstein";
   let stadiumBrawlSchauenburgSuccessfulHits = 0;
+  // R86 — neutral rest images alternate continuously.
+  let stadiumBrawlSharedRestAltNext = false;
 
   // R85 — the 4th successful Schauenburg hit branches into the finish sequence.
   let stadiumBrawlFatalityPending = false;
@@ -9832,6 +9837,12 @@
       STADIUM.fightIntro.brawl.sharedPoint,
       true
     );
+    const brawlSharedAlt = makeBrawlLayer(
+      "stadiumBrawlSharedAlt",
+      STADIUM.fightIntro.brawl.sharedRestAlt,
+      STADIUM.fightIntro.brawl.sharedPoint,
+      true
+    );
     const brawlAttackB = makeBrawlLayer(
       "stadiumBrawlAttackB",
       STADIUM.fightIntro.brawl.schauenburgAttack,
@@ -9896,6 +9907,7 @@
     stadiumBrawlVisuals = {
       attackA: brawlAttackA,
       shared: brawlShared,
+      sharedAlt: brawlSharedAlt,
       attackB: brawlAttackB,
       hitNeuenstein: brawlHitNeuenstein,
       hitSchauenburg: brawlHitSchauenburg,
@@ -9923,6 +9935,7 @@
     for (const brawlSrc of [
       STADIUM.fightIntro.brawl.neuensteinAttack,
       STADIUM.fightIntro.brawl.sharedRest,
+      STADIUM.fightIntro.brawl.sharedRestAlt,
       STADIUM.fightIntro.brawl.schauenburgAttack,
       STADIUM.fightIntro.brawl.neuensteinHitFrame,
       STADIUM.fightIntro.brawl.schauenburgHitFrame,
@@ -10477,6 +10490,7 @@
     if (!stadiumBrawlVisuals) return;
     setStadiumBrawlLayerVisible(stadiumBrawlVisuals.attackA, false);
     setStadiumBrawlLayerVisible(stadiumBrawlVisuals.shared, false);
+    setStadiumBrawlLayerVisible(stadiumBrawlVisuals.sharedAlt, false);
     setStadiumBrawlLayerVisible(stadiumBrawlVisuals.attackB, false);
     setStadiumBrawlLayerVisible(stadiumBrawlVisuals.hitNeuenstein, false);
     setStadiumBrawlLayerVisible(stadiumBrawlVisuals.hitSchauenburg, false);
@@ -10490,6 +10504,7 @@
   function showStadiumBrawlAttack() {
     if (!stadiumBrawlVisuals) return;
     setStadiumBrawlLayerVisible(stadiumBrawlVisuals.shared, false);
+    setStadiumBrawlLayerVisible(stadiumBrawlVisuals.sharedAlt, false);
     setStadiumBrawlLayerVisible(stadiumBrawlVisuals.hitNeuenstein, false);
     setStadiumBrawlLayerVisible(stadiumBrawlVisuals.hitSchauenburg, false);
     setStadiumBrawlLayerVisible(stadiumBrawlVisuals.hitSchauenburgFourth, false);
@@ -10556,13 +10571,21 @@
     setStadiumBrawlLayerVisible(stadiumBrawlVisuals.attackA, false);
     setStadiumBrawlLayerVisible(stadiumBrawlVisuals.attackB, false);
     setStadiumBrawlLayerVisible(stadiumBrawlVisuals.shared, false);
+    setStadiumBrawlLayerVisible(stadiumBrawlVisuals.sharedAlt, false);
     setStadiumBrawlLayerVisible(stadiumBrawlVisuals.hitNeuenstein, false);
     setStadiumBrawlLayerVisible(stadiumBrawlVisuals.hitSchauenburg, false);
     setStadiumBrawlLayerVisible(stadiumBrawlVisuals.hitSchauenburgFourth, false);
 
+    // R86 — the two neutral shared-rest frames alternate on every rest slot.
+    // A successful hit still replaces that slot visually; the alternation itself keeps ticking.
+    const neutralRestLayer = stadiumBrawlSharedRestAltNext
+      ? stadiumBrawlVisuals.sharedAlt
+      : stadiumBrawlVisuals.shared;
+    stadiumBrawlSharedRestAltNext = !stadiumBrawlSharedRestAltNext;
+
     // Final/result holds remain neutral and must never consume another hit slot.
     if (!allowHitRoll) {
-      setStadiumBrawlLayerVisible(stadiumBrawlVisuals.shared, true);
+      setStadiumBrawlLayerVisible(neutralRestLayer, true);
       return;
     }
 
@@ -10570,7 +10593,7 @@
       // First shared slot is always Neuenstein's 30% opportunity.
       const landed = Math.random() < STADIUM.derby.neuensteinChance;
       setStadiumBrawlLayerVisible(
-        landed ? stadiumBrawlVisuals.hitNeuenstein : stadiumBrawlVisuals.shared,
+        landed ? stadiumBrawlVisuals.hitNeuenstein : neutralRestLayer,
         true
       );
       if (landed) {
@@ -10584,7 +10607,7 @@
     // Next shared slot is Schauenburg's 70% opportunity.
     const landed = Math.random() < STADIUM.derby.schauenburgChance;
     if (!landed) {
-      setStadiumBrawlLayerVisible(stadiumBrawlVisuals.shared, true);
+      setStadiumBrawlLayerVisible(neutralRestLayer, true);
     } else {
       stadiumBrawlSchauenburgSuccessfulHits += 1;
       const fourthSuccessfulHit = stadiumBrawlSchauenburgSuccessfulHits % 4 === 0;
@@ -10688,6 +10711,7 @@
     stadiumBrawlCyclesDone = 0;
     stadiumBrawlRestTurn = "neuenstein";
     stadiumBrawlSchauenburgSuccessfulHits = 0;
+    stadiumBrawlSharedRestAltNext = false;
     stadiumBrawlFatalityPending = false;
     stadiumBrawlFatalityEvaded = null;
     stadiumBrawlApproachStartedAt = now;
@@ -10911,6 +10935,7 @@
     stadiumBrawlCyclesDone = 0;
     stadiumBrawlRestTurn = "neuenstein";
     stadiumBrawlSchauenburgSuccessfulHits = 0;
+    stadiumBrawlSharedRestAltNext = false;
     stadiumBrawlFatalityPending = false;
     stadiumBrawlFatalityEvaded = null;
     stadiumBrawlPhaseEndAt = 0;
