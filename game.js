@@ -9706,7 +9706,7 @@
 
       #playerHudExp {
         right: 0;
-        width: min(22vw, 360px);
+        width: min(15.4vw, 252px);
       }
 
       .player-hud-piece.player-hud--hidden {
@@ -9728,12 +9728,12 @@
 
       @media (max-width: 1100px) {
         #playerHudMain { width: min(43vw, 560px); }
-        #playerHudExp  { width: min(24vw, 300px); }
+        #playerHudExp  { width: min(16.8vw, 210px); }
       }
 
       @media (max-height: 760px) {
         #playerHudMain { width: min(37vw, 570px); }
-        #playerHudExp  { width: min(20vw, 320px); }
+        #playerHudExp  { width: min(14vw, 224px); }
       }
     `;
 
