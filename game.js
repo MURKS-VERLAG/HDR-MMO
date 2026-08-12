@@ -10601,8 +10601,33 @@
     const success = Math.random() < CALIPH_LAMP_ULTIMATE.successChance;
 
     if (success) {
-      runCaliphBallistaSuccessAction();
+      // MINIFIX R108:
+      // First play ONE of the original success voice lines completely.
+      // Only AFTER that finishes do we start the existing ballista sequence
+      // (ballista image -> crank sound -> launch sound + shot).
+      const pool = CALIPH_LAMP_ULTIMATE.successSounds;
+      const src = pool[Math.floor(Math.random() * pool.length)];
+
+      const introAudio = new Audio(encodeURI(src));
+      introAudio.preload = "auto";
+      introAudio.volume = 1.0;
+      caliphLampUltimateState.activeAudio = introAudio;
+
+      let continued = false;
+      const continueWithBallista = () => {
+        if (continued) return;
+        continued = true;
+        if (caliphLampUltimateState.activeAudio === introAudio) {
+          caliphLampUltimateState.activeAudio = null;
+        }
+        runCaliphBallistaSuccessAction();
+      };
+
+      introAudio.addEventListener("ended", continueWithBallista, { once: true });
+      introAudio.addEventListener("error", continueWithBallista, { once: true });
+      introAudio.play().catch(continueWithBallista);
     } else {
+      // Failure stays exactly as before: random failure audio only.
       const pool = CALIPH_LAMP_ULTIMATE.failureSounds;
       const src = pool[Math.floor(Math.random() * pool.length)];
       playCaliphLampUltimateSound(src);
