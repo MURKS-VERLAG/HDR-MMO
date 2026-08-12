@@ -464,13 +464,15 @@
       "assets/audio/stadium/arena/SCHAUENBURG HIT 1.mp3",
       "assets/audio/stadium/arena/SCHAUENBURG HIT 2.mp3"
     ]),
-    killLead: "assets/audio/stadium/arena/ARENA KILL LEAD.mp3",
+    // R90 — the formerly misassigned swish8 "kill lead" is actually rest movement SFX.
+    deathFinal: "assets/audio/stadium/arena/ARENA DEATH FINAL.mp3",
     // This file is physically trimmed: original audio begins at source 00:05.
     killCrowd: "assets/audio/stadium/arena/ARENA KILL CROWD FROM 5S.mp3",
     neutralRest: Object.freeze([
       "assets/audio/stadium/arena/ARENA REST 1.mp3",
       "assets/audio/stadium/arena/ARENA REST 2.mp3",
-      "assets/audio/stadium/arena/ARENA REST 3.mp3"
+      "assets/audio/stadium/arena/ARENA REST 3.mp3",
+      "assets/audio/stadium/arena/ARENA KILL LEAD.mp3"
     ])
   });
 
@@ -483,7 +485,7 @@
     const all = [
       ...STADIUM_ARENA_SFX.neuensteinHits,
       ...STADIUM_ARENA_SFX.schauenburgHits,
-      STADIUM_ARENA_SFX.killLead,
+      STADIUM_ARENA_SFX.deathFinal,
       STADIUM_ARENA_SFX.killCrowd,
       ...STADIUM_ARENA_SFX.neutralRest
     ];
@@ -547,10 +549,11 @@
     if (stadiumArenaKillSequencePlayed) return;
     stadiumArenaKillSequencePlayed = true;
 
-    // Kill sequence has strict priority: cancel stray combat SFX first.
-    // Sound 7 MUST play first; only when it ends may trimmed Sound 1 begin.
+    // R90 — strict fatality audio order for BOTH possible winners:
+    // actual death/final-hit sound first, then the already trimmed crowd reaction.
+    // The former swish8 sound is no longer a death cue; it now lives in neutralRest.
     stopAllStadiumArenaSfx();
-    playStadiumArenaSfx(STADIUM_ARENA_SFX.killLead, () => {
+    playStadiumArenaSfx(STADIUM_ARENA_SFX.deathFinal, () => {
       playStadiumArenaSfx(STADIUM_ARENA_SFX.killCrowd);
     });
   }
