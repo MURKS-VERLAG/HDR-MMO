@@ -9665,13 +9665,14 @@
 
 
   // ------------------------------------------------------------------
-  // R100 — PERMANENT PLAYER HUD
-  // Exact supplied HUD artwork, screen-space UI.
-  // Visible on every campaign map EXCEPT RENCHTALSTADION.
-  // No gameplay values are wired yet; this patch installs only the HUD base.
+  // R103 — SPLIT PLAYER HUD
+  // Main status/quickbar is pinned flush to the lower-left screen corner.
+  // EXP shields are a separate transparent asset pinned flush lower-right.
+  // Both are campaign-only and hidden in RENCHTALSTADION.
   // ------------------------------------------------------------------
   const PLAYER_HUD = Object.freeze({
-    image: "assets/ui/hud/PLAYER HUD MAIN.png"
+    mainImage: "assets/ui/hud/PLAYER HUD MAIN.png",
+    expImage: "assets/ui/hud/PLAYER HUD EXP SHIELDS.png"
   });
 
   let playerHud = null;
@@ -9682,46 +9683,42 @@
     const style = document.createElement("style");
     style.id = "playerHudStyles";
     style.textContent = `
-      #playerHud {
+      .player-hud-piece {
         position: fixed;
         z-index: 2147483000;
-        left: 0;
         bottom: 0;
-        width: min(40vw, 750px);
-        /* R102: crop the PNG's transparent bottom canvas in the HUD viewport.
-           The artwork itself stays at the exact existing scale. */
-        aspect-ratio: 1536 / 884;
-        height: auto;
-        overflow: hidden;
         pointer-events: none;
         user-select: none;
         -webkit-user-drag: none;
+        margin: 0;
+        padding: 0;
+        line-height: 0;
         opacity: 1;
         visibility: visible;
         transition: opacity 160ms ease, visibility 160ms ease;
-        filter: drop-shadow(0 4px 5px rgba(0,0,0,.24));
-        isolation: isolate;
-        transform: none;
-        transform-origin: left bottom;
-        margin: 0;
-        padding: 0;
+        filter: drop-shadow(0 3px 4px rgba(0,0,0,.22));
       }
 
-      #playerHud.player-hud--hidden {
+      #playerHudMain {
+        left: 0;
+        width: min(40vw, 640px);
+      }
+
+      #playerHudExp {
+        right: 0;
+        width: min(22vw, 360px);
+      }
+
+      .player-hud-piece.player-hud--hidden {
         display: none !important;
         opacity: 0;
         visibility: hidden;
       }
 
-      #playerHud img {
-        position: absolute;
-        left: 0;
-        top: 0;
+      .player-hud-piece img {
         display: block;
         width: 100%;
         height: auto;
-        object-fit: contain;
-        object-position: left bottom;
         pointer-events: none;
         user-select: none;
         -webkit-user-drag: none;
@@ -9730,42 +9727,41 @@
       }
 
       @media (max-width: 1100px) {
-        #playerHud {
-          width: min(48vw, 625px);
-        }
+        #playerHudMain { width: min(43vw, 560px); }
+        #playerHudExp  { width: min(24vw, 300px); }
       }
 
       @media (max-height: 760px) {
-        #playerHud {
-          width: min(38vw, 590px);
-        }
+        #playerHudMain { width: min(37vw, 570px); }
+        #playerHudExp  { width: min(20vw, 320px); }
       }
     `;
 
     document.head.appendChild(style);
   }
 
-  function createPlayerHud() {
-    if (playerHud) return;
-
-    installPlayerHudStyles();
-
+  function createPlayerHudPiece(id, src, sideClass) {
     const root = document.createElement("div");
-    root.id = "playerHud";
+    root.id = id;
+    root.className = `player-hud-piece ${sideClass}`;
     root.setAttribute("aria-hidden", "true");
 
     const image = document.createElement("img");
-    image.src = encodeURI(PLAYER_HUD.image);
+    image.src = encodeURI(src);
     image.alt = "";
     image.draggable = false;
-
     root.appendChild(image);
-
-    // R101: attach HUD directly to BODY so no game/world stacking context,
-    // transform, clipping or map layout can hide or reposition it.
     document.body.appendChild(root);
+    return { root, image };
+  }
 
-    playerHud = { root, image };
+  function createPlayerHud() {
+    if (playerHud) return;
+    installPlayerHudStyles();
+
+    const main = createPlayerHudPiece("playerHudMain", PLAYER_HUD.mainImage, "player-hud-piece--left");
+    const exp = createPlayerHudPiece("playerHudExp", PLAYER_HUD.expImage, "player-hud-piece--right");
+    playerHud = { main, exp };
     updatePlayerHudVisibility();
   }
 
@@ -9779,7 +9775,8 @@
       MAP &&
       MAP.id !== "renchtalstadion";
 
-    playerHud.root.classList.toggle("player-hud--hidden", !visible);
+    playerHud.main.root.classList.toggle("player-hud--hidden", !visible);
+    playerHud.exp.root.classList.toggle("player-hud--hidden", !visible);
   }
 
 
