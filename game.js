@@ -40,7 +40,7 @@
     oedsbach: Object.freeze({
       id: "oedsbach",
       name: "ÖDSBACH",
-      image: "assets/maps/MAP 6 ÖDSBACH.png",
+      image: "assets/maps/MAP 6 ├ûDSBACH.png",
       width: 10000,
       height: 6655
     })
@@ -1209,9 +1209,9 @@
     interval: 2000,
     fade: 650,
     sprites: Object.freeze([
-      "assets/npcs/oedegard/ÖDEGARD 1.png",
-      "assets/npcs/oedegard/ÖDEGARD 2.png",
-      "assets/npcs/oedegard/ÖDEGARD 3.png"
+      "assets/npcs/oedegard/├ûDEGARD 1.png",
+      "assets/npcs/oedegard/├ûDEGARD 2.png",
+      "assets/npcs/oedegard/├ûDEGARD 3.png"
     ])
   });
 
