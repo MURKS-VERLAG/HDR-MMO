@@ -9817,6 +9817,59 @@
             transparent var(--caliph-cooldown-angle) 360deg);
       }
 
+      /* R107 — successful Caliph summon: fire ballista in world space. */
+      .caliph-ballista-action {
+        position: absolute;
+        z-index: 24;
+        transform: translate(-50%, -68%);
+        pointer-events: none;
+        user-select: none;
+        opacity: 0;
+        transition: opacity 120ms ease;
+        will-change: left, top, opacity;
+      }
+
+      .caliph-ballista-action--visible {
+        opacity: 1;
+      }
+
+      .caliph-ballista-action__sprite {
+        display: block;
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+        object-position: 50% 50%;
+        transform: scaleX(var(--caliph-ballista-facing, 1));
+        transform-origin: 50% 50%;
+        pointer-events: none;
+        user-select: none;
+        -webkit-user-drag: none;
+        filter: drop-shadow(0 18px 10px rgba(0,0,0,.40));
+      }
+
+      .caliph-ballista-bolt {
+        position: absolute;
+        z-index: 26;
+        pointer-events: none;
+        user-select: none;
+        transform-origin: 50% 50%;
+        will-change: left, top, transform;
+      }
+
+      .caliph-ballista-bolt__sprite {
+        display: block;
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+        object-position: 50% 50%;
+        pointer-events: none;
+        user-select: none;
+        -webkit-user-drag: none;
+        filter:
+          drop-shadow(0 0 12px rgba(255,74,0,.90))
+          drop-shadow(0 5px 5px rgba(0,0,0,.42));
+      }
+
       @media (max-width: 1100px) {
         #playerHudMain { width: min(43vw, 560px); }
         #playerHudExp  { width: min(16.8vw, 210px); }
@@ -9897,7 +9950,20 @@
       "assets/audio/skills/caliph-lamp/CALIPH FAILURE 2.mp3",
       "assets/audio/skills/caliph-lamp/CALIPH FAILURE 3.mp3",
       "assets/audio/skills/caliph-lamp/CALIPH FAILURE 4.mp3"
-    ])
+    ]),
+    successAction1: Object.freeze({
+      sprite: "assets/skills/caliph/CALIPH FIRE BALLISTA.png",
+      boltSprite: "assets/skills/caliph/CALIPH FIRE BALLISTA BOLT.png",
+      crankSound: "assets/audio/skills/caliph-lamp/BALLISTA CRANK.mp3",
+      launchSound: "assets/audio/skills/caliph-lamp/BALLISTA LAUNCH.mp3",
+      width: 1120,
+      height: 1120,
+      boltWidth: 720,
+      boltHeight: 260,
+      boltHitRadius: 215,
+      projectileMsMin: 180,
+      projectileMsMax: 360
+    })
   });
 
   const caliphLampUltimateState = {
@@ -9913,8 +9979,21 @@
 
     const all = [
       ...CALIPH_LAMP_ULTIMATE.successSounds,
-      ...CALIPH_LAMP_ULTIMATE.failureSounds
+      ...CALIPH_LAMP_ULTIMATE.failureSounds,
+      CALIPH_LAMP_ULTIMATE.successAction1.crankSound,
+      CALIPH_LAMP_ULTIMATE.successAction1.launchSound
     ];
+
+    const actionImages = [
+      CALIPH_LAMP_ULTIMATE.successAction1.sprite,
+      CALIPH_LAMP_ULTIMATE.successAction1.boltSprite
+    ];
+    for (const src of actionImages) {
+      const image = new Image();
+      image.decoding = "async";
+      image.src = encodeURI(src);
+      if (typeof image.decode === "function") image.decode().catch(() => {});
+    }
 
     for (const src of all) {
       const audio = new Audio(encodeURI(src));
@@ -10217,6 +10296,298 @@
     renderQuickSlots();
   }
 
+
+  // ------------------------------------------------------------------
+  // R107 SUCCESS ACTION 1 — FIRE BALLISTA
+  // ------------------------------------------------------------------
+  function caliphCurrentLivingMobs() {
+    const mobs = [];
+
+    for (const actor of rabbitActors) {
+      const mapId = actor.zone.mapId || "oberkirch-zentrum";
+      if (mapId !== MAP.id || actor.dead || actor.away || actor.ready === false) continue;
+      mobs.push({
+        kind: "rabbit", actor, x: actor.x, y: actor.y, radius: 175,
+        kill: (now) => killRabbit(actor, now)
+      });
+    }
+
+    for (const actor of wolfActors) {
+      if (actor.mapId !== MAP.id || actor.dead || actor.away || actor.ready === false) continue;
+      mobs.push({
+        kind: "wolf", actor, x: actor.x, y: actor.y, radius: 270,
+        kill: (now) => killWolf(actor, now)
+      });
+    }
+
+    for (const actor of boarActors) {
+      const mapId = actor.zone.mapId || BOAR_CONFIG.mapId;
+      if (mapId !== MAP.id || actor.dead || actor.away || actor.ready === false) continue;
+      mobs.push({
+        kind: "boar", actor, x: actor.x, y: actor.y, radius: 285,
+        kill: (now) => killBoar(actor, now)
+      });
+    }
+
+    if (
+      moleEvent &&
+      (moleEvent.mapId || "oberkirch-zentrum") === MAP.id &&
+      moleEvent.phase === "exposed" &&
+      !moleEvent.dead
+    ) {
+      mobs.push({
+        kind: "mole", actor: moleEvent, x: moleEvent.x, y: moleEvent.y, radius: 135,
+        kill: (now) => killMole(now)
+      });
+    }
+
+    return mobs;
+  }
+
+  function caliphNearestLivingMob() {
+    let nearest = null;
+    let nearestDistance = Infinity;
+    for (const mob of caliphCurrentLivingMobs()) {
+      const distance = Math.hypot(mob.x - playerX, mob.y - playerY);
+      if (distance < nearestDistance) {
+        nearest = mob;
+        nearestDistance = distance;
+      }
+    }
+    return nearest;
+  }
+
+  function caliphRefreshMobPosition(mob) {
+    if (!mob || !mob.actor) return mob;
+    if (Number.isFinite(mob.actor.x)) mob.x = mob.actor.x;
+    if (Number.isFinite(mob.actor.y)) mob.y = mob.actor.y;
+    return mob;
+  }
+
+  function caliphSegmentProjection(startX, startY, endX, endY, px, py) {
+    const dx = endX - startX;
+    const dy = endY - startY;
+    const lengthSq = dx * dx + dy * dy;
+    if (lengthSq <= 0.0001) {
+      return { t: 0, distance: Math.hypot(px - startX, py - startY) };
+    }
+    const rawT = ((px - startX) * dx + (py - startY) * dy) / lengthSq;
+    const t = Math.max(0, Math.min(1, rawT));
+    const cx = startX + dx * t;
+    const cy = startY + dy * t;
+    return { t, distance: Math.hypot(px - cx, py - cy) };
+  }
+
+  function caliphBallistaVictims(startX, startY, targetX, targetY, guaranteedTarget) {
+    const hits = [];
+    const seen = new Set();
+
+    for (const mob of caliphCurrentLivingMobs()) {
+      caliphRefreshMobPosition(mob);
+      const projection = caliphSegmentProjection(
+        startX, startY, targetX, targetY, mob.x, mob.y
+      );
+      const threshold =
+        CALIPH_LAMP_ULTIMATE.successAction1.boltHitRadius + (mob.radius || 0);
+
+      if (projection.distance <= threshold) {
+        hits.push({ mob, t: projection.t });
+        seen.add(mob.actor);
+      }
+    }
+
+    if (guaranteedTarget && guaranteedTarget.actor && !seen.has(guaranteedTarget.actor)) {
+      caliphRefreshMobPosition(guaranteedTarget);
+      hits.push({ mob: guaranteedTarget, t: 1 });
+    }
+
+    hits.sort((a, b) => a.t - b.t);
+    return hits;
+  }
+
+  function caliphPlayActionAudio(src, onEnded = null) {
+    const previous = caliphLampUltimateState.activeAudio;
+    if (previous) {
+      try {
+        previous.pause();
+        previous.currentTime = 0;
+      } catch (_) {}
+    }
+
+    const audio = new Audio(encodeURI(src));
+    audio.preload = "auto";
+    audio.volume = 1.0;
+    caliphLampUltimateState.activeAudio = audio;
+
+    let finished = false;
+    const finish = () => {
+      if (finished) return;
+      finished = true;
+      if (caliphLampUltimateState.activeAudio === audio) {
+        caliphLampUltimateState.activeAudio = null;
+      }
+      if (typeof onEnded === "function") onEnded();
+    };
+
+    audio.addEventListener("ended", finish, { once: true });
+    audio.addEventListener("error", finish, { once: true });
+    audio.play().catch(finish);
+    return audio;
+  }
+
+  function caliphCreateBallista(target) {
+    const action = CALIPH_LAMP_ULTIMATE.successAction1;
+    caliphRefreshMobPosition(target);
+
+    const targetIsLeft = target ? target.x < playerX : lastHorizontalFacing === "left";
+    const facing = targetIsLeft ? -1 : 1;
+
+    const x = Math.max(520, Math.min(MAP.width - 520, playerX - facing * 470));
+    const y = Math.max(760, Math.min(MAP.height - 120, playerY + 105));
+
+    const root = document.createElement("div");
+    root.className = "caliph-ballista-action";
+    root.style.left = `${x}px`;
+    root.style.top = `${y}px`;
+    root.style.width = `${action.width}px`;
+    root.style.height = `${action.height}px`;
+    root.style.setProperty("--caliph-ballista-facing", String(facing));
+
+    const image = document.createElement("img");
+    image.className = "caliph-ballista-action__sprite";
+    image.src = encodeURI(action.sprite);
+    image.alt = "";
+    image.draggable = false;
+
+    root.appendChild(image);
+    world.appendChild(root);
+    requestAnimationFrame(() => root.classList.add("caliph-ballista-action--visible"));
+
+    return { root, x, y, facing };
+  }
+
+  function caliphBallistaMuzzle(ballista) {
+    return {
+      x: ballista.x + ballista.facing * 405,
+      y: ballista.y - 215
+    };
+  }
+
+  function caliphCreateBolt(startX, startY, targetX, targetY) {
+    const action = CALIPH_LAMP_ULTIMATE.successAction1;
+    const angle = Math.atan2(targetY - startY, targetX - startX);
+    const distance = Math.hypot(targetX - startX, targetY - startY);
+    const duration = Math.max(
+      action.projectileMsMin,
+      Math.min(action.projectileMsMax, distance * 0.075)
+    );
+
+    const root = document.createElement("div");
+    root.className = "caliph-ballista-bolt";
+    root.style.left = `${startX}px`;
+    root.style.top = `${startY}px`;
+    root.style.width = `${action.boltWidth}px`;
+    root.style.height = `${action.boltHeight}px`;
+    root.style.transform =
+      `translate(-50%, -50%) rotate(${angle * 180 / Math.PI}deg)`;
+
+    const image = document.createElement("img");
+    image.className = "caliph-ballista-bolt__sprite";
+    image.src = encodeURI(action.boltSprite);
+    image.alt = "";
+    image.draggable = false;
+
+    root.appendChild(image);
+    world.appendChild(root);
+
+    return { root, duration, angle, startX, startY, targetX, targetY };
+  }
+
+  function caliphAnimateBolt(bolt, victims) {
+    const startedAt = performance.now();
+    const pending = victims.map((entry) => ({ ...entry, triggered: false }));
+
+    const step = (now) => {
+      const p = Math.max(0, Math.min(1, (now - startedAt) / bolt.duration));
+      const eased = 1 - Math.pow(1 - p, 2);
+
+      const x = bolt.startX + (bolt.targetX - bolt.startX) * eased;
+      const y = bolt.startY + (bolt.targetY - bolt.startY) * eased;
+      bolt.root.style.left = `${x}px`;
+      bolt.root.style.top = `${y}px`;
+
+      for (const entry of pending) {
+        if (entry.triggered || eased + 0.015 < entry.t) continue;
+        entry.triggered = true;
+        try { entry.mob.kill(performance.now()); } catch (_) {}
+      }
+
+      if (p < 1) {
+        requestAnimationFrame(step);
+        return;
+      }
+
+      // Bolt remains physically stuck at the chosen target until launch sound ends.
+      bolt.root.style.left = `${bolt.targetX}px`;
+      bolt.root.style.top = `${bolt.targetY}px`;
+
+      for (const entry of pending) {
+        if (!entry.triggered) {
+          entry.triggered = true;
+          try { entry.mob.kill(performance.now()); } catch (_) {}
+        }
+      }
+    };
+
+    requestAnimationFrame(step);
+  }
+
+  function runCaliphBallistaSuccessAction() {
+    let target = caliphNearestLivingMob();
+
+    const fallbackFacing = lastHorizontalFacing === "left" ? -1 : 1;
+    const fallbackTarget = {
+      actor: null,
+      x: Math.max(180, Math.min(MAP.width - 180, playerX + fallbackFacing * 2200)),
+      y: playerY - 80,
+      radius: 0,
+      kill: () => {}
+    };
+
+    if (!target) target = fallbackTarget;
+
+    const ballista = caliphCreateBallista(target);
+    const action = CALIPH_LAMP_ULTIMATE.successAction1;
+
+    // Attachment 2 starts immediately with the Caliph apparition.
+    caliphPlayActionAudio(action.crankSound, () => {
+      let launchTarget = caliphNearestLivingMob() || target || fallbackTarget;
+      caliphRefreshMobPosition(launchTarget);
+
+      const nextFacing = launchTarget.x < ballista.x ? -1 : 1;
+      ballista.facing = nextFacing;
+      ballista.root.style.setProperty("--caliph-ballista-facing", String(nextFacing));
+
+      const muzzle = caliphBallistaMuzzle(ballista);
+      const victims = caliphBallistaVictims(
+        muzzle.x, muzzle.y, launchTarget.x, launchTarget.y,
+        launchTarget.actor ? launchTarget : null
+      );
+
+      // Attachment 3 starts and the visible shot happens in this exact callback.
+      const bolt = caliphCreateBolt(
+        muzzle.x, muzzle.y, launchTarget.x, launchTarget.y
+      );
+      caliphAnimateBolt(bolt, victims);
+
+      caliphPlayActionAudio(action.launchSound, () => {
+        bolt.root.remove();
+        ballista.root.classList.remove("caliph-ballista-action--visible");
+        window.setTimeout(() => ballista.root.remove(), 130);
+      });
+    });
+  }
+
   function activateCaliphLamp() {
     const now = performance.now();
 
@@ -10228,12 +10599,14 @@
     caliphLampUltimateState.readyAt = now + CALIPH_LAMP_ULTIMATE.cooldownMs;
 
     const success = Math.random() < CALIPH_LAMP_ULTIMATE.successChance;
-    const pool = success
-      ? CALIPH_LAMP_ULTIMATE.successSounds
-      : CALIPH_LAMP_ULTIMATE.failureSounds;
 
-    const src = pool[Math.floor(Math.random() * pool.length)];
-    playCaliphLampUltimateSound(src);
+    if (success) {
+      runCaliphBallistaSuccessAction();
+    } else {
+      const pool = CALIPH_LAMP_ULTIMATE.failureSounds;
+      const src = pool[Math.floor(Math.random() * pool.length)];
+      playCaliphLampUltimateSound(src);
+    }
 
     renderQuickSlots();
     runCaliphLampCooldownVisual();
