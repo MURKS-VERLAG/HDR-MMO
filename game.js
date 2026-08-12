@@ -1273,12 +1273,11 @@
   }
 
   // ------------------------------------------------------------------
-  // R97 ÖDSBACH — HARD-VISIBLE MOOR FOG + CALIPH APPARITIONS
+  // R98 ÖDSBACH — GUARANTEED SCREEN-SPACE FOG + CALIPH APPARITIONS
+  // World coordinates remain authoritative; visuals render as GAME overlays
+  // so they cannot disappear behind the world/map stacking context.
   // ------------------------------------------------------------------
 
-  // Reference artwork is the PURE 10000 x 6655 map (no black game side bars).
-  // Red painted areas from the supplied reference are converted to world-space
-  // polygons and block the PLAYER FOOT anchor only.
   const OEDSBACH_BLOCK_ZONES = Object.freeze([
     Object.freeze([
       { x: 0, y: 1217 }, { x: 463, y: 1418 }, { x: 927, y: 1710 },
@@ -1308,8 +1307,6 @@
     return false;
   }
 
-  // Yellow reference circles: centred on Ödegard. Radii are world-space,
-  // derived from the supplied pure-map reference.
   const OEDSBACH_SHADOW_CONFIG = Object.freeze({
     centerX: 5570,
     centerY: 1900,
@@ -1347,92 +1344,97 @@
 
   function installOedsbachAtmosphereStyles() {
     if (document.getElementById("oedsbachAtmosphereStyles")) return;
+
     const style = document.createElement("style");
     style.id = "oedsbachAtmosphereStyles";
     style.textContent = `
-      .oedsbach-fog {
+      .oedsbach-screen-fog {
         position:absolute;
-        left:0;
-        top:0;
-        width:10000px;
-        height:6655px;
-        z-index:6;
+        inset:0;
+        z-index:4200;
         overflow:hidden;
         pointer-events:none;
         display:none;
       }
-      .oedsbach-fog__veil {
+
+      .oedsbach-screen-fog__veil {
         position:absolute;
-        left:-2600px;
-        width:7600px;
-        height:760px;
+        left:-85vw;
+        width:95vw;
+        min-width:1100px;
+        height:22vh;
+        min-height:170px;
         border-radius:50%;
-        opacity:.68;
-        filter:blur(38px);
+        filter:blur(28px);
         background:
-          radial-gradient(ellipse at 32% 50%, rgba(238,242,240,.80) 0%, rgba(220,227,224,.62) 28%, rgba(197,207,203,.38) 57%, rgba(197,207,203,0) 78%),
-          radial-gradient(ellipse at 72% 46%, rgba(235,240,238,.70) 0%, rgba(211,220,217,.52) 32%, rgba(194,204,201,0) 76%);
-        animation:oedsbachFogHardDrift linear infinite;
+          radial-gradient(ellipse at 35% 50%,
+            rgba(232,237,235,.82) 0%,
+            rgba(211,219,216,.70) 28%,
+            rgba(187,198,194,.48) 56%,
+            rgba(187,198,194,0) 80%),
+          radial-gradient(ellipse at 74% 45%,
+            rgba(239,242,241,.68) 0%,
+            rgba(207,216,212,.56) 36%,
+            rgba(185,196,192,0) 78%);
+        opacity:.72;
+        animation:oedsbachScreenFogDrift linear infinite;
         will-change:transform;
       }
-      .oedsbach-fog__veil:nth-child(1){top:220px; animation-duration:27s; animation-delay:-6s}
-      .oedsbach-fog__veil:nth-child(2){top:1030px; animation-duration:34s; animation-delay:-21s; opacity:.58}
-      .oedsbach-fog__veil:nth-child(3){top:1870px; animation-duration:24s; animation-delay:-13s; opacity:.72}
-      .oedsbach-fog__veil:nth-child(4){top:2760px; animation-duration:39s; animation-delay:-29s; opacity:.57}
-      .oedsbach-fog__veil:nth-child(5){top:3640px; animation-duration:30s; animation-delay:-17s; opacity:.70}
-      .oedsbach-fog__veil:nth-child(6){top:4510px; animation-duration:36s; animation-delay:-8s; opacity:.61}
-      .oedsbach-fog__veil:nth-child(7){top:5420px; animation-duration:26s; animation-delay:-19s; opacity:.69}
-      .oedsbach-fog__veil:nth-child(8){top:6150px; animation-duration:41s; animation-delay:-33s; opacity:.56}
-      @keyframes oedsbachFogHardDrift {
-        from { transform:translate3d(-1600px,0,0) scaleX(1.0); }
-        to   { transform:translate3d(12800px,0,0) scaleX(1.14); }
+
+      .oedsbach-screen-fog__veil:nth-child(1){top:-3%; animation-duration:24s; animation-delay:-5s}
+      .oedsbach-screen-fog__veil:nth-child(2){top:10%; animation-duration:31s; animation-delay:-17s; opacity:.62}
+      .oedsbach-screen-fog__veil:nth-child(3){top:24%; animation-duration:21s; animation-delay:-11s; opacity:.78}
+      .oedsbach-screen-fog__veil:nth-child(4){top:38%; animation-duration:35s; animation-delay:-27s; opacity:.60}
+      .oedsbach-screen-fog__veil:nth-child(5){top:52%; animation-duration:27s; animation-delay:-15s; opacity:.74}
+      .oedsbach-screen-fog__veil:nth-child(6){top:66%; animation-duration:33s; animation-delay:-7s; opacity:.66}
+      .oedsbach-screen-fog__veil:nth-child(7){top:79%; animation-duration:23s; animation-delay:-19s; opacity:.73}
+      .oedsbach-screen-fog__veil:nth-child(8){top:91%; animation-duration:38s; animation-delay:-31s; opacity:.60}
+
+      @keyframes oedsbachScreenFogDrift {
+        from { transform:translate3d(0,0,0) scaleX(1); }
+        to   { transform:translate3d(195vw,0,0) scaleX(1.12); }
       }
 
-      .oedsbach-shadow-layer {
+      .oedsbach-screen-shadows {
         position:absolute;
-        left:0;
-        top:0;
-        width:10000px;
-        height:6655px;
-        z-index:9;
+        inset:0;
+        z-index:4300;
+        overflow:hidden;
         pointer-events:none;
         display:none;
       }
-      .oedsbach-shadow {
+
+      .oedsbach-screen-shadow {
         position:absolute;
-        width:650px;
-        height:780px;
         transform:translate(-50%,-100%);
         opacity:0;
-        transition:opacity ${OEDSBACH_SHADOW_CONFIG.fadeMs}ms ease-in-out;
         pointer-events:none;
-        filter:drop-shadow(0 12px 12px rgba(0,0,0,.55));
+        transition:opacity ${OEDSBACH_SHADOW_CONFIG.fadeMs}ms ease-in-out;
+        filter:drop-shadow(0 10px 14px rgba(0,0,0,.70));
+        will-change:left,top,width,height,opacity;
       }
-      .oedsbach-shadow img {
+
+      .oedsbach-screen-shadow img {
         width:100%;
         height:100%;
         object-fit:contain;
         object-position:50% 100%;
+        display:block;
       }
-      .oedsbach-shadow--inner {
-        width:720px;
-        height:900px;
-      }
-      .oedsbach-dust {
+
+      .oedsbach-screen-dust {
         position:absolute;
-        width:16px;
-        height:16px;
         border-radius:50%;
         pointer-events:none;
-        opacity:.9;
-        background:rgba(38,38,38,.88);
+        background:rgba(35,35,35,.84);
         filter:blur(2px);
-        animation:oedsbachDustPuff 760ms ease-out forwards;
+        animation:oedsbachScreenDust 780ms ease-out forwards;
       }
-      @keyframes oedsbachDustPuff {
-        0%   { transform:translate3d(0,0,0) scale(.25); opacity:.9; }
-        60%  { opacity:.62; }
-        100% { transform:translate3d(var(--dust-x),var(--dust-y),0) scale(2.6); opacity:0; }
+
+      @keyframes oedsbachScreenDust {
+        0%   { transform:translate3d(0,0,0) scale(.3); opacity:.92; }
+        70%  { opacity:.54; }
+        100% { transform:translate3d(var(--dx),var(--dy),0) scale(2.5); opacity:0; }
       }
     `;
     document.head.appendChild(style);
@@ -1443,20 +1445,22 @@
     installOedsbachAtmosphereStyles();
 
     const root = document.createElement("div");
-    root.className = "oedsbach-fog";
-    root.style.display = MAP.id === "oedsbach" ? "" : "none";
+    root.className = "oedsbach-screen-fog";
+    root.style.display = MAP.id === "oedsbach" ? "block" : "none";
+
     for (let i = 0; i < 8; i += 1) {
       const veil = document.createElement("div");
-      veil.className = "oedsbach-fog__veil";
+      veil.className = "oedsbach-screen-fog__veil";
       root.appendChild(veil);
     }
-    world.appendChild(root);
+
+    game.appendChild(root);
     oedsbachFogRoot = root;
   }
 
   function setOedsbachFogVisibility(visible) {
     if (!oedsbachFogRoot) return;
-    oedsbachFogRoot.style.display = visible ? "" : "none";
+    oedsbachFogRoot.style.display = visible ? "block" : "none";
   }
 
   function createOedsbachShadowSystem() {
@@ -1464,10 +1468,53 @@
     installOedsbachAtmosphereStyles();
 
     const root = document.createElement("div");
-    root.className = "oedsbach-shadow-layer";
-    root.style.display = MAP.id === "oedsbach" ? "" : "none";
-    world.appendChild(root);
+    root.className = "oedsbach-screen-shadows";
+    root.style.display = MAP.id === "oedsbach" ? "block" : "none";
+
+    game.appendChild(root);
     oedsbachShadowRoot = root;
+  }
+
+  function currentWorldScreenTransform() {
+    const mapScreenWidth = MAP.width * displayScale;
+    const mapScreenHeight = MAP.height * displayScale;
+
+    let tx = viewportWidth / 2 - cameraX * displayScale;
+    let ty = viewportHeight / 2 - cameraY * displayScale;
+
+    if (zoomLevel === 0 && !zoomAnimating) {
+      tx = (viewportWidth - mapScreenWidth) / 2;
+      ty = (viewportHeight - mapScreenHeight) / 2;
+    }
+
+    return { tx, ty, scale: displayScale };
+  }
+
+  function worldToOedsbachScreen(x, y) {
+    const t = currentWorldScreenTransform();
+    return {
+      x: t.tx + x * t.scale,
+      y: t.ty + y * t.scale,
+      scale: t.scale
+    };
+  }
+
+  function renderOedsbachShadowPositions() {
+    if (!oedsbachShadowRoot || MAP.id !== "oedsbach") return;
+
+    for (const root of oedsbachShadowRoot.querySelectorAll(".oedsbach-screen-shadow")) {
+      const wx = Number(root.dataset.worldX);
+      const wy = Number(root.dataset.worldY);
+      const baseW = Number(root.dataset.baseW) || 650;
+      const baseH = Number(root.dataset.baseH) || 780;
+      if (!Number.isFinite(wx) || !Number.isFinite(wy)) continue;
+
+      const p = worldToOedsbachScreen(wx, wy);
+      root.style.left = `${p.x}px`;
+      root.style.top = `${p.y}px`;
+      root.style.width = `${Math.max(150, baseW * p.scale)}px`;
+      root.style.height = `${Math.max(180, baseH * p.scale)}px`;
+    }
   }
 
   function clearOedsbachShadowTimers() {
@@ -1484,41 +1531,43 @@
     return id;
   }
 
-  function puffOedsbachDust(x, y, amount = 22) {
+  function puffOedsbachDust(worldX, worldY, amount = 24) {
     if (!oedsbachShadowRoot || MAP.id !== "oedsbach") return;
+    const p0 = worldToOedsbachScreen(worldX, worldY);
+
     for (let i = 0; i < amount; i += 1) {
       const p = document.createElement("span");
-      p.className = "oedsbach-dust";
-      p.style.left = `${x + (Math.random() - .5) * 180}px`;
-      p.style.top = `${y - 250 + (Math.random() - .5) * 260}px`;
-      const distance = 110 + Math.random() * 270;
-      const angle = Math.random() * Math.PI * 2;
-      p.style.setProperty("--dust-x", `${Math.cos(angle) * distance}px`);
-      p.style.setProperty("--dust-y", `${Math.sin(angle) * distance}px`);
-      const shade = Math.floor(18 + Math.random() * 90);
-      p.style.background = `rgba(${shade},${shade},${shade},${.48 + Math.random() * .42})`;
-      const size = 8 + Math.random() * 24;
+      p.className = "oedsbach-screen-dust";
+
+      const size = 7 + Math.random() * 20;
       p.style.width = `${size}px`;
       p.style.height = `${size}px`;
+      p.style.left = `${p0.x + (Math.random() - .5) * 130}px`;
+      p.style.top = `${p0.y - 110 + (Math.random() - .5) * 140}px`;
+
+      const distance = 55 + Math.random() * 160;
+      const angle = Math.random() * Math.PI * 2;
+      p.style.setProperty("--dx", `${Math.cos(angle) * distance}px`);
+      p.style.setProperty("--dy", `${Math.sin(angle) * distance}px`);
+
+      const shade = Math.floor(18 + Math.random() * 100);
+      p.style.background = `rgba(${shade},${shade},${shade},${.52 + Math.random() * .38})`;
+
       oedsbachShadowRoot.appendChild(p);
       scheduleOedsbachShadow(() => p.remove(), 850);
     }
   }
 
-  function chooseMirroredTransform(mirrored) {
-    return mirrored ? "scaleX(-1)" : "scaleX(1)";
-  }
-
   function clampShadowPoint(x, y) {
     return {
-      x: Math.max(420, Math.min(MAP.width - 420, x)),
-      y: Math.max(850, Math.min(MAP.height - 120, y))
+      x: Math.max(500, Math.min(MAP.width - 500, x)),
+      y: Math.max(900, Math.min(MAP.height - 120, y))
     };
   }
 
   function randomNearPlayer() {
     const angle = Math.random() * Math.PI * 2;
-    const dist = 500 + Math.random() * 310;
+    const dist = 560 + Math.random() * 320;
     return clampShadowPoint(
       playerX + Math.cos(angle) * dist,
       playerY + Math.sin(angle) * dist
@@ -1527,108 +1576,125 @@
 
   function randomNearOedegard() {
     const anchors = [
-      { x: -650, y: 70 }, { x: 650, y: 70 },
-      { x: -420, y: 330 }, { x: 420, y: 330 },
-      { x: -280, y: -170 }, { x: 300, y: -150 },
-      { x: (playerX - OEDSBACH_SHADOW_CONFIG.centerX) * .34, y: (playerY - OEDSBACH_SHADOW_CONFIG.centerY) * .34 + 120 }
+      { x:-720, y:80 }, { x:720, y:80 },
+      { x:-480, y:350 }, { x:480, y:350 },
+      { x:-320, y:-170 }, { x:330, y:-150 },
+      {
+        x:(playerX - OEDSBACH_SHADOW_CONFIG.centerX) * .34,
+        y:(playerY - OEDSBACH_SHADOW_CONFIG.centerY) * .34 + 130
+      }
     ];
     const a = anchors[Math.floor(Math.random() * anchors.length)];
     return clampShadowPoint(
       OEDSBACH_SHADOW_CONFIG.centerX + a.x + (Math.random() - .5) * 180,
-      OEDSBACH_SHADOW_CONFIG.centerY + a.y + (Math.random() - .5) * 140
+      OEDSBACH_SHADOW_CONFIG.centerY + a.y + (Math.random() - .5) * 150
     );
   }
 
-  function spawnOedsbachOneShot(sprite, point = randomNearPlayer()) {
-    if (!oedsbachShadowRoot || MAP.id !== "oedsbach") return;
+  function buildOedsbachShadow(sprite, point, inner = false) {
     const root = document.createElement("div");
-    root.className = "oedsbach-shadow";
-    root.style.left = `${point.x}px`;
-    root.style.top = `${point.y}px`;
+    root.className = "oedsbach-screen-shadow";
+    root.dataset.worldX = String(point.x);
+    root.dataset.worldY = String(point.y);
+    root.dataset.baseW = String(inner ? 760 : 680);
+    root.dataset.baseH = String(inner ? 950 : 830);
 
     const img = document.createElement("img");
     img.src = encodeURI(sprite);
     img.alt = "";
     img.draggable = false;
-    img.style.transform = chooseMirroredTransform(Math.random() < .5);
+    img.style.transform = Math.random() < .5 ? "scaleX(-1)" : "scaleX(1)";
+    img.addEventListener("error", () => {
+      console.error("ÖDSBACH KALIF SPRITE konnte nicht geladen werden:", sprite);
+    }, { once:true });
+
     root.appendChild(img);
     oedsbachShadowRoot.appendChild(root);
+    renderOedsbachShadowPositions();
+    return root;
+  }
 
-    puffOedsbachDust(point.x, point.y, 24);
+  function spawnOedsbachOneShot(sprite, point = randomNearPlayer()) {
+    if (!oedsbachShadowRoot || MAP.id !== "oedsbach") return;
+
+    const root = buildOedsbachShadow(sprite, point, false);
+    puffOedsbachDust(point.x, point.y, 28);
+
     requestAnimationFrame(() => {
-      requestAnimationFrame(() => { root.style.opacity = "1"; });
+      requestAnimationFrame(() => {
+        if (root.isConnected) root.style.opacity = "1";
+      });
     });
 
     scheduleOedsbachShadow(() => {
-      puffOedsbachDust(point.x, point.y, 24);
+      puffOedsbachDust(point.x, point.y, 28);
       root.style.opacity = "0";
     }, OEDSBACH_SHADOW_CONFIG.fadeMs + OEDSBACH_SHADOW_CONFIG.oneShotHoldMs);
 
-    scheduleOedsbachShadow(
-      () => root.remove(),
-      OEDSBACH_SHADOW_CONFIG.fadeMs * 2 + OEDSBACH_SHADOW_CONFIG.oneShotHoldMs + 80
+    scheduleOedsbachShadow(() => root.remove(),
+      OEDSBACH_SHADOW_CONFIG.fadeMs * 2 +
+      OEDSBACH_SHADOW_CONFIG.oneShotHoldMs + 100
     );
   }
 
   function removeOedsbachInnerShadow(withPuff = true) {
     if (!oedsbachInnerSprite) return;
+
     const root = oedsbachInnerSprite;
-    const x = parseFloat(root.style.left) || OEDSBACH_SHADOW_CONFIG.centerX;
-    const y = parseFloat(root.style.top) || OEDSBACH_SHADOW_CONFIG.centerY;
-    if (withPuff) puffOedsbachDust(x, y, 28);
+    const x = Number(root.dataset.worldX) || OEDSBACH_SHADOW_CONFIG.centerX;
+    const y = Number(root.dataset.worldY) || OEDSBACH_SHADOW_CONFIG.centerY;
+
+    if (withPuff) puffOedsbachDust(x, y, 32);
     root.style.opacity = "0";
-    scheduleOedsbachShadow(() => root.remove(), OEDSBACH_SHADOW_CONFIG.fadeMs + 40);
+    scheduleOedsbachShadow(() => root.remove(), OEDSBACH_SHADOW_CONFIG.fadeMs + 60);
     oedsbachInnerSprite = null;
   }
 
   function spawnOedsbachInnerShadow(now) {
     removeOedsbachInnerShadow(true);
+
     const pool = OEDSBACH_SHADOW_CONFIG.sprites.inner;
     const sprite = pool[Math.floor(Math.random() * pool.length)];
     const point = randomNearOedegard();
+    const root = buildOedsbachShadow(sprite, point, true);
 
-    const root = document.createElement("div");
-    root.className = "oedsbach-shadow oedsbach-shadow--inner";
-    root.style.left = `${point.x}px`;
-    root.style.top = `${point.y}px`;
-
-    const img = document.createElement("img");
-    img.src = encodeURI(sprite);
-    img.alt = "";
-    img.draggable = false;
-    img.style.transform = chooseMirroredTransform(Math.random() < .5);
-    root.appendChild(img);
-    oedsbachShadowRoot.appendChild(root);
     oedsbachInnerSprite = root;
+    puffOedsbachDust(point.x, point.y, 34);
 
-    puffOedsbachDust(point.x, point.y, 30);
     requestAnimationFrame(() => {
-      requestAnimationFrame(() => { root.style.opacity = "1"; });
+      requestAnimationFrame(() => {
+        if (root.isConnected) root.style.opacity = "1";
+      });
     });
+
     oedsbachInnerNextAt = now + OEDSBACH_SHADOW_CONFIG.innerIntervalMs;
   }
 
   function resetOedsbachShadowVisit(removeVisuals = true) {
-    oedsbachShadowVisit = { zone1: false, zone2: false, zone3: false };
+    oedsbachShadowVisit = { zone1:false, zone2:false, zone3:false };
     oedsbachInnerNextAt = 0;
     oedsbachInnerVisible = false;
+
     if (removeVisuals) {
       clearOedsbachShadowTimers();
-      if (oedsbachShadowRoot) {
-        for (const el of [...oedsbachShadowRoot.children]) el.remove();
-      }
+      if (oedsbachShadowRoot) oedsbachShadowRoot.replaceChildren();
       oedsbachInnerSprite = null;
     }
   }
 
   function setOedsbachShadowVisibility(visible) {
     if (!oedsbachShadowRoot) return;
-    oedsbachShadowRoot.style.display = visible ? "" : "none";
+    oedsbachShadowRoot.style.display = visible ? "block" : "none";
     if (!visible) resetOedsbachShadowVisit(true);
   }
 
   function updateOedsbachShadows(now) {
-    if (!oedsbachShadowRoot || MAP.id !== "oedsbach") return;
+    if (MAP.id !== "oedsbach") return;
+
+    // HARD GUARANTEE: if another map-visibility routine or CSS rule hides the
+    // overlays, restore them every gameplay frame while ÖDSBACH is active.
+    if (oedsbachFogRoot) oedsbachFogRoot.style.display = "block";
+    if (oedsbachShadowRoot) oedsbachShadowRoot.style.display = "block";
 
     const distance = Math.hypot(
       playerX - OEDSBACH_SHADOW_CONFIG.centerX,
@@ -1636,7 +1702,6 @@
     );
     const r = OEDSBACH_SHADOW_CONFIG.radii;
 
-    // Full retreat beyond the outer ring resets the complete approach sequence.
     if (distance > r.outer + 160) {
       if (
         oedsbachShadowVisit.zone1 ||
@@ -1677,6 +1742,8 @@
       oedsbachInnerNextAt = 0;
       removeOedsbachInnerShadow(true);
     }
+
+    renderOedsbachShadowPositions();
   }
 
   // ------------------------------------------------------------------
@@ -15018,6 +15085,7 @@
     renderPlayer();
     updateChurchPlayerDepth();
     renderWorld();
+    renderOedsbachShadowPositions();
 
     requestAnimationFrame(frame);
   }
