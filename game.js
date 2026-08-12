@@ -1203,9 +1203,9 @@
   // ------------------------------------------------------------------
   const OEDEGARD_CONFIG = Object.freeze({
     x: 5570,
-    y: 2140,
-    width: 625,
-    height: 625,
+    y: 1900,
+    width: 688,
+    height: 688,
     interval: 2000,
     fade: 650,
     sprites: Object.freeze([
@@ -1280,26 +1280,57 @@
     const style = document.createElement("style");
     style.id = "oedsbachFogStyles";
     style.textContent = `
-      .oedsbach-fog { position:absolute; inset:0; z-index:105; overflow:hidden; pointer-events:none; user-select:none; display:none; }
+      .oedsbach-fog {
+        position:absolute;
+        inset:0;
+        z-index:105;
+        overflow:hidden;
+        pointer-events:none;
+        user-select:none;
+        display:none;
+      }
+
       .oedsbach-fog__veil {
-        position:absolute; left:-42%; width:138%; border-radius:50%; pointer-events:none;
-        will-change:transform,opacity; mix-blend-mode:screen; filter:blur(42px);
+        position:absolute;
+        left:-55%;
+        width:155%;
+        border-radius:48%;
+        pointer-events:none;
+        will-change:transform,opacity;
+        filter:blur(30px);
         background:
-          radial-gradient(ellipse at 18% 50%, rgba(248,250,249,0) 0%, rgba(235,241,239,.34) 22%, rgba(228,236,233,.52) 44%, rgba(242,246,244,.25) 64%, rgba(248,250,249,0) 82%),
-          radial-gradient(ellipse at 70% 48%, rgba(248,250,249,0) 0%, rgba(231,238,236,.31) 24%, rgba(240,245,243,.44) 49%, rgba(248,250,249,0) 79%);
+          radial-gradient(ellipse at 18% 52%,
+            rgba(226,232,230,0) 0%,
+            rgba(218,225,223,.55) 18%,
+            rgba(230,235,233,.76) 38%,
+            rgba(210,219,216,.62) 57%,
+            rgba(226,232,230,0) 78%),
+          radial-gradient(ellipse at 58% 46%,
+            rgba(224,231,228,0) 0%,
+            rgba(214,222,219,.48) 20%,
+            rgba(232,236,235,.72) 43%,
+            rgba(210,219,216,.50) 63%,
+            rgba(224,231,228,0) 82%),
+          radial-gradient(ellipse at 88% 54%,
+            rgba(226,232,230,0) 0%,
+            rgba(219,226,224,.46) 23%,
+            rgba(234,238,237,.68) 45%,
+            rgba(226,232,230,0) 76%);
         animation:oedsbachFogDrift linear infinite;
       }
-      .oedsbach-fog__veil:nth-child(1){top:2%;height:620px;opacity:.72;animation-duration:29s;animation-delay:-12s}
-      .oedsbach-fog__veil:nth-child(2){top:15%;height:470px;opacity:.58;animation-duration:23s;animation-delay:-5s}
-      .oedsbach-fog__veil:nth-child(3){top:28%;height:680px;opacity:.76;animation-duration:35s;animation-delay:-22s}
-      .oedsbach-fog__veil:nth-child(4){top:42%;height:450px;opacity:.54;animation-duration:27s;animation-delay:-16s}
-      .oedsbach-fog__veil:nth-child(5){top:55%;height:710px;opacity:.74;animation-duration:38s;animation-delay:-29s}
-      .oedsbach-fog__veil:nth-child(6){top:69%;height:500px;opacity:.61;animation-duration:25s;animation-delay:-8s}
-      .oedsbach-fog__veil:nth-child(7){top:81%;height:600px;opacity:.68;animation-duration:32s;animation-delay:-18s}
+
+      .oedsbach-fog__veil:nth-child(1){top:1%; height:720px; opacity:.72; animation-duration:30s; animation-delay:-14s}
+      .oedsbach-fog__veil:nth-child(2){top:13%;height:560px; opacity:.62; animation-duration:24s; animation-delay:-7s}
+      .oedsbach-fog__veil:nth-child(3){top:26%;height:760px; opacity:.78; animation-duration:37s; animation-delay:-25s}
+      .oedsbach-fog__veil:nth-child(4){top:40%;height:520px; opacity:.60; animation-duration:28s; animation-delay:-18s}
+      .oedsbach-fog__veil:nth-child(5){top:53%;height:790px; opacity:.76; animation-duration:40s; animation-delay:-31s}
+      .oedsbach-fog__veil:nth-child(6){top:67%;height:590px; opacity:.64; animation-duration:26s; animation-delay:-10s}
+      .oedsbach-fog__veil:nth-child(7){top:80%;height:690px; opacity:.70; animation-duration:34s; animation-delay:-21s}
+
       @keyframes oedsbachFogDrift {
-        0% {transform:translate3d(-9%,0,0) scaleX(1.03)}
-        50% {transform:translate3d(24%,0,0) scaleX(1.11)}
-        100% {transform:translate3d(58%,0,0) scaleX(1.03)}
+        0%   { transform:translate3d(-12%,0,0) scaleX(1.00); }
+        50%  { transform:translate3d(28%,0,0) scaleX(1.08); }
+        100% { transform:translate3d(70%,0,0) scaleX(1.00); }
       }
     `;
     document.head.appendChild(style);
