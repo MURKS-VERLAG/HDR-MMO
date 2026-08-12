@@ -1331,6 +1331,26 @@
         "assets/npcs/oedsbach-shadows/CALIPH SHADOW 6.png",
         "assets/npcs/oedsbach-shadows/CALIPH SHADOW 7.png"
       ])
+    }),
+    sounds: Object.freeze({
+      outer: "assets/audio/oedsbach/caliph/CIRCLE OUTER.mp3",
+      secondBase: "assets/audio/oedsbach/caliph/CIRCLE SECOND BASE.mp3",
+      secondRandom: Object.freeze([
+        "assets/audio/oedsbach/caliph/CIRCLE SECOND RANDOM 1.mp3",
+        "assets/audio/oedsbach/caliph/CIRCLE SECOND RANDOM 2.mp3"
+      ]),
+      third: "assets/audio/oedsbach/caliph/CIRCLE THIRD.mp3",
+      innerBase: "assets/audio/oedsbach/caliph/INNER BASE.mp3",
+      innerRandom: Object.freeze([
+        "assets/audio/oedsbach/caliph/INNER RANDOM 01.mp3",
+        "assets/audio/oedsbach/caliph/INNER RANDOM 02.mp3",
+        "assets/audio/oedsbach/caliph/INNER RANDOM 03.mp3",
+        "assets/audio/oedsbach/caliph/INNER RANDOM 04.mp3",
+        "assets/audio/oedsbach/caliph/INNER RANDOM 05.mp3",
+        "assets/audio/oedsbach/caliph/INNER RANDOM 06.mp3",
+        "assets/audio/oedsbach/caliph/INNER RANDOM 07.mp3",
+        "assets/audio/oedsbach/caliph/INNER RANDOM 08.mp3"
+      ])
     })
   });
 
@@ -1339,8 +1359,215 @@
   let oedsbachInnerSprite = null;
   let oedsbachInnerNextAt = 0;
   let oedsbachInnerVisible = false;
-  let oedsbachShadowVisit = { zone1: false, zone2: false, zone3: false };
+
+  // R99: every ring can re-trigger after leaving THAT ring and entering it again.
+  let oedsbachZoneInside = {
+    outer: false,
+    second: false,
+    third: false,
+    inner: false
+  };
+
   const oedsbachShadowTimeouts = new Set();
+
+  // R99: all Caliph images are loaded+decoded long before they are shown.
+  const oedsbachShadowImageCache = new Map();
+  let oedsbachShadowPreloadPromise = null;
+
+  // R99: strict serialized circle voice system.
+  const oedsbachCaliphAudioCache = new Map();
+  const oedsbachCaliphAudioQueue = [];
+  let oedsbachCaliphAudioRunning = false;
+  let oedsbachInnerAudioEnabled = false;
+  let oedsbachInnerAudioNextIsBase = true;
+  let oedsbachCaliphGeneration = 0;
+
+  function allOedsbachShadowSprites() {
+    return [
+      ...OEDSBACH_SHADOW_CONFIG.sprites.zone1,
+      OEDSBACH_SHADOW_CONFIG.sprites.zone2,
+      OEDSBACH_SHADOW_CONFIG.sprites.zone3,
+      ...OEDSBACH_SHADOW_CONFIG.sprites.inner
+    ];
+  }
+
+  function preloadOedsbachShadowSprites() {
+    if (oedsbachShadowPreloadPromise) return oedsbachShadowPreloadPromise;
+
+    const jobs = allOedsbachShadowSprites().map((src) => new Promise((resolve) => {
+      const image = new Image();
+      image.decoding = "async";
+
+      image.onload = async () => {
+        try {
+          if (typeof image.decode === "function") await image.decode();
+        } catch (_) {}
+        oedsbachShadowImageCache.set(src, image);
+        resolve(true);
+      };
+
+      image.onerror = () => {
+        console.error("ÖDSBACH KALIF PRELOAD fehlgeschlagen:", src);
+        resolve(false);
+      };
+
+      image.src = encodeURI(src);
+    }));
+
+    oedsbachShadowPreloadPromise = Promise.all(jobs);
+    return oedsbachShadowPreloadPromise;
+  }
+
+  function allOedsbachCaliphSounds() {
+    const s = OEDSBACH_SHADOW_CONFIG.sounds;
+    return [
+      s.outer,
+      s.secondBase,
+      ...s.secondRandom,
+      s.third,
+      s.innerBase,
+      ...s.innerRandom
+    ];
+  }
+
+  function preloadOedsbachCaliphSounds() {
+    for (const src of allOedsbachCaliphSounds()) {
+      if (oedsbachCaliphAudioCache.has(src)) continue;
+      const audio = new Audio(encodeURI(src));
+      audio.preload = "auto";
+      audio.loop = false;
+      audio.volume = 1.0;
+      try { audio.load(); } catch (_) {}
+      oedsbachCaliphAudioCache.set(src, audio);
+    }
+  }
+
+  function waitForOedsbachAudioEnd(audio, generation) {
+    return new Promise((resolve) => {
+      let finished = false;
+
+      const finish = () => {
+        if (finished) return;
+        finished = true;
+        audio.removeEventListener("ended", finish);
+        audio.removeEventListener("error", finish);
+        resolve();
+      };
+
+      audio.addEventListener("ended", finish, { once: true });
+      audio.addEventListener("error", finish, { once: true });
+
+      if (generation !== oedsbachCaliphGeneration || MAP.id !== "oedsbach") {
+        finish();
+        return;
+      }
+
+      try { audio.currentTime = 0; } catch (_) {}
+      const playPromise = audio.play();
+      if (playPromise && typeof playPromise.catch === "function") {
+        playPromise.catch(finish);
+      }
+    });
+  }
+
+  async function playOedsbachAudioBundle(bundle, generation) {
+    const audios = bundle
+      .map((src) => oedsbachCaliphAudioCache.get(src))
+      .filter(Boolean);
+
+    if (!audios.length) return;
+
+    // A bundle starts simultaneously. The NEXT block waits until ALL files
+    // in this bundle have ended.
+    await Promise.all(
+      audios.map((audio) => waitForOedsbachAudioEnd(audio, generation))
+    );
+  }
+
+  function enqueueOedsbachAudioBundle(bundle) {
+    if (MAP.id !== "oedsbach" || !Array.isArray(bundle) || !bundle.length) return;
+    oedsbachCaliphAudioQueue.push(bundle);
+    pumpOedsbachCaliphAudio();
+  }
+
+  async function pumpOedsbachCaliphAudio() {
+    if (oedsbachCaliphAudioRunning) return;
+    oedsbachCaliphAudioRunning = true;
+    const generation = oedsbachCaliphGeneration;
+
+    try {
+      while (MAP.id === "oedsbach" && generation === oedsbachCaliphGeneration) {
+        // Ring-entry cues have priority over the repeating inner loop.
+        if (oedsbachCaliphAudioQueue.length) {
+          const bundle = oedsbachCaliphAudioQueue.shift();
+          await playOedsbachAudioBundle(bundle, generation);
+          continue;
+        }
+
+        if (oedsbachInnerAudioEnabled) {
+          const sounds = OEDSBACH_SHADOW_CONFIG.sounds;
+          const src = oedsbachInnerAudioNextIsBase
+            ? sounds.innerBase
+            : sounds.innerRandom[Math.floor(Math.random() * sounds.innerRandom.length)];
+
+          // Required: 6 -> random 7..14 -> 6 -> random 7..14...
+          oedsbachInnerAudioNextIsBase = !oedsbachInnerAudioNextIsBase;
+          await playOedsbachAudioBundle([src], generation);
+          continue;
+        }
+
+        break;
+      }
+    } finally {
+      oedsbachCaliphAudioRunning = false;
+
+      if (
+        MAP.id === "oedsbach" &&
+        (oedsbachCaliphAudioQueue.length || oedsbachInnerAudioEnabled)
+      ) {
+        queueMicrotask(pumpOedsbachCaliphAudio);
+      }
+    }
+  }
+
+  function setOedsbachInnerAudioEnabled(enabled) {
+    const next = Boolean(enabled);
+    if (oedsbachInnerAudioEnabled === next) return;
+
+    oedsbachInnerAudioEnabled = next;
+
+    if (next) {
+      // Every fresh inner-circle entry begins again with attachment 6.
+      oedsbachInnerAudioNextIsBase = true;
+      pumpOedsbachCaliphAudio();
+    }
+    // On exit: do NOT cut the current sound. It finishes; then loop stops.
+  }
+
+  function stopOedsbachCaliphAudioImmediately() {
+    oedsbachCaliphGeneration += 1;
+    oedsbachCaliphAudioQueue.length = 0;
+    oedsbachInnerAudioEnabled = false;
+    oedsbachInnerAudioNextIsBase = true;
+
+    for (const audio of oedsbachCaliphAudioCache.values()) {
+      try {
+        audio.pause();
+        audio.currentTime = 0;
+      } catch (_) {}
+    }
+
+    oedsbachCaliphAudioRunning = false;
+  }
+
+  function resetOedsbachZoneEntryState() {
+    oedsbachZoneInside = {
+      outer: false,
+      second: false,
+      third: false,
+      inner: false
+    };
+  }
 
   function installOedsbachAtmosphereStyles() {
     if (document.getElementById("oedsbachAtmosphereStyles")) return;
@@ -1600,9 +1827,11 @@
     root.dataset.baseH = String(inner ? 950 : 830);
 
     const img = document.createElement("img");
-    img.src = encodeURI(sprite);
+    const cached = oedsbachShadowImageCache.get(sprite);
+    img.src = cached ? cached.src : encodeURI(sprite);
     img.alt = "";
     img.draggable = false;
+    img.decoding = "sync";
     img.style.transform = Math.random() < .5 ? "scaleX(-1)" : "scaleX(1)";
     img.addEventListener("error", () => {
       console.error("ÖDSBACH KALIF SPRITE konnte nicht geladen werden:", sprite);
@@ -1671,9 +1900,10 @@
   }
 
   function resetOedsbachShadowVisit(removeVisuals = true) {
-    oedsbachShadowVisit = { zone1:false, zone2:false, zone3:false };
+    resetOedsbachZoneEntryState();
     oedsbachInnerNextAt = 0;
     oedsbachInnerVisible = false;
+    setOedsbachInnerAudioEnabled(false);
 
     if (removeVisuals) {
       clearOedsbachShadowTimers();
@@ -1685,14 +1915,20 @@
   function setOedsbachShadowVisibility(visible) {
     if (!oedsbachShadowRoot) return;
     oedsbachShadowRoot.style.display = visible ? "block" : "none";
-    if (!visible) resetOedsbachShadowVisit(true);
+
+    if (visible) {
+      preloadOedsbachShadowSprites();
+      preloadOedsbachCaliphSounds();
+      resetOedsbachZoneEntryState();
+    } else {
+      resetOedsbachShadowVisit(true);
+      stopOedsbachCaliphAudioImmediately();
+    }
   }
 
   function updateOedsbachShadows(now) {
     if (MAP.id !== "oedsbach") return;
 
-    // HARD GUARANTEE: if another map-visibility routine or CSS rule hides the
-    // overlays, restore them every gameplay frame while ÖDSBACH is active.
     if (oedsbachFogRoot) oedsbachFogRoot.style.display = "block";
     if (oedsbachShadowRoot) oedsbachShadowRoot.style.display = "block";
 
@@ -1702,46 +1938,86 @@
     );
     const r = OEDSBACH_SHADOW_CONFIG.radii;
 
-    if (distance > r.outer + 160) {
-      if (
-        oedsbachShadowVisit.zone1 ||
-        oedsbachShadowVisit.zone2 ||
-        oedsbachShadowVisit.zone3 ||
-        oedsbachInnerVisible
-      ) {
-        resetOedsbachShadowVisit(true);
-      }
-      return;
-    }
+    const insideOuter = distance <= r.outer;
+    const insideSecond = distance <= r.second;
+    const insideThird = distance <= r.third;
+    const insideInner = distance <= r.inner;
 
-    if (distance <= r.outer && !oedsbachShadowVisit.zone1) {
-      oedsbachShadowVisit.zone1 = true;
+    // OUTER RING — attachment 1.
+    if (insideOuter && !oedsbachZoneInside.outer) {
       const pool = OEDSBACH_SHADOW_CONFIG.sprites.zone1;
-      spawnOedsbachOneShot(pool[Math.floor(Math.random() * pool.length)]);
+      const sprite = pool[Math.floor(Math.random() * pool.length)];
+
+      preloadOedsbachShadowSprites().then(() => {
+        if (MAP.id === "oedsbach") spawnOedsbachOneShot(sprite);
+      });
+
+      enqueueOedsbachAudioBundle([
+        OEDSBACH_SHADOW_CONFIG.sounds.outer
+      ]);
     }
 
-    if (distance <= r.second && !oedsbachShadowVisit.zone2) {
-      oedsbachShadowVisit.zone2 = true;
-      spawnOedsbachOneShot(OEDSBACH_SHADOW_CONFIG.sprites.zone2);
+    // SECOND RING — attachment 2 SIMULTANEOUSLY with random attachment 3/4.
+    if (insideSecond && !oedsbachZoneInside.second) {
+      preloadOedsbachShadowSprites().then(() => {
+        if (MAP.id === "oedsbach") {
+          spawnOedsbachOneShot(OEDSBACH_SHADOW_CONFIG.sprites.zone2);
+        }
+      });
+
+      const pool = OEDSBACH_SHADOW_CONFIG.sounds.secondRandom;
+      const secondary = pool[Math.floor(Math.random() * pool.length)];
+
+      enqueueOedsbachAudioBundle([
+        OEDSBACH_SHADOW_CONFIG.sounds.secondBase,
+        secondary
+      ]);
     }
 
-    if (distance <= r.third && !oedsbachShadowVisit.zone3) {
-      oedsbachShadowVisit.zone3 = true;
-      spawnOedsbachOneShot(OEDSBACH_SHADOW_CONFIG.sprites.zone3);
+    // THIRD RING — attachment 5.
+    if (insideThird && !oedsbachZoneInside.third) {
+      preloadOedsbachShadowSprites().then(() => {
+        if (MAP.id === "oedsbach") {
+          spawnOedsbachOneShot(OEDSBACH_SHADOW_CONFIG.sprites.zone3);
+        }
+      });
+
+      enqueueOedsbachAudioBundle([
+        OEDSBACH_SHADOW_CONFIG.sounds.third
+      ]);
     }
 
-    if (distance <= r.inner) {
-      if (!oedsbachInnerVisible) {
-        oedsbachInnerVisible = true;
-        spawnOedsbachInnerShadow(now);
-      } else if (now >= oedsbachInnerNextAt) {
-        spawnOedsbachInnerShadow(now);
-      }
-    } else if (oedsbachInnerVisible) {
+    // INNER RING — visual 3s cycle remains; audio loop is independently
+    // serialized so no new sound begins until the old sound finished.
+    if (insideInner && !oedsbachZoneInside.inner) {
+      oedsbachInnerVisible = true;
+
+      preloadOedsbachShadowSprites().then(() => {
+        const stillInside = MAP.id === "oedsbach" &&
+          Math.hypot(
+            playerX - OEDSBACH_SHADOW_CONFIG.centerX,
+            playerY - OEDSBACH_SHADOW_CONFIG.centerY
+          ) <= OEDSBACH_SHADOW_CONFIG.radii.inner;
+
+        if (stillInside) spawnOedsbachInnerShadow(performance.now());
+      });
+
+      setOedsbachInnerAudioEnabled(true);
+    } else if (!insideInner && oedsbachZoneInside.inner) {
       oedsbachInnerVisible = false;
       oedsbachInnerNextAt = 0;
       removeOedsbachInnerShadow(true);
+      setOedsbachInnerAudioEnabled(false);
+    } else if (insideInner && oedsbachInnerVisible && now >= oedsbachInnerNextAt) {
+      spawnOedsbachInnerShadow(now);
     }
+
+    // Membership is stored AFTER entry checks, making every future
+    // outside -> inside transition triggerable again.
+    oedsbachZoneInside.outer = insideOuter;
+    oedsbachZoneInside.second = insideSecond;
+    oedsbachZoneInside.third = insideThird;
+    oedsbachZoneInside.inner = insideInner;
 
     renderOedsbachShadowPositions();
   }
@@ -15319,6 +15595,11 @@
   createOedegard();
   createOedsbachFog();
   createOedsbachShadowSystem();
+
+  // R99: cache/decode every Caliph visual and preload every circle voice at boot.
+  preloadOedsbachShadowSprites();
+  preloadOedsbachCaliphSounds();
+
   createAreaSigns();
     installIcePlayerStyles();
     createRabbits();
