@@ -9697,7 +9697,8 @@
         transition: opacity 160ms ease, visibility 160ms ease;
         filter: drop-shadow(0 4px 5px rgba(0,0,0,.24));
         isolation: isolate;
-        transform: none;
+        transform: translateY(20%);
+        transform-origin: left bottom;
         margin: 0;
         padding: 0;
       }
@@ -9764,6 +9765,8 @@
     if (!playerHud) return;
 
     const visible =
+      typeof startFlowState !== "undefined" &&
+      startFlowState === "campaign" &&
       typeof MAP !== "undefined" &&
       MAP &&
       MAP.id !== "renchtalstadion";
