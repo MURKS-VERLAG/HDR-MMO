@@ -610,7 +610,7 @@
     "hubacker": "assets/audio/maps/HUBACKER - THE LAST KNIGHT'S LAMENT.mp3",
     // R52 dedicated RENCHTALSTADION track supplied by the user.
     "renchtalstadion": "assets/audio/maps/RENCHTALSTADION - MEDIEVAL BATTLE.mp3",
-    "oedsbach": "assets/audio/maps/WINTERBACH - FROSTBOUND BALLAD.mp3"
+    "oedsbach": "assets/audio/maps/OEDSBACH - THE HOLLOW KNIGHTS MARCH.mp3"
   });
 
   const MAP_MUSIC_VOLUME = 1.0;
@@ -1204,8 +1204,8 @@
   const OEDEGARD_CONFIG = Object.freeze({
     x: 5570,
     y: 2140,
-    width: 1250,
-    height: 1250,
+    width: 625,
+    height: 625,
     interval: 2000,
     fade: 650,
     sprites: Object.freeze([
@@ -1270,6 +1270,58 @@
     oedegard.index = (oedegard.index + 1) % oedegard.imgs.length;
     oedegard.imgs[oedegard.index].style.opacity = "1";
     oedegard.nextAt = now + OEDEGARD_CONFIG.interval;
+  }
+
+  // R95 ÖDSBACH: dense translucent fog veils continuously drifting left -> right.
+  let oedsbachFogRoot = null;
+
+  function installOedsbachFogStyles() {
+    if (document.getElementById("oedsbachFogStyles")) return;
+    const style = document.createElement("style");
+    style.id = "oedsbachFogStyles";
+    style.textContent = `
+      .oedsbach-fog { position:absolute; inset:0; z-index:105; overflow:hidden; pointer-events:none; user-select:none; display:none; }
+      .oedsbach-fog__veil {
+        position:absolute; left:-42%; width:138%; border-radius:50%; pointer-events:none;
+        will-change:transform,opacity; mix-blend-mode:screen; filter:blur(42px);
+        background:
+          radial-gradient(ellipse at 18% 50%, rgba(248,250,249,0) 0%, rgba(235,241,239,.34) 22%, rgba(228,236,233,.52) 44%, rgba(242,246,244,.25) 64%, rgba(248,250,249,0) 82%),
+          radial-gradient(ellipse at 70% 48%, rgba(248,250,249,0) 0%, rgba(231,238,236,.31) 24%, rgba(240,245,243,.44) 49%, rgba(248,250,249,0) 79%);
+        animation:oedsbachFogDrift linear infinite;
+      }
+      .oedsbach-fog__veil:nth-child(1){top:2%;height:620px;opacity:.72;animation-duration:29s;animation-delay:-12s}
+      .oedsbach-fog__veil:nth-child(2){top:15%;height:470px;opacity:.58;animation-duration:23s;animation-delay:-5s}
+      .oedsbach-fog__veil:nth-child(3){top:28%;height:680px;opacity:.76;animation-duration:35s;animation-delay:-22s}
+      .oedsbach-fog__veil:nth-child(4){top:42%;height:450px;opacity:.54;animation-duration:27s;animation-delay:-16s}
+      .oedsbach-fog__veil:nth-child(5){top:55%;height:710px;opacity:.74;animation-duration:38s;animation-delay:-29s}
+      .oedsbach-fog__veil:nth-child(6){top:69%;height:500px;opacity:.61;animation-duration:25s;animation-delay:-8s}
+      .oedsbach-fog__veil:nth-child(7){top:81%;height:600px;opacity:.68;animation-duration:32s;animation-delay:-18s}
+      @keyframes oedsbachFogDrift {
+        0% {transform:translate3d(-9%,0,0) scaleX(1.03)}
+        50% {transform:translate3d(24%,0,0) scaleX(1.11)}
+        100% {transform:translate3d(58%,0,0) scaleX(1.03)}
+      }
+    `;
+    document.head.appendChild(style);
+  }
+
+  function createOedsbachFog() {
+    if (oedsbachFogRoot) return;
+    installOedsbachFogStyles();
+    const root = document.createElement("div");
+    root.className = "oedsbach-fog";
+    root.style.display = MAP.id === "oedsbach" ? "" : "none";
+    for (let i=0;i<7;i+=1) {
+      const veil=document.createElement("div");
+      veil.className="oedsbach-fog__veil";
+      root.appendChild(veil);
+    }
+    world.appendChild(root);
+    oedsbachFogRoot=root;
+  }
+
+  function setOedsbachFogVisibility(visible) {
+    if (oedsbachFogRoot) oedsbachFogRoot.style.display = visible ? "" : "none";
   }
 
   // ------------------------------------------------------------------
@@ -5931,9 +5983,8 @@
         (drop.mapId || "oberkirch-zentrum") === MAP.id ? "" : "none";
     }
 
-    // R27 MINIFIX: MAP 3 LAUTENBACH never shows or spawns a mole.
-    // Existing OBERKIRCH / WINTERBACH spawn fields and rules remain untouched.
-    if (MAP.id === "lautenbach") {
+    // R95: neither LAUTENBACH nor ÖDSBACH may show or spawn a mole.
+    if (MAP.id === "lautenbach" || MAP.id === "oedsbach") {
       if (moleEvent) {
         moleEvent.element.style.display = "none";
       }
@@ -13535,6 +13586,7 @@
     setWinterbachWorldVisibility(MAP.id === "winterbach-ranglehen");
     setLautenbachWorldVisibility(MAP.id === "lautenbach");
     setOedegardVisibility(MAP.id === "oedsbach");
+    setOedsbachFogVisibility(MAP.id === "oedsbach");
 
     // Sync map-specific animals while the transition overlay is still covering the map.
     updateRabbits(0, performance.now());
@@ -14837,6 +14889,7 @@
 
     installOedegardStyles();
   createOedegard();
+  createOedsbachFog();
   createAreaSigns();
     installIcePlayerStyles();
     createRabbits();
