@@ -9687,7 +9687,7 @@
         z-index: 2147483000;
         left: 0;
         bottom: 0;
-        width: min(82vw, 1500px);
+        width: min(40vw, 750px);
         height: auto;
         pointer-events: none;
         user-select: none;
@@ -9697,6 +9697,9 @@
         transition: opacity 160ms ease, visibility 160ms ease;
         filter: drop-shadow(0 4px 5px rgba(0,0,0,.24));
         isolation: isolate;
+        transform: none;
+        margin: 0;
+        padding: 0;
       }
 
       #playerHud.player-hud--hidden {
@@ -9709,20 +9712,23 @@
         width: 100%;
         height: auto;
         object-fit: contain;
+        object-position: left bottom;
         pointer-events: none;
         user-select: none;
         -webkit-user-drag: none;
+        margin: 0;
+        padding: 0;
       }
 
       @media (max-width: 1100px) {
         #playerHud {
-          width: min(94vw, 1250px);
+          width: min(48vw, 625px);
         }
       }
 
       @media (max-height: 760px) {
         #playerHud {
-          width: min(76vw, 1180px);
+          width: min(38vw, 590px);
         }
       }
     `;
