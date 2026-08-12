@@ -9683,11 +9683,11 @@
     style.id = "playerHudStyles";
     style.textContent = `
       #playerHud {
-        position: absolute;
-        z-index: 6100;
+        position: fixed;
+        z-index: 2147483000;
         left: 0;
         bottom: 0;
-        width: min(78vw, 1500px);
+        width: min(82vw, 1500px);
         height: auto;
         pointer-events: none;
         user-select: none;
@@ -9696,6 +9696,7 @@
         visibility: visible;
         transition: opacity 160ms ease, visibility 160ms ease;
         filter: drop-shadow(0 4px 5px rgba(0,0,0,.24));
+        isolation: isolate;
       }
 
       #playerHud.player-hud--hidden {
@@ -9715,7 +9716,13 @@
 
       @media (max-width: 1100px) {
         #playerHud {
-          width: min(92vw, 1250px);
+          width: min(94vw, 1250px);
+        }
+      }
+
+      @media (max-height: 760px) {
+        #playerHud {
+          width: min(76vw, 1180px);
         }
       }
     `;
@@ -9738,7 +9745,10 @@
     image.draggable = false;
 
     root.appendChild(image);
-    game.appendChild(root);
+
+    // R101: attach HUD directly to BODY so no game/world stacking context,
+    // transform, clipping or map layout can hide or reposition it.
+    document.body.appendChild(root);
 
     playerHud = { root, image };
     updatePlayerHudVisibility();
