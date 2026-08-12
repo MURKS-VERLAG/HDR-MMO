@@ -8832,7 +8832,16 @@
         // Chances reuse the exact bookmaker probabilities; no outcome logic is changed.
         neuensteinHitFrame: "assets/stadium/fighters/DERBY HIT NEUENSTEIN.png",
         schauenburgHitFrame: "assets/stadium/fighters/DERBY HIT SCHAUENBURG 1.png",
-        schauenburgHitFourthFrame: "assets/stadium/fighters/DERBY HIT SCHAUENBURG 4.png"
+        schauenburgHitFourthFrame: "assets/stadium/fighters/DERBY HIT SCHAUENBURG 4.png",
+
+        // R85 — fatality branch after Schauenburg's 4th successful hit.
+        finishSetupFrame: "assets/stadium/fighters/DERBY FINISH SETUP.png",
+        finishEvadeFrame: "assets/stadium/fighters/DERBY FINISH NEUENSTEIN EVADE.png",
+        fatalityNeuensteinFrame: "assets/stadium/fighters/DERBY FATALITY NEUENSTEIN.png",
+        fatalitySchauenburgFrame: "assets/stadium/fighters/DERBY FATALITY SCHAUENBURG.png",
+        finishSetupMs: 750,
+        finishEvadeMs: 750,
+        fatalityMs: 2100
       })
     }),
 
@@ -8895,6 +8904,12 @@
   // R84 — rest slots alternate: Neuenstein first, then Schauenburg.
   let stadiumBrawlRestTurn = "neuenstein";
   let stadiumBrawlSchauenburgSuccessfulHits = 0;
+
+  // R85 — the 4th successful Schauenburg hit branches into the finish sequence.
+  let stadiumBrawlFatalityPending = false;
+  let stadiumBrawlFatalityEvaded = null;
+  let stadiumBrawlDamageTextRoot = null;
+  let stadiumBrawlFatalityText = null;
 
   // R77 — normalize each movement direction to ITS OWN matching stand pose.
   // WALK UP uses FLEGEL VICTORY as its size reference at the green circle.
@@ -9455,6 +9470,73 @@
         }
       }
 
+      .stadium-brawl-damage-root {
+        position: absolute;
+        inset: 0;
+        z-index: 23;
+        pointer-events: none;
+        user-select: none;
+      }
+
+      .stadium-brawl-damage {
+        position: absolute;
+        transform: translate(-50%, -100%);
+        font-family: Georgia, "Times New Roman", serif;
+        font-size: 104px;
+        font-weight: 900;
+        line-height: 1;
+        letter-spacing: 2px;
+        text-shadow:
+          0 4px 2px rgba(0,0,0,.92),
+          0 0 10px currentColor,
+          0 0 20px rgba(0,0,0,.55);
+        animation: stadiumBrawlDamageFloat 820ms ease-out forwards;
+        will-change: transform, opacity;
+      }
+
+      .stadium-brawl-damage--neuenstein {
+        color: #82dcff;
+      }
+
+      .stadium-brawl-damage--schauenburg {
+        color: #ff3737;
+      }
+
+      @keyframes stadiumBrawlDamageFloat {
+        0%   { opacity: 0; transform: translate(-50%, -72%) scale(.82); }
+        16%  { opacity: 1; transform: translate(-50%, -100%) scale(1.05); }
+        72%  { opacity: 1; }
+        100% { opacity: 0; transform: translate(-50%, -178%) scale(.98); }
+      }
+
+      .stadium-brawl-fatality-text {
+        position: absolute;
+        z-index: 24;
+        left: ${STADIUM.fightIntro.brawl.sharedPoint.x}px;
+        top: ${STADIUM.fightIntro.brawl.sharedPoint.y - 930}px;
+        transform: translate(-50%, -50%) scale(.88);
+        pointer-events: none;
+        user-select: none;
+        opacity: 0;
+        visibility: hidden;
+        font-family: "Old English Text MT", "Lucida Blackletter", "UnifrakturCook", Georgia, serif;
+        font-size: 172px;
+        font-weight: 900;
+        letter-spacing: 5px;
+        white-space: nowrap;
+        text-shadow: 0 5px 3px #000, 0 0 18px currentColor, 0 0 36px rgba(0,0,0,.72);
+        transition: opacity 150ms ease, transform 180ms ease, visibility 150ms ease;
+      }
+
+      .stadium-brawl-fatality-text--visible {
+        opacity: 1;
+        visibility: visible;
+        transform: translate(-50%, -50%) scale(1);
+      }
+
+      .stadium-brawl-fatality-text--neuenstein { color: #82dcff; }
+      .stadium-brawl-fatality-text--schauenburg { color: #ff3737; }
+
       .stadium-gate-foreground {
         position: absolute;
         z-index: 18;
@@ -9778,6 +9860,32 @@
       true
     );
 
+    // R85 — full two-fighter finish compositions, isolated from the normal brawl.
+    const brawlFinishSetup = makeBrawlLayer(
+      "stadiumBrawlFinishSetup",
+      STADIUM.fightIntro.brawl.finishSetupFrame,
+      STADIUM.fightIntro.brawl.sharedPoint,
+      true
+    );
+    const brawlFinishEvade = makeBrawlLayer(
+      "stadiumBrawlFinishEvade",
+      STADIUM.fightIntro.brawl.finishEvadeFrame,
+      STADIUM.fightIntro.brawl.sharedPoint,
+      true
+    );
+    const brawlFatalityNeuenstein = makeBrawlLayer(
+      "stadiumBrawlFatalityNeuenstein",
+      STADIUM.fightIntro.brawl.fatalityNeuensteinFrame,
+      STADIUM.fightIntro.brawl.sharedPoint,
+      true
+    );
+    const brawlFatalitySchauenburg = makeBrawlLayer(
+      "stadiumBrawlFatalitySchauenburg",
+      STADIUM.fightIntro.brawl.fatalitySchauenburgFrame,
+      STADIUM.fightIntro.brawl.sharedPoint,
+      true
+    );
+
     const brawlDust = document.createElement("div");
     brawlDust.id = "stadiumBrawlDust";
     brawlDust.className = "stadium-brawl-dust";
@@ -9791,9 +9899,26 @@
       attackB: brawlAttackB,
       hitNeuenstein: brawlHitNeuenstein,
       hitSchauenburg: brawlHitSchauenburg,
-      hitSchauenburgFourth: brawlHitSchauenburgFourth
+      hitSchauenburgFourth: brawlHitSchauenburgFourth,
+      finishSetup: brawlFinishSetup,
+      finishEvade: brawlFinishEvade,
+      fatalityNeuenstein: brawlFatalityNeuenstein,
+      fatalitySchauenburg: brawlFatalitySchauenburg
     };
     stadiumBrawlDust = brawlDust;
+
+    const brawlDamageRoot = document.createElement("div");
+    brawlDamageRoot.id = "stadiumBrawlDamageRoot";
+    brawlDamageRoot.className = "stadium-brawl-damage-root";
+    world.appendChild(brawlDamageRoot);
+    stadiumBrawlDamageTextRoot = brawlDamageRoot;
+
+    const fatalityText = document.createElement("div");
+    fatalityText.id = "stadiumBrawlFatalityText";
+    fatalityText.className = "stadium-brawl-fatality-text";
+    fatalityText.textContent = "FATALITÄT!";
+    world.appendChild(fatalityText);
+    stadiumBrawlFatalityText = fatalityText;
 
     for (const brawlSrc of [
       STADIUM.fightIntro.brawl.neuensteinAttack,
@@ -9801,7 +9926,11 @@
       STADIUM.fightIntro.brawl.schauenburgAttack,
       STADIUM.fightIntro.brawl.neuensteinHitFrame,
       STADIUM.fightIntro.brawl.schauenburgHitFrame,
-      STADIUM.fightIntro.brawl.schauenburgHitFourthFrame
+      STADIUM.fightIntro.brawl.schauenburgHitFourthFrame,
+      STADIUM.fightIntro.brawl.finishSetupFrame,
+      STADIUM.fightIntro.brawl.finishEvadeFrame,
+      STADIUM.fightIntro.brawl.fatalityNeuensteinFrame,
+      STADIUM.fightIntro.brawl.fatalitySchauenburgFrame
     ]) {
       const preload = new Image();
       preload.src = encodeURI(brawlSrc);
@@ -10352,6 +10481,10 @@
     setStadiumBrawlLayerVisible(stadiumBrawlVisuals.hitNeuenstein, false);
     setStadiumBrawlLayerVisible(stadiumBrawlVisuals.hitSchauenburg, false);
     setStadiumBrawlLayerVisible(stadiumBrawlVisuals.hitSchauenburgFourth, false);
+    setStadiumBrawlLayerVisible(stadiumBrawlVisuals.finishSetup, false);
+    setStadiumBrawlLayerVisible(stadiumBrawlVisuals.finishEvade, false);
+    setStadiumBrawlLayerVisible(stadiumBrawlVisuals.fatalityNeuenstein, false);
+    setStadiumBrawlLayerVisible(stadiumBrawlVisuals.fatalitySchauenburg, false);
   }
 
   function showStadiumBrawlAttack() {
@@ -10360,9 +10493,61 @@
     setStadiumBrawlLayerVisible(stadiumBrawlVisuals.hitNeuenstein, false);
     setStadiumBrawlLayerVisible(stadiumBrawlVisuals.hitSchauenburg, false);
     setStadiumBrawlLayerVisible(stadiumBrawlVisuals.hitSchauenburgFourth, false);
+    setStadiumBrawlLayerVisible(stadiumBrawlVisuals.finishSetup, false);
+    setStadiumBrawlLayerVisible(stadiumBrawlVisuals.finishEvade, false);
+    setStadiumBrawlLayerVisible(stadiumBrawlVisuals.fatalityNeuenstein, false);
+    setStadiumBrawlLayerVisible(stadiumBrawlVisuals.fatalitySchauenburg, false);
     setStadiumBrawlLayerVisible(stadiumBrawlVisuals.attackA, true);
     setStadiumBrawlLayerVisible(stadiumBrawlVisuals.attackB, true);
     spawnStadiumBrawlDust();
+  }
+
+  function spawnStadiumBrawlDamageText(targetTeam) {
+    if (!stadiumBrawlDamageTextRoot) return;
+
+    const isNeuensteinTarget = targetTeam === "neuenstein";
+    const point = isNeuensteinTarget
+      ? STADIUM.fightIntro.brawl.neuensteinContact
+      : STADIUM.fightIntro.brawl.schauenburgContact;
+
+    const text = document.createElement("span");
+    text.className =
+      "stadium-brawl-damage " +
+      (isNeuensteinTarget
+        ? "stadium-brawl-damage--neuenstein"
+        : "stadium-brawl-damage--schauenburg");
+    text.textContent = "-20";
+    text.style.left = `${point.x}px`;
+    text.style.top = `${point.y - 870}px`;
+    stadiumBrawlDamageTextRoot.appendChild(text);
+    text.addEventListener("animationend", () => text.remove(), { once: true });
+  }
+
+  function clearStadiumBrawlDamageText() {
+    if (stadiumBrawlDamageTextRoot) stadiumBrawlDamageTextRoot.replaceChildren();
+  }
+
+  function hideStadiumBrawlFatalityText() {
+    if (!stadiumBrawlFatalityText) return;
+    stadiumBrawlFatalityText.classList.remove(
+      "stadium-brawl-fatality-text--visible",
+      "stadium-brawl-fatality-text--neuenstein",
+      "stadium-brawl-fatality-text--schauenburg"
+    );
+  }
+
+  function showStadiumBrawlFatalityText(winner) {
+    if (!stadiumBrawlFatalityText) return;
+    stadiumBrawlFatalityText.classList.remove(
+      "stadium-brawl-fatality-text--neuenstein",
+      "stadium-brawl-fatality-text--schauenburg"
+    );
+    stadiumBrawlFatalityText.classList.add(
+      winner === "neuenstein"
+        ? "stadium-brawl-fatality-text--neuenstein"
+        : "stadium-brawl-fatality-text--schauenburg",
+      "stadium-brawl-fatality-text--visible"
+    );
   }
 
   function showStadiumBrawlRest(allowHitRoll = true) {
@@ -10388,6 +10573,10 @@
         landed ? stadiumBrawlVisuals.hitNeuenstein : stadiumBrawlVisuals.shared,
         true
       );
+      if (landed) {
+        // Neuenstein hits Schauenburg: red -20 over the left-side Schauenburger.
+        spawnStadiumBrawlDamageText("schauenburg");
+      }
       stadiumBrawlRestTurn = "schauenburg";
       return;
     }
@@ -10405,6 +10594,13 @@
           : stadiumBrawlVisuals.hitSchauenburg,
         true
       );
+
+      // Schauenburg hits Neuenstein: light-blue -20 over the right-side Neuensteiner.
+      spawnStadiumBrawlDamageText("neuenstein");
+
+      // R85: after this existing 4th-hit frame has held for the normal restMs,
+      // the normal attack/rest loop stops and the finish branch begins.
+      if (fourthSuccessfulHit) stadiumBrawlFatalityPending = true;
     }
     stadiumBrawlRestTurn = "neuenstein";
   }
@@ -10439,6 +10635,46 @@
     }
   }
 
+  function beginStadiumBrawlFatalitySetup(now) {
+    stadiumBrawlFatalityPending = false;
+    stadiumBrawlFatalityEvaded = null;
+    clearStadiumBrawlDust();
+    clearStadiumBrawlDamageText();
+    hideStadiumBrawlFatalityText();
+    hideAllStadiumBrawlLayers();
+    setStadiumBrawlLayerVisible(stadiumBrawlVisuals.finishSetup, true);
+    stadiumBrawlPhaseEndAt = now + STADIUM.fightIntro.brawl.finishSetupMs;
+    stadiumState = "fight-fatality-setup";
+  }
+
+  function resolveStadiumBrawlFatalityEvade(now) {
+    // Exactly one 30% evade roll, using the existing bookmaker chance.
+    stadiumBrawlFatalityEvaded = Math.random() < STADIUM.derby.neuensteinChance;
+    hideAllStadiumBrawlLayers();
+
+    if (stadiumBrawlFatalityEvaded) {
+      setStadiumBrawlLayerVisible(stadiumBrawlVisuals.finishEvade, true);
+      stadiumBrawlPhaseEndAt = now + STADIUM.fightIntro.brawl.finishEvadeMs;
+      stadiumState = "fight-fatality-evade";
+      return;
+    }
+
+    stadiumBrawlWinner = "schauenburg";
+    setStadiumBrawlLayerVisible(stadiumBrawlVisuals.fatalitySchauenburg, true);
+    showStadiumBrawlFatalityText("schauenburg");
+    stadiumBrawlPhaseEndAt = now + STADIUM.fightIntro.brawl.fatalityMs;
+    stadiumState = "fight-fatality-schauenburg";
+  }
+
+  function beginStadiumBrawlNeuensteinFatality(now) {
+    hideAllStadiumBrawlLayers();
+    stadiumBrawlWinner = "neuenstein";
+    setStadiumBrawlLayerVisible(stadiumBrawlVisuals.fatalityNeuenstein, true);
+    showStadiumBrawlFatalityText("neuenstein");
+    stadiumBrawlPhaseEndAt = now + STADIUM.fightIntro.brawl.fatalityMs;
+    stadiumState = "fight-fatality-neuenstein";
+  }
+
   function beginStadiumBrawl(now = performance.now()) {
     if (stadiumBrawlStarted || !stadiumFightFighter || !stadiumFightFighterB) return;
     stadiumBrawlStarted = true;
@@ -10452,6 +10688,8 @@
     stadiumBrawlCyclesDone = 0;
     stadiumBrawlRestTurn = "neuenstein";
     stadiumBrawlSchauenburgSuccessfulHits = 0;
+    stadiumBrawlFatalityPending = false;
+    stadiumBrawlFatalityEvaded = null;
     stadiumBrawlApproachStartedAt = now;
     stadiumBrawlApproachStartA = { x: stadiumFightFighter.x, y: stadiumFightFighter.y };
     stadiumBrawlApproachStartB = { x: stadiumFightFighterB.x, y: stadiumFightFighterB.y };
@@ -10461,6 +10699,8 @@
     stadiumFightFighterBNextFrameAt = now + STADIUM.fightIntro.frameDuration;
     hideAllStadiumBrawlLayers();
     clearStadiumBrawlDust();
+    clearStadiumBrawlDamageText();
+    hideStadiumBrawlFatalityText();
 
     // Reuse the already-proven side-run animation groups in the reverse direction.
     setStadiumFightSprite(STADIUM.fightIntro.walkRightFrames[0], true);
@@ -10517,9 +10757,17 @@
 
     if (stadiumState === "fight-brawl-rest") {
       if (now < stadiumBrawlPhaseEndAt) return true;
+
+      // R85: the existing 4th Schauenburg hit held for its full normal restMs.
+      // From here on, no more normal hit rolls, dust or 50–90-cycle loop.
+      if (stadiumBrawlFatalityPending) {
+        beginStadiumBrawlFatalitySetup(now);
+        return true;
+      }
+
       stadiumBrawlCyclesDone += 1;
       if (stadiumBrawlCyclesDone >= stadiumBrawlCyclesTarget) {
-        // R82/R83 result remains the neutral shared frame; R84 hit rolls stop here.
+        // Fallback remains the neutral shared frame if no fatality branch was reached.
         showStadiumBrawlRest(false);
         stadiumState = "fight-brawl-result";
         return true;
@@ -10527,6 +10775,27 @@
       showStadiumBrawlAttack();
       stadiumBrawlPhaseEndAt = now + STADIUM.fightIntro.brawl.attackMs;
       stadiumState = "fight-brawl-attack";
+      return true;
+    }
+
+    if (stadiumState === "fight-fatality-setup") {
+      if (now < stadiumBrawlPhaseEndAt) return true;
+      resolveStadiumBrawlFatalityEvade(now);
+      return true;
+    }
+
+    if (stadiumState === "fight-fatality-evade") {
+      if (now < stadiumBrawlPhaseEndAt) return true;
+      beginStadiumBrawlNeuensteinFatality(now);
+      return true;
+    }
+
+    if (
+      stadiumState === "fight-fatality-neuenstein" ||
+      stadiumState === "fight-fatality-schauenburg"
+    ) {
+      if (now < stadiumBrawlPhaseEndAt) return true;
+      stadiumState = "fight-brawl-result";
       return true;
     }
 
@@ -10642,12 +10911,16 @@
     stadiumBrawlCyclesDone = 0;
     stadiumBrawlRestTurn = "neuenstein";
     stadiumBrawlSchauenburgSuccessfulHits = 0;
+    stadiumBrawlFatalityPending = false;
+    stadiumBrawlFatalityEvaded = null;
     stadiumBrawlPhaseEndAt = 0;
     stadiumBrawlApproachStartedAt = 0;
     stadiumBrawlApproachStartA = null;
     stadiumBrawlApproachStartB = null;
     hideAllStadiumBrawlLayers();
     clearStadiumBrawlDust();
+    clearStadiumBrawlDamageText();
+    hideStadiumBrawlFatalityText();
     try {
       stadiumFightAnnouncerAudio.pause();
       stadiumFightAnnouncerAudio.currentTime = 0;
@@ -10819,6 +11092,10 @@
       stadiumState === "fight-brawl-approach" ||
       stadiumState === "fight-brawl-attack" ||
       stadiumState === "fight-brawl-rest" ||
+      stadiumState === "fight-fatality-setup" ||
+      stadiumState === "fight-fatality-evade" ||
+      stadiumState === "fight-fatality-neuenstein" ||
+      stadiumState === "fight-fatality-schauenburg" ||
       stadiumState === "fight-brawl-result"
     ) {
       updateStadiumBrawl(now);
