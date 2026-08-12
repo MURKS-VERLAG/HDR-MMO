@@ -1,17 +1,16 @@
-SAUKEULE ANIMATIONS-REIHENFOLGE PATCH
+R92 – WINTERBACH -> ÖDSBACH EAST EXIT MINIFIX
 
-Ersetzt: game.js
+Geändert:
+- Ausschließlich clampPlayer().
+- Auf MAP 2 WINTERBACH darf der Spieler innerhalb der bestehenden
+  ÖDSBACH-Ostausgangsspur beim Rechtslaufen bis leaveX + 80 laufen.
+- Dadurch kann die bereits vorhandene checkMapExit()-Transition bei X >= 10018
+  ausgelöst werden.
 
-Neue Reihenfolge:
-LINKS:  Bild 3 -> Bild 1 AUSHOLEN -> Bild 2 -> Bild 1 AUSHOLEN -> Bild 3 -> Bild 1 AUSHOLEN -> Bild 4 -> Bild 1 AUSHOLEN
-RECHTS: Bild 3 -> Bild 1 AUSHOLEN -> Bild 2 -> Bild 1 AUSHOLEN -> Bild 3 -> Bild 1 AUSHOLEN -> Bild 4 -> Bild 1 AUSHOLEN
-S / UNTEN: Bild 3 -> Bild 1 AUSHOLEN -> Bild 2 -> Bild 1 AUSHOLEN -> Bild 3 -> Bild 1 AUSHOLEN -> Bild 4 -> Bild 1 AUSHOLEN
-W / OBEN:  Bild 3 -> Bild 2 AUSHOLEN -> Bild 1 -> Bild 2 AUSHOLEN -> Bild 3 -> Bild 2 AUSHOLEN -> Bild 4 -> Bild 2 AUSHOLEN
-
-Timing pro Zyklus entsprechend Faustkampf-Schlag/GAP-Abfolge:
-400 / 100 / 500 / 100 / 400 / 100 / 500 / 400 ms
-
-WICHTIG:
-- Ausholbilder haben KEIN hit:true und verursachen KEINEN Schaden.
-- SAUKEULE-Werte bleiben unverändert: 40 DMG, 80 KRIT, 5% SAUSTARK = 120.
-- Keine anderen Systeme wurden verändert.
+Unverändert:
+- Exit-Koordinaten
+- Spawnpunkte
+- checkMapExit()
+- ÖDSBACH-Rückweg
+- andere Maps und Exits
+- Kamera, Zoom, Kampf, NPCs, Tiere, Musik und Collision-Systeme

@@ -36,6 +36,13 @@
       image: "assets/maps/MAP 5 RENCHTALSTADION.jpg",
       width: 10240,
       height: 5763
+    }),
+    oedsbach: Object.freeze({
+      id: "oedsbach",
+      name: "ÖDSBACH",
+      image: "assets/maps/MAP 6 ÖDSBACH.png",
+      width: 10000,
+      height: 6655
     })
   });
 
@@ -185,6 +192,28 @@
     oberkirchFromStadiumSpawn: Object.freeze({
       x: 7310,
       y: 6490
+    }),
+
+    // R91 MAP 2 -> ÖDSBACH: red arrow on the east road.
+    winterbachOedsbachEast: Object.freeze({
+      y1: 2250,
+      y2: 3250,
+      leaveX: 10018
+    }),
+    oedsbachFromWinterbachSpawn: Object.freeze({
+      x: 1820,
+      y: 6400
+    }),
+
+    // R91 ÖDSBACH -> MAP 2: ONLY the blue bottom road returns to WINTERBACH.
+    oedsbachWinterbachSouth: Object.freeze({
+      x1: 1250,
+      x2: 2450,
+      leavePadding: 18
+    }),
+    winterbachFromOedsbachSpawn: Object.freeze({
+      x: 9730,
+      y: 2715
     })
   });
 
@@ -328,6 +357,98 @@
     { sprite: PLAYER.standUp, duration: 400 }
   ]);
 
+  // ------------------------------------------------------------------
+  // R67 WAFFE 1 — SCHWEINEKEULE (LV 1-10)
+  // Finished character+weapon sprites; NO runtime weapon overlay.
+  // ------------------------------------------------------------------
+  const WEAPONS = Object.freeze({
+    pinkPigClub: Object.freeze({
+      id: "pink-pig-club",
+      name: "SCHWEINEKEULE",
+      icon: "assets/items/weapons/PINK PIG CLUB.png",
+      inventoryWidth: 1,
+      inventoryHeight: 2,
+      levelMin: 1,
+      levelMax: 10,
+
+      // R68 SAUKEULE — weapon-specific combat values.
+      damage: 40,
+      criticalDamage: 80,
+      saustarkChance: 0.05,
+      saustarkDamage: 120,
+      tooltipName: "SAUKEULE",
+      tooltipDescription: "Für eine Keule Eures Ranges wirklich saustark!",
+
+      attacks: Object.freeze({
+        left: Object.freeze([
+          "assets/player/weapons/pink-pig-club/PLAYER CLUB LEFT 1.webp",
+          "assets/player/weapons/pink-pig-club/PLAYER CLUB LEFT 2.webp",
+          "assets/player/weapons/pink-pig-club/PLAYER CLUB LEFT 3.webp",
+          "assets/player/weapons/pink-pig-club/PLAYER CLUB LEFT 4.webp"
+        ]),
+        right: Object.freeze([
+          "assets/player/weapons/pink-pig-club/PLAYER CLUB RIGHT 1.webp",
+          "assets/player/weapons/pink-pig-club/PLAYER CLUB RIGHT 2.webp",
+          "assets/player/weapons/pink-pig-club/PLAYER CLUB RIGHT 3.webp",
+          "assets/player/weapons/pink-pig-club/PLAYER CLUB RIGHT 4.webp"
+        ]),
+        down: Object.freeze([
+          "assets/player/weapons/pink-pig-club/PLAYER CLUB DOWN 1.webp",
+          "assets/player/weapons/pink-pig-club/PLAYER CLUB DOWN 2.webp",
+          "assets/player/weapons/pink-pig-club/PLAYER CLUB DOWN 3.webp",
+          "assets/player/weapons/pink-pig-club/PLAYER CLUB DOWN 4.webp"
+        ]),
+        up: Object.freeze([
+          "assets/player/weapons/pink-pig-club/PLAYER CLUB UP 1.webp",
+          "assets/player/weapons/pink-pig-club/PLAYER CLUB UP 2.webp",
+          "assets/player/weapons/pink-pig-club/PLAYER CLUB UP 3.webp",
+          "assets/player/weapons/pink-pig-club/PLAYER CLUB UP 4.webp"
+        ])
+      })
+    })
+  });
+
+  // ------------------------------------------------------------------
+  // R69 SAUKEULE — FINAL ANIMATION ORDER
+  // Hit timing is copied from the existing fist combo:
+  // HIT 400 -> AUSHOL 100 -> HIT 500 -> AUSHOL 100 ->
+  // HIT 400 -> AUSHOL 100 -> HIT 500 -> AUSHOL 400.
+  // AUSHOL frames are visual ONLY and NEVER deal damage.
+  // ------------------------------------------------------------------
+  function makeClubSequence(direction) {
+    const f = WEAPONS.pinkPigClub.attacks[direction];
+
+    // LEFT / RIGHT / DOWN (S): 3 -> A1 -> 2 -> A1 -> 3 -> A1 -> 4 -> A1
+    // UP (W):                  3 -> A2 -> 1 -> A2 -> 3 -> A2 -> 4 -> A2
+    const isUp = direction === "up";
+    const hit1 = f[2]; // Bild 3
+    const pull = isUp ? f[1] : f[0]; // W = Bild 2; sonst Bild 1
+    const hit2 = isUp ? f[0] : f[1]; // W = Bild 1; sonst Bild 2
+    const hit3 = f[2]; // Bild 3
+    const hit4 = f[3]; // Bild 4
+
+    const entries = [
+      { sprite: hit1, duration: 400, hit: true, damage: WEAPONS.pinkPigClub.damage, strike: 1 },
+      { sprite: pull, duration: 100 },
+
+      { sprite: hit2, duration: 500, hit: true, damage: WEAPONS.pinkPigClub.damage, strike: 2 },
+      { sprite: pull, duration: 100 },
+
+      { sprite: hit3, duration: 400, hit: true, damage: WEAPONS.pinkPigClub.damage, strike: 4 },
+      { sprite: pull, duration: 100 },
+
+      { sprite: hit4, duration: 500, hit: true, damage: WEAPONS.pinkPigClub.criticalDamage, strike: 3, critical: true },
+      { sprite: pull, duration: 400 }
+    ];
+
+    return Object.freeze(entries.map((entry) => Object.freeze(entry)));
+  }
+
+  const CLUB_ATTACK_RIGHT = makeClubSequence("right");
+  const CLUB_ATTACK_LEFT = makeClubSequence("left");
+  const CLUB_ATTACK_DOWN = makeClubSequence("down");
+  const CLUB_ATTACK_UP = makeClubSequence("up");
+
   const ZOOM_MULTIPLIERS = [1, 1.75, 3, 4.5];
   const ZOOM_DURATION = 300;
 
@@ -335,6 +456,145 @@
   attackAudio.preload = "auto";
   attackAudio.loop = false;
   attackAudio.volume = 1.0;
+
+  // R80 — one-shot stadium announcer. It is never looped and is never
+  // restarted during the countdown/fighter sequence.
+  const stadiumFightAnnouncerAudio = new Audio("assets/audio/stadium/ITS TIME UFC ANNOUNCER.mp3");
+  stadiumFightAnnouncerAudio.preload = "auto";
+  stadiumFightAnnouncerAudio.loop = false;
+  stadiumFightAnnouncerAudio.volume = 1.0;
+  let stadiumFightAnnouncerPlayed = false;
+
+  // R81 — battle horn after "Wette abschließen".
+  const stadiumBattleHornAudio = new Audio("assets/audio/stadium/BATTLEHORN.mp3");
+  stadiumBattleHornAudio.preload = "auto";
+  stadiumBattleHornAudio.loop = false;
+  stadiumBattleHornAudio.volume = 1.0;
+  let stadiumBattleHornPlayed = false;
+
+  function playStadiumBattleHornOnce() {
+    if (stadiumBattleHornPlayed) return;
+    stadiumBattleHornPlayed = true;
+    try { stadiumBattleHornAudio.currentTime = 0; } catch (_) {}
+    stadiumBattleHornAudio.play().catch(() => {});
+  }
+
+  // ------------------------------------------------------------------
+  // R89 — RENCHTALSTADION FINAL COMBAT SFX
+  // Purely additive. Existing music, horn and announcer remain untouched.
+  // ------------------------------------------------------------------
+  const STADIUM_ARENA_SFX = Object.freeze({
+    neuensteinHits: Object.freeze([
+      "assets/audio/stadium/arena/NEUENSTEIN HIT 1.mp3",
+      "assets/audio/stadium/arena/NEUENSTEIN HIT 2.mp3",
+      "assets/audio/stadium/arena/NEUENSTEIN HIT 3.mp3"
+    ]),
+    schauenburgHits: Object.freeze([
+      "assets/audio/stadium/arena/SCHAUENBURG HIT 1.mp3",
+      "assets/audio/stadium/arena/SCHAUENBURG HIT 2.mp3"
+    ]),
+    // R90 — the formerly misassigned swish8 "kill lead" is actually rest movement SFX.
+    deathFinal: "assets/audio/stadium/arena/ARENA DEATH FINAL.mp3",
+    // This file is physically trimmed: original audio begins at source 00:05.
+    killCrowd: "assets/audio/stadium/arena/ARENA KILL CROWD FROM 5S.mp3",
+    neutralRest: Object.freeze([
+      "assets/audio/stadium/arena/ARENA REST 1.mp3",
+      "assets/audio/stadium/arena/ARENA REST 2.mp3",
+      "assets/audio/stadium/arena/ARENA REST 3.mp3",
+      "assets/audio/stadium/arena/ARENA KILL LEAD.mp3"
+    ])
+  });
+
+  const stadiumArenaSfxPreloads = [];
+  const stadiumArenaActiveSfx = new Set();
+  let stadiumArenaKillSequencePlayed = false;
+
+  function preloadStadiumArenaSfx() {
+    if (stadiumArenaSfxPreloads.length) return;
+    const all = [
+      ...STADIUM_ARENA_SFX.neuensteinHits,
+      ...STADIUM_ARENA_SFX.schauenburgHits,
+      STADIUM_ARENA_SFX.deathFinal,
+      STADIUM_ARENA_SFX.killCrowd,
+      ...STADIUM_ARENA_SFX.neutralRest
+    ];
+    for (const src of all) {
+      const audio = new Audio(encodeURI(src));
+      audio.preload = "auto";
+      audio.load();
+      stadiumArenaSfxPreloads.push(audio);
+    }
+  }
+
+  function playStadiumArenaSfx(src, onEnded = null) {
+    const audio = new Audio(encodeURI(src));
+    audio.preload = "auto";
+    audio.volume = 1.0;
+    stadiumArenaActiveSfx.add(audio);
+
+    const cleanup = () => {
+      stadiumArenaActiveSfx.delete(audio);
+    };
+
+    audio.addEventListener("ended", () => {
+      cleanup();
+      if (typeof onEnded === "function") onEnded();
+    }, { once: true });
+    audio.addEventListener("error", cleanup, { once: true });
+    audio.play().catch(() => cleanup());
+    return audio;
+  }
+
+  function stopAllStadiumArenaSfx() {
+    for (const audio of stadiumArenaActiveSfx) {
+      try {
+        audio.pause();
+        audio.currentTime = 0;
+      } catch (_) {}
+    }
+    stadiumArenaActiveSfx.clear();
+  }
+
+  function playRandomStadiumArenaSfx(pool) {
+    if (!Array.isArray(pool) || !pool.length) return;
+    const src = pool[Math.floor(Math.random() * pool.length)];
+    playStadiumArenaSfx(src);
+  }
+
+  function playStadiumArenaNeutralRestPair() {
+    const pool = STADIUM_ARENA_SFX.neutralRest;
+    if (pool.length < 2) return;
+    const firstIndex = Math.floor(Math.random() * pool.length);
+    let secondIndex = Math.floor(Math.random() * (pool.length - 1));
+    if (secondIndex >= firstIndex) secondIndex += 1;
+
+    // EXACT requirement: two DIFFERENT rest sounds, directly one after another.
+    playStadiumArenaSfx(pool[firstIndex], () => {
+      playStadiumArenaSfx(pool[secondIndex]);
+    });
+  }
+
+  function playStadiumArenaKillSequenceOnce() {
+    if (stadiumArenaKillSequencePlayed) return;
+    stadiumArenaKillSequencePlayed = true;
+
+    // R90 — strict fatality audio order for BOTH possible winners:
+    // actual death/final-hit sound first, then the already trimmed crowd reaction.
+    // The former swish8 sound is no longer a death cue; it now lives in neutralRest.
+    stopAllStadiumArenaSfx();
+    playStadiumArenaSfx(STADIUM_ARENA_SFX.deathFinal, () => {
+      playStadiumArenaSfx(STADIUM_ARENA_SFX.killCrowd);
+    });
+  }
+
+  function playStadiumFightAnnouncerOnce() {
+    if (stadiumFightAnnouncerPlayed) return Promise.resolve(false);
+    stadiumFightAnnouncerPlayed = true;
+    try { stadiumFightAnnouncerAudio.currentTime = 0; } catch (_) {}
+    return stadiumFightAnnouncerAudio.play()
+      .then(() => true)
+      .catch(() => false);
+  }
 
   // ------------------------------------------------------------------
   // R33 MAP MUSIC — robust crossfade manager
@@ -349,19 +609,37 @@
     // R52 dedicated HUBACKER track supplied by the user.
     "hubacker": "assets/audio/maps/HUBACKER - THE LAST KNIGHT'S LAMENT.mp3",
     // R52 dedicated RENCHTALSTADION track supplied by the user.
-    "renchtalstadion": "assets/audio/maps/RENCHTALSTADION - MEDIEVAL BATTLE.mp3"
+    "renchtalstadion": "assets/audio/maps/RENCHTALSTADION - MEDIEVAL BATTLE.mp3",
+    "oedsbach": "assets/audio/maps/WINTERBACH - FROSTBOUND BALLAD.mp3"
   });
 
   const MAP_MUSIC_VOLUME = 1.0;
   const MAP_MUSIC_FADE_MS = 1400;
 
+  // R79 STADIUM MUSIC:
+  // RENCHTALSTADION inherits the currently running OBERKIRCH track until
+  // the arena fight is actually started via "Wette abschließen".
+  let stadiumBattleMusicStarted = false;
+
   // R60 START FLOW MUSIC:
   // Both screens before OBERKIRCH use the EXACT existing RENCHTALSTADION track.
   // No duplicate audio file is needed; we reuse MAP_MUSIC["renchtalstadion"].
   function desiredBackgroundMusicId() {
-    return (typeof startFlowState !== "undefined" && startFlowState !== "campaign")
-      ? "renchtalstadion"
-      : (MAP && MAP.id ? MAP.id : "oberkirch-zentrum");
+    if (typeof startFlowState !== "undefined" && startFlowState !== "campaign") {
+      return "renchtalstadion";
+    }
+
+    // R79: while merely visiting / spectating before the bet is submitted,
+    // the stadium must continue OBERKIRCH music without restarting it.
+    if (
+      MAP &&
+      MAP.id === "renchtalstadion" &&
+      !stadiumBattleMusicStarted
+    ) {
+      return "oberkirch-zentrum";
+    }
+
+    return (MAP && MAP.id) ? MAP.id : "oberkirch-zentrum";
   }
 
   const mapMusicPlayers = new Map();
@@ -747,6 +1025,28 @@
       direction: "down",
       glow: "#ffffff",
       trigger: { x1: 6900, y1: 4450, x2: 8850, y2: 5763 }
+    },
+
+    // R91 MAP 6 ÖDSBACH — labels only except the blue WINTERBACH return.
+    {
+      id: "oedsbach-sendelbach", mapId: "oedsbach", text: "SENDELBACH",
+      x: 620, y: 430, direction: "up", glow: "#ffffff",
+      trigger: { x1: 0, y1: 0, x2: 1450, y2: 1300 }
+    },
+    {
+      id: "oedsbach-hengstberg", mapId: "oedsbach", text: "HENGSTBERG",
+      x: 9350, y: 430, direction: "up", glow: "#ffffff",
+      trigger: { x1: 8550, y1: 0, x2: 10000, y2: 1300 }
+    },
+    {
+      id: "oedsbach-hesselbach", mapId: "oedsbach", text: "HESSELBACH",
+      x: 9470, y: 4720, direction: "right", glow: "#ffffff",
+      trigger: { x1: 8500, y1: 3850, x2: 10000, y2: 5550 }
+    },
+    {
+      id: "oedsbach-winterbach", mapId: "oedsbach", text: "WINTERBACH",
+      x: 1820, y: 6170, direction: "down", glow: "#ffffff",
+      trigger: { x1: 1050, y1: 5350, x2: 2700, y2: 6655 }
     }
   ]);
 
@@ -882,6 +1182,7 @@
       const t = config.trigger;
 
       const visible =
+        config.id !== "stadium-oberkirch" &&
         MAP.id === signMapId &&
         playerX >= t.x1 &&
         playerX <= t.x2 &&
@@ -896,6 +1197,71 @@
   }
 
 
+
+  // ------------------------------------------------------------------
+  // R91 ÖDEGARD — MAP 6 fixed NPC, three supplied poses, smooth 2s cycle.
+  // ------------------------------------------------------------------
+  const OEDEGARD_CONFIG = Object.freeze({
+    x: 5570,
+    y: 2140,
+    width: 1250,
+    height: 1250,
+    interval: 2000,
+    fade: 650,
+    sprites: Object.freeze([
+      "assets/npcs/oedegard/ÖDEGARD 1.png",
+      "assets/npcs/oedegard/ÖDEGARD 2.png",
+      "assets/npcs/oedegard/ÖDEGARD 3.png"
+    ])
+  });
+
+  let oedegard = null;
+
+  function createOedegard() {
+    if (oedegard) return;
+    const root = document.createElement("div");
+    root.className = "oedegard";
+    root.style.left = `${OEDEGARD_CONFIG.x}px`;
+    root.style.top = `${OEDEGARD_CONFIG.y}px`;
+    root.style.width = `${OEDEGARD_CONFIG.width}px`;
+    root.style.height = `${OEDEGARD_CONFIG.height}px`;
+    root.style.display = MAP.id === "oedsbach" ? "" : "none";
+
+    const imgs = OEDEGARD_CONFIG.sprites.map((src, i) => {
+      const img = document.createElement("img");
+      img.src = encodeURI(src); img.alt = ""; img.draggable = false;
+      img.className = "oedegard__sprite";
+      img.style.opacity = i === 0 ? "1" : "0";
+      root.appendChild(img);
+      return img;
+    });
+    world.appendChild(root);
+    oedegard = { root, imgs, index: 0, nextAt: performance.now() + OEDEGARD_CONFIG.interval };
+  }
+
+  function installOedegardStyles() {
+    if (document.getElementById("oedegardStyles")) return;
+    const style = document.createElement("style");
+    style.id = "oedegardStyles";
+    style.textContent = `
+      .oedegard { position:absolute; transform:translate(-50%,-100%); z-index:7; pointer-events:none; user-select:none; }
+      .oedegard__sprite { position:absolute; inset:0; width:100%; height:100%; object-fit:contain; object-position:50% 100%; transition:opacity ${OEDEGARD_CONFIG.fade}ms ease-in-out; filter:drop-shadow(0 9px 5px rgba(0,0,0,.28)); }
+    `;
+    document.head.appendChild(style);
+  }
+
+  function setOedegardVisibility(visible) {
+    if (oedegard) oedegard.root.style.display = visible ? "" : "none";
+  }
+
+  function updateOedegard(now) {
+    if (!oedegard || MAP.id !== "oedsbach") return;
+    if (now < oedegard.nextAt) return;
+    oedegard.imgs[oedegard.index].style.opacity = "0";
+    oedegard.index = (oedegard.index + 1) % oedegard.imgs.length;
+    oedegard.imgs[oedegard.index].style.opacity = "1";
+    oedegard.nextAt = now + OEDEGARD_CONFIG.interval;
+  }
 
   // ------------------------------------------------------------------
   // TRUNKENBOLD — R14 NPC V1
@@ -1351,7 +1717,11 @@
       "assets/animals/wolves/WOLF WALK 2.png"
     ]),
     howlFrame: "assets/animals/wolves/WOLF HOWL.png",
+    deadFrame: "assets/animals/wolves/WOLF DEAD.png",
     howlSound: "assets/audio/wolves/WOLF HOWL.mp3",
+    maxHp: 750,
+    deadDuration: 6500,
+    fadeDuration: 420,
     count: 5,
     // R17: one tick larger.
     // R18: another very small size increase.
@@ -1434,8 +1804,13 @@
         will-change: left, top, opacity;
       }
 
-      .map-wolf--away {
+      .map-wolf--away,
+      .map-wolf--death-fading {
         opacity: 0;
+      }
+
+      .map-wolf--critical-hit {
+        transition: left 210ms ease-out, top 210ms cubic-bezier(.1,.75,.25,1), opacity 420ms ease !important;
       }
 
       .map-wolf__sprite {
@@ -1455,6 +1830,11 @@
         filter: drop-shadow(0 9px 5px rgba(0,0,0,.24));
         backface-visibility: hidden;
         -webkit-backface-visibility: hidden;
+      }
+
+      .map-wolf__sprite--dead {
+        transform: scaleX(var(--wolf-facing, 1)) scale(.75);
+        transform-origin: 50% 100%;
       }
 
       .map-wolf__sprite--visible {
@@ -1641,7 +2021,14 @@
 
   function wolfSetHowl(actor, now, delay) {
     window.setTimeout(() => {
-      if (!actor || !actor.ready || actor.away || MAP.id !== actor.mapId) return;
+      if (
+        !actor ||
+        !actor.ready ||
+        actor.away ||
+        actor.dead ||
+        actor.tierbannAggressive ||
+        MAP.id !== actor.mapId
+      ) return;
 
       actor.howling = true;
       actor.moving = false;
@@ -1672,8 +2059,14 @@
     }
   }
 
-  function createWolfActor(index, mapId = WOLF_CONFIG.mapId, habitat = WOLF_CONFIG.habitat, canExitTop = true) {
-    const start = wolfRandomPoint(180, habitat, mapId);
+  function createWolfActor(
+    index,
+    mapId = WOLF_CONFIG.mapId,
+    habitat = WOLF_CONFIG.habitat,
+    canExitTop = true,
+    options = {}
+  ) {
+    const start = options.start || wolfRandomPoint(180, habitat, mapId);
 
     const element = document.createElement("div");
     element.className = "map-wolf";
@@ -1700,8 +2093,15 @@
     imageHowl.draggable = false;
     imageHowl.decoding = "async";
 
-    // All three sources exist permanently before the wolf ever animates.
-    element.append(imageA, imageB, imageHowl);
+    const imageDead = document.createElement("img");
+    imageDead.className = "map-wolf__sprite map-wolf__sprite--dead";
+    imageDead.src = encodeURI(WOLF_CONFIG.deadFrame);
+    imageDead.alt = "";
+    imageDead.draggable = false;
+    imageDead.decoding = "async";
+
+    // Walk 1 / Walk 2 / Howl / KO are all permanently loaded.
+    element.append(imageA, imageB, imageHowl, imageDead);
     world.appendChild(element);
 
     const actor = {
@@ -1709,8 +2109,15 @@
       mapId,
       habitat,
       canExitTop,
-      images: [imageA, imageB, imageHowl],
+      images: [imageA, imageB, imageHowl, imageDead],
       visibleLayer: 0,
+      hp: WOLF_CONFIG.maxHp,
+      dead: false,
+      respawnAt: 0,
+      fadeAt: 0,
+      fadeStarted: false,
+      pendingLoot: [],
+      lootSpawned: false,
       frameIndex: 0,
       x: start.x,
       y: start.y,
@@ -1728,7 +2135,12 @@
       nextFrameAt: performance.now() + WOLF_CONFIG.frameDuration,
       howling: false,
       howlEndAt: 0,
-      ready: false
+      ready: false,
+
+      // R67 optional Tierbann event metadata.
+      tierbannSummon: Boolean(options.tierbannSummon),
+      tierbannAggressive: Boolean(options.tierbannAggressive),
+      noRespawn: Boolean(options.noRespawn)
     };
 
     element.style.left = `${actor.x}px`;
@@ -1776,7 +2188,7 @@
   function createWolves() {
     installWolfStyles();
 
-    for (const src of [...WOLF_CONFIG.frames, WOLF_CONFIG.howlFrame]) {
+    for (const src of [...WOLF_CONFIG.frames, WOLF_CONFIG.howlFrame, WOLF_CONFIG.deadFrame]) {
       const image = new Image();
       image.decoding = "async";
       image.src = encodeURI(src);
@@ -1844,8 +2256,22 @@
     for (const actor of activeActors) {
       if (!actor.ready) continue;
 
+      if (actor.dead) {
+        if (!actor.fadeStarted && actor.fadeAt && now >= actor.fadeAt) {
+          actor.fadeStarted = true;
+          actor.element.classList.add("map-wolf--death-fading");
+        }
+        if (actor.respawnAt && now >= actor.respawnAt) respawnWolf(actor, now);
+        continue;
+      }
+
       if (actor.away) {
         if (now >= actor.returnAt) wolfReturn(actor, now);
+        continue;
+      }
+
+      if (actor.tierbannAggressive) {
+        updateTierbannAggressiveWolf(actor, deltaSeconds, now);
         continue;
       }
 
@@ -2250,6 +2676,10 @@
 
     idleFrame: "assets/animals/boars/WILDSCHWEIN STAND.png",
     runFrame: "assets/animals/boars/WILDSCHWEIN LAUF.png",
+    deadFrame: "assets/animals/boars/WILDSCHWEIN DEAD.png",
+    maxHp: 500,
+    deadDuration: 6500,
+    fadeDuration: 420,
 
     sounds: Object.freeze([
       "assets/audio/boars/WILDSCHWEIN 1.mp3",
@@ -2366,8 +2796,13 @@
         will-change: left, top, opacity;
       }
 
-      .map-boar--away {
+      .map-boar--away,
+      .map-boar--death-fading {
         opacity: 0;
+      }
+
+      .map-boar--critical-hit {
+        transition: left 210ms ease-out, top 210ms cubic-bezier(.1,.75,.25,1), opacity 420ms ease !important;
       }
 
       .map-boar__sprite {
@@ -2385,6 +2820,11 @@
         filter: drop-shadow(0 8px 5px rgba(0,0,0,.22));
         backface-visibility: hidden;
         -webkit-backface-visibility: hidden;
+      }
+
+      .map-boar__sprite--dead {
+        transform: scaleX(var(--boar-facing, 1)) scale(.75);
+        transform-origin: 50% 100%;
       }
 
       .map-boar__sprite--visible {
@@ -2626,8 +3066,8 @@
     actor.element.style.top = `${actor.y}px`;
   }
 
-  function createBoarActor(zone, index) {
-    const start = boarRandomPoint(zone, 130);
+  function createBoarActor(zone, index, options = {}) {
+    const start = options.start || boarRandomPoint(zone, 130);
 
     const element = document.createElement("div");
     element.className = "map-boar";
@@ -2648,13 +3088,27 @@
     runImage.draggable = false;
     runImage.decoding = "async";
 
-    element.append(idleImage, runImage);
+    const deadImage = document.createElement("img");
+    deadImage.className = "map-boar__sprite map-boar__sprite--dead";
+    deadImage.src = encodeURI(BOAR_CONFIG.deadFrame);
+    deadImage.alt = "";
+    deadImage.draggable = false;
+    deadImage.decoding = "async";
+
+    element.append(idleImage, runImage, deadImage);
     world.appendChild(element);
 
     const actor = {
       element,
-      images: [idleImage, runImage],
+      images: [idleImage, runImage, deadImage],
       visibleLayer: 0,
+      hp: BOAR_CONFIG.maxHp,
+      dead: false,
+      respawnAt: 0,
+      fadeAt: 0,
+      fadeStarted: false,
+      pendingLoot: [],
+      lootSpawned: false,
       zone,
       x: start.x,
       y: start.y,
@@ -2669,7 +3123,12 @@
       returnAt: 0,
       pauseUntil: performance.now() + 500 + Math.random() * 2500,
       moveEndAt: 0,
-      ready: false
+      ready: false,
+
+      // R67 optional Tierbann event metadata.
+      tierbannSummon: Boolean(options.tierbannSummon),
+      tierbannAggressive: Boolean(options.tierbannAggressive),
+      noRespawn: Boolean(options.noRespawn)
     };
 
     element.style.left = `${actor.x}px`;
@@ -2710,7 +3169,7 @@
   function createBoars() {
     installBoarStyles();
 
-    for (const src of [BOAR_CONFIG.idleFrame, BOAR_CONFIG.runFrame]) {
+    for (const src of [BOAR_CONFIG.idleFrame, BOAR_CONFIG.runFrame, BOAR_CONFIG.deadFrame]) {
       const image = new Image();
       image.decoding = "async";
       image.src = encodeURI(src);
@@ -2736,7 +3195,7 @@
     const nearby = boarActors.filter((actor) => {
       const actorMapId = actor.zone.mapId || BOAR_CONFIG.mapId;
       if (actorMapId !== MAP.id) return false;
-      if (!actor.ready || actor.away) return false;
+      if (!actor.ready || actor.away || actor.dead) return false;
       return (
         Math.hypot(playerX - actor.x, playerY - actor.y) <=
         BOAR_CONFIG.soundDistance
@@ -2787,10 +3246,24 @@
       if (actorMapId !== MAP.id) continue;
       if (!actor.ready) continue;
 
+      if (actor.dead) {
+        if (!actor.fadeStarted && actor.fadeAt && now >= actor.fadeAt) {
+          actor.fadeStarted = true;
+          actor.element.classList.add("map-boar--death-fading");
+        }
+        if (actor.respawnAt && now >= actor.respawnAt) respawnBoar(actor, now);
+        continue;
+      }
+
       if (actor.away) {
         if (now >= actor.returnAt) {
           boarReturnFromRight(actor, now);
         }
+        continue;
+      }
+
+      if (actor.tierbannAggressive) {
+        updateTierbannAggressiveBoar(actor, deltaSeconds, now);
         continue;
       }
 
@@ -3101,6 +3574,28 @@
         text-align: center;
       }
 
+      /* R68 SAUKEULE: damage stays red; SAUSTARK appears beside it in pink. */
+      .rabbit-damage--saustark {
+        display: flex;
+        align-items: center;
+        gap: 34px;
+      }
+
+      .rabbit-damage__value {
+        color: #ff2020;
+      }
+
+      .rabbit-damage__saustark {
+        color: #ff5fb7;
+        font-size: 108px;
+        letter-spacing: 5px;
+        text-shadow:
+          0 0 4px #ff4fae,
+          0 0 10px #ff4fae,
+          0 0 22px rgba(255,79,174,.92),
+          0 5px 3px rgba(0,0,0,.8);
+      }
+
       @keyframes rabbitDamageFloat {
         0%   { opacity: 0; transform: translate(-50%, -25%) scale(.72); }
         16%  { opacity: 1; transform: translate(-50%, -75%) scale(1.10); }
@@ -3386,9 +3881,60 @@
     audio.play().catch(() => {});
   }
 
+  // R64 LARGE ANIMAL HIT AUDIO — species-specific, interruptible.
+  const WOLF_HIT_SOUNDS = Object.freeze([
+    "assets/audio/wolves/WOLF HIT 1.mp3",
+    "assets/audio/wolves/WOLF HIT 2.mp3",
+    "assets/audio/wolves/WOLF HIT 3.mp3"
+  ]);
+  const BOAR_HIT_SOUNDS = Object.freeze([
+    "assets/audio/boars/WILDSCHWEIN HIT 1.mp3",
+    "assets/audio/boars/WILDSCHWEIN HIT 2.mp3",
+    "assets/audio/boars/WILDSCHWEIN HIT 3.mp3"
+  ]);
+
+  let activeWolfHitAudio = null;
+  let activeBoarHitAudio = null;
+  let wolfHitFadeToken = 0;
+  let boarHitFadeToken = 0;
+
+  function playInterruptibleAnimalHitSound(kind) {
+    const isWolf = kind === "wolf";
+    const sounds = isWolf ? WOLF_HIT_SOUNDS : BOAR_HIT_SOUNDS;
+    const old = isWolf ? activeWolfHitAudio : activeBoarHitAudio;
+    const token = isWolf ? ++wolfHitFadeToken : ++boarHitFadeToken;
+
+    // A new hit must sound immediately. The previous cry fades out very fast.
+    if (old && !old.paused) {
+      const startVolume = old.volume;
+      const startedAt = performance.now();
+      const fadeMs = 85;
+      const fade = (now) => {
+        const currentToken = isWolf ? wolfHitFadeToken : boarHitFadeToken;
+        if (token !== currentToken) return;
+        const t = Math.min(1, (now - startedAt) / fadeMs);
+        old.volume = Math.max(0, startVolume * (1 - t));
+        if (t < 1) requestAnimationFrame(fade);
+        else { old.pause(); old.currentTime = 0; old.volume = 1; }
+      };
+      requestAnimationFrame(fade);
+    }
+
+    const audio = new Audio(sounds[Math.floor(Math.random() * sounds.length)]);
+    audio.preload = "auto";
+    audio.loop = false;
+    audio.volume = 1.0;
+    if (isWolf) activeWolfHitAudio = audio;
+    else activeBoarHitAudio = audio;
+    audio.play().catch(() => {});
+  }
+
+  function playWolfHitSound() { playInterruptibleAnimalHitSound("wolf"); }
+  function playBoarHitSound() { playInterruptibleAnimalHitSound("boar"); }
+
   function rabbitAttackDirection() {
-    if (attackSequence === ATTACK_DOWN) return "down";
-    if (attackSequence === ATTACK_LEFT) return "left";
+    if (attackSequence === ATTACK_DOWN || attackSequence === CLUB_ATTACK_DOWN) return "down";
+    if (attackSequence === ATTACK_LEFT || attackSequence === CLUB_ATTACK_LEFT) return "left";
     return "right";
   }
 
@@ -3421,14 +3967,26 @@
     );
   }
 
-  function createRabbitDamageText(actor, amount, critical) {
+  function createRabbitDamageText(actor, amount, critical, saustark = false) {
     const popup = document.createElement("div");
     popup.className =
-      "rabbit-damage" + (critical ? " rabbit-damage--crit" : "");
+      "rabbit-damage" +
+      (critical && !saustark ? " rabbit-damage--crit" : "") +
+      (saustark ? " rabbit-damage--saustark" : "");
     popup.style.left = `${actor.x}px`;
     popup.style.top = `${actor.y - 215}px`;
 
-    if (critical) {
+    if (saustark) {
+      const value = document.createElement("span");
+      value.className = "rabbit-damage__value";
+      value.textContent = `-${amount}`;
+
+      const special = document.createElement("span");
+      special.className = "rabbit-damage__saustark";
+      special.textContent = "SAUSTARK";
+
+      popup.append(value, special);
+    } else if (critical) {
       const crit = document.createElement("span");
       crit.className = "rabbit-damage__crit";
       crit.textContent = "KRIT";
@@ -3481,6 +4039,11 @@
   function rabbitForceEscape(actor, now) {
     if (actor.dead || actor.away) return;
 
+    if (actor.tierbannSummon) {
+      tierbannRabbitFleeFromPlayer(actor, now);
+      return;
+    }
+
     // Hit rabbits immediately try to flee toward a valid map-edge exit.
     if (actor.zone.exits.length) {
       actor.pauseUntil = 0;
@@ -3498,6 +4061,23 @@
     const drops = [];
     if (Math.random() < RABBIT_LOOT_CONFIG.carrotChance) drops.push(CARROT_ITEM);
     if (Math.random() < RABBIT_LOOT_CONFIG.rabbitFootChance) drops.push(RABBIT_FOOT_ITEM);
+    return drops;
+  }
+
+  function rollWolfLoot() {
+    const drops = [];
+    if (Math.random() < WOLF_LOOT_CONFIG.peltChance) drops.push(WOLF_PELT_ITEM);
+    if (Math.random() < WOLF_LOOT_CONFIG.clawChance) drops.push(WOLF_CLAW_ITEM);
+    if (Math.random() < WOLF_LOOT_CONFIG.bagChance) drops.push(WANDERER_BAG_ITEM);
+    return drops;
+  }
+
+  function rollBoarLoot() {
+    const drops = [];
+    if (Math.random() < BOAR_LOOT_CONFIG.radishChance) drops.push(RADISH_ITEM);
+    if (Math.random() < BOAR_LOOT_CONFIG.cabbageChance) drops.push(CABBAGE_ITEM);
+    if (Math.random() < BOAR_LOOT_CONFIG.lettuceChance) drops.push(LETTUCE_ITEM);
+    if (Math.random() < BOAR_LOOT_CONFIG.tuskChance) drops.push(BOAR_TUSK_ITEM);
     return drops;
   }
 
@@ -3618,6 +4198,14 @@
       actor.lootSpawned = true;
     }
 
+    // R67 Tierbann summons do not create an infinite respawn population.
+    // They behave normally until killed, drop normal rabbit loot, then are gone.
+    if (actor.noRespawn) {
+      actor.element.remove();
+      rabbitActors = rabbitActors.filter((entry) => entry !== actor);
+      return;
+    }
+
     const start = rabbitRandomPoint(actor.zone, 160);
 
     actor.hp = RABBIT_MAX_HP;
@@ -3651,12 +4239,12 @@
     rabbitPickFrame(actor, false);
   }
 
-  function damageRabbit(actor, amount, critical, direction, now) {
+  function damageRabbit(actor, amount, critical, direction, now, saustark = false) {
     if (actor.dead || actor.away) return;
 
     actor.hp = Math.max(0, actor.hp - amount);
 
-    createRabbitDamageText(actor, amount, critical);
+    createRabbitDamageText(actor, amount, critical, saustark);
     playRabbitHitSound();
 
     if (critical) {
@@ -3670,6 +4258,198 @@
     }
 
     rabbitForceEscape(actor, now);
+  }
+
+  // ------------------------------------------------------------------
+  // R63 LARGE ANIMAL COMBAT — WOLF + WILDSCHWEIN
+  // Same player damage table / same directional strike geometry as rabbits.
+  // ------------------------------------------------------------------
+  function largeAnimalCriticalKnockback(actor, direction, cssClass) {
+    actor.element.classList.add(cssClass);
+
+    let knockX = 0;
+    let knockY = -45;
+    if (direction === "right") knockX = 190;
+    else if (direction === "left") knockX = -190;
+    else knockY = 185;
+
+    actor.x += knockX;
+    actor.y += knockY;
+    actor.element.style.left = `${actor.x}px`;
+    actor.element.style.top = `${actor.y}px`;
+
+    window.setTimeout(() => actor.element.classList.remove(cssClass), 240);
+  }
+
+  function killWolf(actor, now) {
+    if (!actor || actor.dead) return;
+    actor.dead = true;
+    actor.hp = 0;
+    actor.moving = false;
+    actor.exiting = false;
+    actor.entering = false;
+    actor.away = false;
+    actor.howling = false;
+    actor.pauseUntil = Infinity;
+    actor.nextDecision = Infinity;
+    actor.nextFrameAt = Infinity;
+    actor.element.classList.remove("map-wolf--away");
+    actor.element.classList.remove("map-wolf--death-fading");
+    wolfShowStaticLayer(actor, 3);
+    actor.pendingLoot = rollWolfLoot();
+    actor.lootSpawned = false;
+    actor.fadeStarted = false;
+    actor.respawnAt = now + WOLF_CONFIG.deadDuration;
+    actor.fadeAt = actor.respawnAt - WOLF_CONFIG.fadeDuration;
+  }
+
+  function respawnWolf(actor, now) {
+    if (!actor.lootSpawned && actor.pendingLoot && actor.pendingLoot.length) {
+      actor.pendingLoot.forEach((item, i) => spawnRabbitLoot(item, actor.x, actor.y, actor.mapId, i));
+    }
+    actor.lootSpawned = true;
+    actor.pendingLoot = [];
+
+    if (actor.noRespawn) {
+      actor.element.remove();
+      wolfActors = wolfActors.filter((entry) => entry !== actor);
+      return;
+    }
+
+    const start = wolfRandomPoint(180, actor.habitat, actor.mapId);
+    actor.hp = WOLF_CONFIG.maxHp;
+    actor.dead = false;
+    actor.away = false;
+    actor.exiting = false;
+    actor.entering = false;
+    actor.moving = false;
+    actor.howling = false;
+    actor.x = start.x;
+    actor.y = start.y;
+    actor.targetX = start.x;
+    actor.targetY = start.y;
+    actor.respawnAt = 0;
+    actor.fadeAt = 0;
+    actor.fadeStarted = false;
+    actor.pauseUntil = now + 600 + Math.random() * 1600;
+    actor.nextDecision = actor.pauseUntil;
+    actor.nextFrameAt = now + WOLF_CONFIG.frameDuration;
+    actor.frameIndex = 0;
+    actor.element.classList.remove("map-wolf--death-fading", "map-wolf--critical-hit", "map-wolf--away");
+    actor.element.style.left = `${actor.x}px`;
+    actor.element.style.top = `${actor.y}px`;
+    wolfShowStaticLayer(actor, 0);
+  }
+
+  function damageWolf(actor, amount, critical, direction, now, saustark = false) {
+    if (!actor || actor.dead || actor.away) return;
+    actor.hp = Math.max(0, actor.hp - amount);
+    createRabbitDamageText(actor, amount, critical, saustark);
+    playWolfHitSound();
+    actor.moving = false;
+    actor.howling = false;
+    if (critical) {
+      createRabbitDust(actor);
+      largeAnimalCriticalKnockback(actor, direction, "map-wolf--critical-hit");
+    }
+    if (actor.hp <= 0) killWolf(actor, now);
+    else {
+      actor.pauseUntil = now + 250;
+      actor.nextDecision = now + 250;
+    }
+  }
+
+  function resolveWolfAttackFrame(frame) {
+    if (!frame || !frame.hit) return;
+    const direction = rabbitAttackDirection();
+    const now = performance.now();
+    for (const actor of wolfActors) {
+      if (actor.mapId !== MAP.id || actor.dead || actor.away || !actor.ready) continue;
+      if (!rabbitInsideAttackHitbox(actor, direction)) continue;
+      damageWolf(actor, frame.damage || 20, Boolean(frame.critical), direction, now, Boolean(frame.saustark));
+    }
+  }
+
+  function killBoar(actor, now) {
+    if (!actor || actor.dead) return;
+    actor.dead = true;
+    actor.hp = 0;
+    actor.moving = false;
+    actor.exiting = false;
+    actor.entering = false;
+    actor.away = false;
+    actor.pauseUntil = Infinity;
+    actor.moveEndAt = 0;
+    actor.element.classList.remove("map-boar--away");
+    actor.element.classList.remove("map-boar--death-fading");
+    boarShowLayer(actor, 2);
+    actor.pendingLoot = rollBoarLoot();
+    actor.lootSpawned = false;
+    actor.fadeStarted = false;
+    actor.respawnAt = now + BOAR_CONFIG.deadDuration;
+    actor.fadeAt = actor.respawnAt - BOAR_CONFIG.fadeDuration;
+  }
+
+  function respawnBoar(actor, now) {
+    if (!actor.lootSpawned && actor.pendingLoot && actor.pendingLoot.length) {
+      const mapId = actor.zone.mapId || BOAR_CONFIG.mapId;
+      actor.pendingLoot.forEach((item, i) => spawnRabbitLoot(item, actor.x, actor.y, mapId, i));
+    }
+    actor.lootSpawned = true;
+    actor.pendingLoot = [];
+
+    if (actor.noRespawn) {
+      actor.element.remove();
+      boarActors = boarActors.filter((entry) => entry !== actor);
+      return;
+    }
+
+    const start = boarRandomPoint(actor.zone, 130);
+    actor.hp = BOAR_CONFIG.maxHp;
+    actor.dead = false;
+    actor.away = false;
+    actor.exiting = false;
+    actor.entering = false;
+    actor.moving = false;
+    actor.x = start.x;
+    actor.y = start.y;
+    actor.targetX = start.x;
+    actor.targetY = start.y;
+    actor.respawnAt = 0;
+    actor.fadeAt = 0;
+    actor.fadeStarted = false;
+    actor.pauseUntil = now + 700 + Math.random() * 1800;
+    actor.moveEndAt = 0;
+    actor.element.classList.remove("map-boar--death-fading", "map-boar--critical-hit", "map-boar--away");
+    actor.element.style.left = `${actor.x}px`;
+    actor.element.style.top = `${actor.y}px`;
+    boarShowLayer(actor, 0);
+  }
+
+  function damageBoar(actor, amount, critical, direction, now, saustark = false) {
+    if (!actor || actor.dead || actor.away) return;
+    actor.hp = Math.max(0, actor.hp - amount);
+    createRabbitDamageText(actor, amount, critical, saustark);
+    playBoarHitSound();
+    actor.moving = false;
+    if (critical) {
+      createRabbitDust(actor);
+      largeAnimalCriticalKnockback(actor, direction, "map-boar--critical-hit");
+    }
+    if (actor.hp <= 0) killBoar(actor, now);
+    else boarStartPause(actor, now);
+  }
+
+  function resolveBoarAttackFrame(frame) {
+    if (!frame || !frame.hit) return;
+    const direction = rabbitAttackDirection();
+    const now = performance.now();
+    for (const actor of boarActors) {
+      const actorMapId = actor.zone.mapId || BOAR_CONFIG.mapId;
+      if (actorMapId !== MAP.id || actor.dead || actor.away || !actor.ready) continue;
+      if (!rabbitInsideAttackHitbox(actor, direction)) continue;
+      damageBoar(actor, frame.damage || 20, Boolean(frame.critical), direction, now, Boolean(frame.saustark));
+    }
   }
 
   function resolveRabbitAttackFrame(frame) {
@@ -3688,14 +4468,15 @@
           frame.damage || 20,
           Boolean(frame.critical),
           direction,
-          now
+          now,
+          Boolean(frame.saustark)
         );
       }
     }
   }
 
-  function createRabbitActor(zone, index) {
-    const start = rabbitRandomPoint(zone, 150);
+  function createRabbitActor(zone, index, options = {}) {
+    const start = options.start || rabbitRandomPoint(zone, 150);
 
     const element = document.createElement("div");
     element.className = "map-rabbit";
@@ -3752,7 +4533,14 @@
       pauseUntil: performance.now() + 500 + Math.random() * 2000,
       nextDecision: performance.now() + 1000 + Math.random() * 3000,
       nextFrameChange: performance.now() + 350 + Math.random() * 1000,
-      returnAt: 0
+      returnAt: 0,
+
+      // R67 optional event metadata; normal rabbits keep all values false.
+      tierbannSummon: Boolean(options.tierbannSummon),
+      noRespawn: Boolean(options.noRespawn),
+      tierbannMode: options.tierbannSummon ? "escape" : null,
+      tierbannEscapeAngle: 0,
+      tierbannEscapeUntil: 0
     };
 
     element.style.left = `${actor.x}px`;
@@ -3805,6 +4593,11 @@
         continue;
       }
 
+      if (actor.tierbannSummon) {
+        updateTierbannRabbit(actor, deltaSeconds, now);
+        continue;
+      }
+
       if (now >= actor.nextFrameChange) {
         rabbitPickFrame(actor);
       }
@@ -3849,6 +4642,815 @@
       } else {
         rabbitChooseInteriorTarget(actor, now);
       }
+    }
+  }
+
+
+  // ------------------------------------------------------------------
+  // R67 TIERBANNSTEIN LEVEL 1
+  // ONLY MAP 2 WINTERBACH + MAP 3 LAUTENBACH
+  // Independent 2-minute / 25% spawn checks per map.
+  // ------------------------------------------------------------------
+  const TIERBANNSTEIN_CONFIG = Object.freeze({
+    image: "assets/events/TIERBANNSTEIN LEVEL 1.png",
+    maxHp: 2000,
+    checkInterval: 120000,
+    spawnChance: 0.25,
+
+    // Tall world-size container. The supplied transparent stone artwork
+    // is bottom-centered so its ground anchor stays fixed.
+    width: 650,
+    height: 900,
+
+    // About a small visual drop from above before impact.
+    landingDrop: 185,
+    landingDuration: 720,
+
+    // Enemy summons appear clearly away from the stone/player.
+    enemyRadiusMin: 900,
+    enemyRadiusMax: 1450,
+
+    maps: Object.freeze({
+      "winterbach-ranglehen": Object.freeze({
+        // Exact blue-circle centers converted from the supplied MAP 2 screenshot
+        // using the map's own 10000 x 6006 coordinate system.
+        spawns: Object.freeze([
+          Object.freeze({ x: 2502, y: 656 }),
+          Object.freeze({ x: 8368, y: 1349 }),
+          Object.freeze({ x: 4274, y: 2097 }),
+          Object.freeze({ x: 2085, y: 2666 }),
+          Object.freeze({ x: 4781, y: 3530 }),
+          Object.freeze({ x: 3121, y: 4169 })
+        ])
+      }),
+      "lautenbach": Object.freeze({
+        // Exact blue-circle centers converted from the supplied MAP 3 screenshot
+        // using the map's own 10000 x 6656 coordinate system.
+        spawns: Object.freeze([
+          Object.freeze({ x: 8822, y: 1026 }),
+          Object.freeze({ x: 8599, y: 2412 }),
+          Object.freeze({ x: 8614, y: 5049 })
+        ])
+      })
+    }),
+
+    thresholds: Object.freeze([
+      Object.freeze({ hp: 1900, type: "rabbit", count: 10 }),
+      Object.freeze({ hp: 1700, type: "boar",   count: 1  }),
+      Object.freeze({ hp: 1500, type: "rabbit", count: 10 }),
+      Object.freeze({ hp: 1300, type: "boar",   count: 3  }),
+      Object.freeze({ hp: 1000, type: "rabbit", count: 10 }),
+      Object.freeze({ hp: 800,  type: "boar",   count: 3  }),
+      Object.freeze({ hp: 500,  type: "rabbit", count: 15 }),
+      Object.freeze({ hp: 300,  type: "boar",   count: 2  }),
+      Object.freeze({ hp: 100,  type: "wolf",   count: 1  })
+    ])
+  });
+
+  let tierbannSteine = [];
+  const tierbannMapTimers = new Map();
+
+  function installTierbannsteinStyles() {
+    if (document.getElementById("tierbannsteinStyles")) return;
+
+    const style = document.createElement("style");
+    style.id = "tierbannsteinStyles";
+    style.textContent = `
+      .tierbannstein {
+        position: absolute;
+        z-index: 6;
+        width: ${TIERBANNSTEIN_CONFIG.width}px;
+        height: ${TIERBANNSTEIN_CONFIG.height}px;
+        transform: translate(-50%, -100%);
+        transform-origin: 50% 100%;
+        pointer-events: none;
+        user-select: none;
+        opacity: 1;
+        will-change: left, top, opacity, transform;
+      }
+
+      .tierbannstein__body {
+        position: absolute;
+        inset: 0;
+        transform-origin: 50% 100%;
+        will-change: transform;
+      }
+
+      .tierbannstein__sprite {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+        object-position: 50% 100%;
+        filter: drop-shadow(0 16px 8px rgba(0,0,0,.34));
+        -webkit-user-drag: none;
+      }
+
+      .tierbannstein--landing .tierbannstein__body {
+        animation: tierbannsteinLanding ${TIERBANNSTEIN_CONFIG.landingDuration}ms
+          cubic-bezier(.19,.82,.2,1) both;
+      }
+
+      /* Every ordinary hit gives one short rigid-rock wobble. */
+      .tierbannstein__body--hit {
+        animation: tierbannsteinHit 185ms ease-out both;
+      }
+
+      .tierbannstein--destroying {
+        animation: tierbannsteinDestroy 520ms ease-out forwards;
+      }
+
+      @keyframes tierbannsteinLanding {
+        0%   { transform: translateY(-${TIERBANNSTEIN_CONFIG.landingDrop}px) rotate(0deg); }
+        49%  { transform: translateY(-8px) rotate(0deg); }
+        58%  { transform: translateY(0) rotate(-4.2deg); }
+        68%  { transform: translateY(0) rotate(4deg); }
+        78%  { transform: translateY(0) rotate(-2.8deg); }
+        88%  { transform: translateY(0) rotate(2.1deg); }
+        100% { transform: translateY(0) rotate(0deg); }
+      }
+
+      @keyframes tierbannsteinHit {
+        0%   { transform: rotate(0deg); }
+        22%  { transform: rotate(-2.7deg); }
+        47%  { transform: rotate(2.5deg); }
+        72%  { transform: rotate(-1.5deg); }
+        100% { transform: rotate(0deg); }
+      }
+
+      @keyframes tierbannsteinDestroy {
+        0%   { opacity: 1; transform: translate(-50%, -100%) scale(1); }
+        40%  { opacity: 1; transform: translate(-50%, -100%) scale(.96); }
+        100% { opacity: 0; transform: translate(-50%, -100%) scale(.74); }
+      }
+
+      .tierbannstein-impact-dust {
+        position: absolute;
+        z-index: 5;
+        width: 780px;
+        height: 250px;
+        transform: translate(-50%, -50%);
+        pointer-events: none;
+        opacity: 0;
+        animation: tierbannsteinDust 900ms ease-out forwards;
+      }
+
+      .tierbannstein-impact-dust::before,
+      .tierbannstein-impact-dust::after {
+        content: "";
+        position: absolute;
+        left: 50%;
+        bottom: 0;
+        width: 310px;
+        height: 135px;
+        border-radius: 50%;
+        background:
+          radial-gradient(ellipse at center,
+            rgba(205,190,162,.88) 0%,
+            rgba(169,145,111,.68) 38%,
+            rgba(120,97,69,0) 77%);
+        filter: blur(7px);
+      }
+
+      .tierbannstein-impact-dust::before {
+        transform: translateX(-285px) scale(1.4);
+      }
+
+      .tierbannstein-impact-dust::after {
+        transform: translateX(-25px) scale(1.7);
+      }
+
+      @keyframes tierbannsteinDust {
+        0%   { opacity: 0; transform: translate(-50%, -30%) scale(.4); }
+        15%  { opacity: 1; transform: translate(-50%, -42%) scale(.95); }
+        100% { opacity: 0; transform: translate(-50%, -82%) scale(1.75); }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .tierbannstein--landing .tierbannstein__body,
+        .tierbannstein__body--hit,
+        .tierbannstein--destroying,
+        .tierbannstein-impact-dust {
+          animation-duration: 1ms !important;
+        }
+      }
+    `;
+
+    document.head.appendChild(style);
+  }
+
+  function tierbannMapDimensions(mapId) {
+    if (mapId === "winterbach-ranglehen") return { width: 10000, height: 6006 };
+    return { width: 10000, height: 6656 };
+  }
+
+  function tierbannOpenRabbitZone(mapId) {
+    const d = tierbannMapDimensions(mapId);
+    return {
+      id: `tierbann-rabbit-${mapId}-${Math.random().toString(36).slice(2)}`,
+      mapId,
+      polygon: [
+        [240, 650],
+        [d.width - 240, 650],
+        [d.width - 240, d.height - 160],
+        [240, d.height - 160]
+      ],
+      exits: [],
+      count: 0,
+      tierbannFreeRoam: true
+    };
+  }
+
+  function tierbannOpenBoarZone(mapId) {
+    const d = tierbannMapDimensions(mapId);
+    return {
+      id: `tierbann-boar-${mapId}-${Math.random().toString(36).slice(2)}`,
+      mapId,
+      polygon: [
+        [650, 700],
+        [d.width - 650, 700],
+        [d.width - 650, d.height - 300],
+        [650, d.height - 300]
+      ],
+      exits: [],
+      count: 0,
+      tierbannFreeRoam: true
+    };
+  }
+
+  function tierbannOpenWolfHabitat(mapId) {
+    const d = tierbannMapDimensions(mapId);
+    return {
+      mapId,
+      count: 0,
+      canExitTop: false,
+      cx: d.width / 2,
+      cy: d.height / 2,
+      rx: d.width / 2 - 500,
+      ry: d.height / 2 - 500,
+      tierbannFreeRoam: true
+    };
+  }
+
+  function tierbannPointAllowed(x, y) {
+    // Reuse the game's existing hard landscape/river/building collision.
+    // Tierbann summons are only updated on their active map, therefore MAP is correct.
+    return canMoveFootTo(x, y);
+  }
+
+  function tierbannStepWithCollision(actor, vx, vy, amount) {
+    const len = Math.hypot(vx, vy) || 1;
+    const nx = vx / len;
+    const ny = vy / len;
+
+    let moved = false;
+    const nextX = actor.x + nx * amount;
+    if (tierbannPointAllowed(nextX, actor.y)) {
+      actor.x = nextX;
+      moved = true;
+    }
+
+    const nextY = actor.y + ny * amount;
+    if (tierbannPointAllowed(actor.x, nextY)) {
+      actor.y = nextY;
+      moved = true;
+    }
+
+    actor.element.style.left = `${actor.x}px`;
+    actor.element.style.top = `${actor.y}px`;
+    return moved;
+  }
+
+  function createTierbannImpactDust(x, y) {
+    const dust = document.createElement("div");
+    dust.className = "tierbannstein-impact-dust";
+    dust.style.left = `${x}px`;
+    dust.style.top = `${y + 30}px`;
+    world.appendChild(dust);
+    window.setTimeout(() => dust.remove(), 980);
+  }
+
+  function tierbannStoneWobble(stone) {
+    if (!stone || stone.dead) return;
+    const body = stone.body;
+    body.classList.remove("tierbannstein__body--hit");
+    void body.offsetWidth;
+    body.classList.add("tierbannstein__body--hit");
+    window.setTimeout(() => {
+      if (body) body.classList.remove("tierbannstein__body--hit");
+    }, 210);
+  }
+
+  function spawnTierbannstein(mapId, spawnIndex, now) {
+    const mapConfig = TIERBANNSTEIN_CONFIG.maps[mapId];
+    if (!mapConfig) return null;
+
+    // Hard occupancy guarantee: NEVER put a second stone on the same blue point.
+    if (
+      tierbannSteine.some(
+        (stone) =>
+          !stone.removed &&
+          stone.mapId === mapId &&
+          stone.spawnIndex === spawnIndex
+      )
+    ) {
+      return null;
+    }
+
+    const point = mapConfig.spawns[spawnIndex];
+    if (!point) return null;
+
+    const element = document.createElement("div");
+    element.className = "tierbannstein tierbannstein--landing";
+    element.dataset.mapId = mapId;
+    element.dataset.spawnIndex = String(spawnIndex);
+    element.style.left = `${point.x}px`;
+    element.style.top = `${point.y}px`;
+    element.style.display = MAP.id === mapId ? "" : "none";
+
+    const body = document.createElement("div");
+    body.className = "tierbannstein__body";
+
+    const image = document.createElement("img");
+    image.className = "tierbannstein__sprite";
+    image.src = encodeURI(TIERBANNSTEIN_CONFIG.image);
+    image.alt = "";
+    image.draggable = false;
+    image.decoding = "async";
+
+    body.appendChild(image);
+    element.appendChild(body);
+    world.appendChild(element);
+
+    const stone = {
+      element,
+      body,
+      image,
+      mapId,
+      spawnIndex,
+      x: point.x,
+      y: point.y,
+      hp: TIERBANNSTEIN_CONFIG.maxHp,
+      dead: false,
+      removed: false,
+      triggered: new Set()
+    };
+
+    tierbannSteine.push(stone);
+
+    // Only show the impact effect when the player can actually see this map.
+    if (MAP.id === mapId) {
+      window.setTimeout(() => {
+        if (!stone.removed && MAP.id === mapId) {
+          createTierbannImpactDust(stone.x, stone.y);
+        }
+      }, 350);
+    }
+
+    window.setTimeout(() => {
+      if (!stone.removed) element.classList.remove("tierbannstein--landing");
+    }, TIERBANNSTEIN_CONFIG.landingDuration + 30);
+
+    return stone;
+  }
+
+  function tryTierbannsteinMapSpawn(mapId, now) {
+    const config = TIERBANNSTEIN_CONFIG.maps[mapId];
+    if (!config) return;
+
+    const free = [];
+    for (let i = 0; i < config.spawns.length; i += 1) {
+      const occupied = tierbannSteine.some(
+        (stone) =>
+          !stone.removed &&
+          stone.mapId === mapId &&
+          stone.spawnIndex === i
+      );
+      if (!occupied) free.push(i);
+    }
+
+    if (!free.length) return;
+    if (Math.random() >= TIERBANNSTEIN_CONFIG.spawnChance) return;
+
+    const spawnIndex = free[Math.floor(Math.random() * free.length)];
+    spawnTierbannstein(mapId, spawnIndex, now);
+  }
+
+  function tierbannFindEnemySpawn(stone, ordinal, count) {
+    const d = tierbannMapDimensions(stone.mapId);
+    let best = null;
+    let bestPlayerDistance = -Infinity;
+
+    const evenlySpacedAngle =
+      (Math.PI * 2 * ordinal) / Math.max(1, count) +
+      Math.random() * 0.45;
+
+    for (let attempt = 0; attempt < 90; attempt += 1) {
+      const angle =
+        attempt < 12
+          ? evenlySpacedAngle + (Math.random() - 0.5) * 0.38
+          : Math.random() * Math.PI * 2;
+
+      const radius =
+        TIERBANNSTEIN_CONFIG.enemyRadiusMin +
+        Math.random() *
+          (TIERBANNSTEIN_CONFIG.enemyRadiusMax -
+           TIERBANNSTEIN_CONFIG.enemyRadiusMin);
+
+      const x = stone.x + Math.cos(angle) * radius;
+      const y = stone.y + Math.sin(angle) * radius;
+
+      if (x < 650 || x > d.width - 650 || y < 700 || y > d.height - 250) {
+        continue;
+      }
+      if (!tierbannPointAllowed(x, y)) continue;
+
+      // Prefer the valid candidate furthest from the player so summons never
+      // pop directly on top of the character.
+      const playerDistance = Math.hypot(x - playerX, y - playerY);
+      if (playerDistance > bestPlayerDistance) {
+        bestPlayerDistance = playerDistance;
+        best = { x, y };
+      }
+
+      if (playerDistance >= 1150 && attempt >= 8) break;
+    }
+
+    if (best) return best;
+
+    // Conservative fallback on open ground near the stone.
+    return {
+      x: Math.max(650, Math.min(d.width - 650, stone.x + 1050)),
+      y: Math.max(700, Math.min(d.height - 250, stone.y + 850))
+    };
+  }
+
+  function spawnTierbannRabbits(stone, count, now) {
+    const zone = tierbannOpenRabbitZone(stone.mapId);
+
+    for (let i = 0; i < count; i += 1) {
+      const angle =
+        (Math.PI * 2 * i) / Math.max(1, count) +
+        (Math.random() - 0.5) * 0.22;
+
+      // They visibly originate at the stone, with only a tiny separation
+      // so ten/fifteen sprites do not occupy one exact pixel.
+      const start = {
+        x: stone.x + Math.cos(angle) * (28 + Math.random() * 35),
+        y: stone.y + Math.sin(angle) * (20 + Math.random() * 28)
+      };
+
+      const actor = createRabbitActor(zone, rabbitActors.length, {
+        start,
+        tierbannSummon: true,
+        noRespawn: true
+      });
+
+      actor.tierbannMode = "escape";
+      actor.tierbannEscapeAngle = angle;
+      actor.tierbannEscapeUntil = now + 2400 + Math.random() * 1100;
+      actor.speed = 410 + Math.random() * 125;
+      actor.moving = true;
+      actor.pauseUntil = 0;
+      actor.nextDecision = 0;
+      actor.element.classList.add("map-rabbit--moving");
+      actor.facing = Math.cos(angle) < 0 ? -1 : 1;
+      actor.element.style.setProperty("--rabbit-facing", actor.facing);
+
+      rabbitActors.push(actor);
+    }
+  }
+
+  function spawnTierbannBoars(stone, count, now) {
+    const zone = tierbannOpenBoarZone(stone.mapId);
+
+    for (let i = 0; i < count; i += 1) {
+      const start = tierbannFindEnemySpawn(stone, i, count);
+      const actor = createBoarActor(zone, boarActors.length, {
+        start,
+        tierbannSummon: true,
+        tierbannAggressive: true,
+        noRespawn: true
+      });
+
+      actor.tierbannAggressive = true;
+      actor.tierbannSummon = true;
+      actor.noRespawn = true;
+      actor.speed = 285 + Math.random() * 55;
+      actor.pauseUntil = 0;
+      actor.moving = true;
+      boarShowLayer(actor, 1);
+
+      boarActors.push(actor);
+    }
+  }
+
+  function spawnTierbannWolf(stone, now) {
+    const start = tierbannFindEnemySpawn(stone, 0, 1);
+    const habitat = tierbannOpenWolfHabitat(stone.mapId);
+
+    const actor = createWolfActor(
+      wolfActors.length,
+      stone.mapId,
+      habitat,
+      false,
+      {
+        start,
+        tierbannSummon: true,
+        tierbannAggressive: true,
+        noRespawn: true
+      }
+    );
+
+    actor.tierbannAggressive = true;
+    actor.tierbannSummon = true;
+    actor.noRespawn = true;
+    actor.speed = 315 + Math.random() * 55;
+    actor.pauseUntil = 0;
+    actor.nextDecision = 0;
+    actor.moving = true;
+
+    wolfActors.push(actor);
+  }
+
+  function triggerTierbannWave(stone, definition, now) {
+    if (!stone || stone.dead || stone.triggered.has(definition.hp)) return;
+    stone.triggered.add(definition.hp);
+
+    if (definition.type === "rabbit") {
+      spawnTierbannRabbits(stone, definition.count, now);
+    } else if (definition.type === "boar") {
+      spawnTierbannBoars(stone, definition.count, now);
+    } else if (definition.type === "wolf") {
+      spawnTierbannWolf(stone, now);
+    }
+  }
+
+  function destroyTierbannstein(stone) {
+    if (!stone || stone.dead) return;
+    stone.dead = true;
+    stone.hp = 0;
+
+    createTierbannImpactDust(stone.x, stone.y);
+    stone.element.classList.add("tierbannstein--destroying");
+
+    window.setTimeout(() => {
+      stone.removed = true;
+      stone.element.remove();
+      tierbannSteine = tierbannSteine.filter((entry) => entry !== stone);
+      // Its blue spawn point is now immediately free for future checks.
+    }, 540);
+  }
+
+  function damageTierbannstein(stone, amount, critical, now, saustark = false) {
+    if (!stone || stone.dead || stone.removed) return;
+
+    const oldHp = stone.hp;
+    stone.hp = Math.max(0, stone.hp - amount);
+
+    // Same damage readout and critical label as all current animals.
+    createRabbitDamageText(stone, amount, critical, saustark);
+
+    // The rock NEVER receives knockback. It only wobbles in place.
+    tierbannStoneWobble(stone);
+
+    if (critical) {
+      createRabbitDust(stone);
+    }
+
+    for (const definition of TIERBANNSTEIN_CONFIG.thresholds) {
+      if (
+        oldHp > definition.hp &&
+        stone.hp <= definition.hp &&
+        !stone.triggered.has(definition.hp)
+      ) {
+        triggerTierbannWave(stone, definition, now);
+      }
+    }
+
+    if (stone.hp <= 0) {
+      destroyTierbannstein(stone);
+    }
+  }
+
+  function resolveTierbannsteinAttackFrame(frame) {
+    if (!frame || !frame.hit) return;
+
+    const direction = rabbitAttackDirection();
+    const now = performance.now();
+
+    for (const stone of tierbannSteine) {
+      if (stone.mapId !== MAP.id || stone.dead || stone.removed) continue;
+
+      // Reuse the exact same player attack reach used by rabbits/wolves/boars.
+      // Supply the minimal actor shape expected by rabbitInsideAttackHitbox().
+      const target = {
+        x: stone.x,
+        y: stone.y,
+        dead: false,
+        away: false
+      };
+
+      if (!rabbitInsideAttackHitbox(target, direction)) continue;
+
+      damageTierbannstein(
+        stone,
+        frame.damage || 20,
+        Boolean(frame.critical),
+        now,
+        Boolean(frame.saustark)
+      );
+    }
+  }
+
+  function tierbannRabbitChooseRoam(actor, now) {
+    const d = tierbannMapDimensions(actor.zone.mapId);
+
+    for (let attempt = 0; attempt < 70; attempt += 1) {
+      const angle = Math.random() * Math.PI * 2;
+      const radius = 450 + Math.random() * 1150;
+      const x = actor.x + Math.cos(angle) * radius;
+      const y = actor.y + Math.sin(angle) * radius;
+
+      if (x < 240 || x > d.width - 240 || y < 650 || y > d.height - 160) {
+        continue;
+      }
+      if (!tierbannPointAllowed(x, y)) continue;
+
+      actor.targetX = x;
+      actor.targetY = y;
+      actor.speed = 155 + Math.random() * 145;
+      actor.moving = true;
+      actor.pauseUntil = 0;
+      actor.nextDecision = now + 1800 + Math.random() * 2800;
+      actor.element.classList.add("map-rabbit--moving");
+
+      const dx = x - actor.x;
+      if (Math.abs(dx) > 12) {
+        actor.facing = dx < 0 ? -1 : 1;
+        actor.element.style.setProperty("--rabbit-facing", actor.facing);
+      }
+      return;
+    }
+
+    actor.moving = false;
+    actor.pauseUntil = now + 450 + Math.random() * 900;
+    actor.nextDecision = actor.pauseUntil;
+    actor.element.classList.remove("map-rabbit--moving");
+  }
+
+  function tierbannRabbitFleeFromPlayer(actor, now) {
+    const angle =
+      Math.atan2(actor.y - playerY, actor.x - playerX) +
+      (Math.random() - 0.5) * 0.5;
+
+    actor.tierbannMode = "escape";
+    actor.tierbannEscapeAngle = angle;
+    actor.tierbannEscapeUntil = now + 1500 + Math.random() * 700;
+    actor.speed = 380 + Math.random() * 100;
+    actor.moving = true;
+    actor.element.classList.add("map-rabbit--moving");
+  }
+
+  function updateTierbannRabbit(actor, deltaSeconds, now) {
+    if (actor.dead || actor.away) return;
+
+    if (now >= actor.nextFrameChange) rabbitPickFrame(actor);
+
+    if (actor.tierbannMode === "escape") {
+      if (now >= actor.tierbannEscapeUntil) {
+        actor.tierbannMode = "roam";
+        actor.moving = false;
+        actor.element.classList.remove("map-rabbit--moving");
+        actor.pauseUntil = now + 350 + Math.random() * 850;
+        actor.nextDecision = actor.pauseUntil;
+        return;
+      }
+
+      const angle = actor.tierbannEscapeAngle;
+      const amount = actor.speed * deltaSeconds;
+      const moved = tierbannStepWithCollision(
+        actor,
+        Math.cos(angle),
+        Math.sin(angle),
+        amount
+      );
+
+      // If terrain blocks the initial direction, fan away to a nearby open angle.
+      if (!moved) {
+        actor.tierbannEscapeAngle +=
+          (Math.random() < 0.5 ? -1 : 1) * (0.55 + Math.random() * 0.65);
+      }
+
+      actor.facing = Math.cos(actor.tierbannEscapeAngle) < 0 ? -1 : 1;
+      actor.element.style.setProperty("--rabbit-facing", actor.facing);
+      return;
+    }
+
+    if (actor.moving) {
+      const dx = actor.targetX - actor.x;
+      const dy = actor.targetY - actor.y;
+      const distance = Math.hypot(dx, dy);
+
+      if (distance <= 14) {
+        actor.moving = false;
+        actor.element.classList.remove("map-rabbit--moving");
+        actor.pauseUntil = now + 550 + Math.random() * 2100;
+        actor.nextDecision = actor.pauseUntil;
+        return;
+      }
+
+      const step = Math.min(distance, actor.speed * deltaSeconds);
+      const moved = tierbannStepWithCollision(actor, dx, dy, step);
+      if (!moved) {
+        actor.moving = false;
+        actor.element.classList.remove("map-rabbit--moving");
+        actor.pauseUntil = now + 300 + Math.random() * 700;
+        actor.nextDecision = actor.pauseUntil;
+      }
+      return;
+    }
+
+    if (now >= actor.pauseUntil && now >= actor.nextDecision) {
+      tierbannRabbitChooseRoam(actor, now);
+    }
+  }
+
+  function updateTierbannAggressiveBoar(actor, deltaSeconds, now) {
+    if (actor.dead || actor.away) return;
+
+    const dx = playerX - actor.x;
+    const dy = playerY - actor.y;
+    const distance = Math.hypot(dx, dy);
+
+    if (Math.abs(dx) > 12) boarSetFacing(actor, dx < 0 ? -1 : 1);
+    boarShowLayer(actor, 1);
+    actor.moving = true;
+
+    // Stop just short of the player's foot anchor; still actively tracks him.
+    if (distance > 225) {
+      tierbannStepWithCollision(actor, dx, dy, actor.speed * deltaSeconds);
+    }
+  }
+
+  function updateTierbannAggressiveWolf(actor, deltaSeconds, now) {
+    if (actor.dead || actor.away) return;
+
+    actor.howling = false;
+
+    const dx = playerX - actor.x;
+    const dy = playerY - actor.y;
+    const distance = Math.hypot(dx, dy);
+
+    if (Math.abs(dx) > 12) {
+      actor.facing = dx < 0 ? -1 : 1;
+      actor.element.style.setProperty("--wolf-facing", actor.facing);
+    }
+
+    actor.moving = true;
+    if (now >= actor.nextFrameAt) wolfPickWalkFrame(actor);
+
+    if (distance > 225) {
+      tierbannStepWithCollision(actor, dx, dy, actor.speed * deltaSeconds);
+    }
+  }
+
+  function createTierbannsteinSystem() {
+    installTierbannsteinStyles();
+
+    const preload = new Image();
+    preload.src = encodeURI(TIERBANNSTEIN_CONFIG.image);
+    if (typeof preload.decode === "function") preload.decode().catch(() => {});
+
+    tierbannSteine = [];
+    const firstCheck = performance.now() + TIERBANNSTEIN_CONFIG.checkInterval;
+
+    for (const mapId of Object.keys(TIERBANNSTEIN_CONFIG.maps)) {
+      // Separate timer/state per map = fully independent 25% rolls.
+      tierbannMapTimers.set(mapId, firstCheck);
+    }
+  }
+
+  function updateTierbannsteine(deltaSeconds, now) {
+    // Independent two-minute rolls for BOTH maps, even if one map is currently hidden.
+    for (const mapId of Object.keys(TIERBANNSTEIN_CONFIG.maps)) {
+      let nextCheck = tierbannMapTimers.get(mapId);
+      if (!Number.isFinite(nextCheck)) {
+        nextCheck = now + TIERBANNSTEIN_CONFIG.checkInterval;
+      }
+
+      while (now >= nextCheck) {
+        tryTierbannsteinMapSpawn(mapId, now);
+        nextCheck += TIERBANNSTEIN_CONFIG.checkInterval;
+      }
+
+      tierbannMapTimers.set(mapId, nextCheck);
+    }
+
+    for (const stone of tierbannSteine) {
+      if (stone.removed) continue;
+      stone.element.style.display = stone.mapId === MAP.id ? "" : "none";
     }
   }
 
@@ -3903,6 +5505,31 @@
     fadeDuration: 420,
     pickupRadius: 820
   });
+
+  // R65 WOLF + BOAR LOOT — independent death rolls, same pickup/inventory pipeline as rabbit loot.
+  const WOLF_PELT_ITEM = Object.freeze({ id: "wolf-pelt", name: "WOLFSPELZ", description: "WOLFSLOOT", icon: "assets/items/WOLFSPELZ.svg", stackable: true });
+  const WOLF_CLAW_ITEM = Object.freeze({ id: "wolf-claw", name: "WOLFSKRALLE", description: "SELTENER WOLFSLOOT", icon: "assets/items/WOLFSKRALLE.svg", stackable: true });
+  const WANDERER_BAG_ITEM = Object.freeze({ id: "wanderer-bag", name: "SÄCKCHEN EINES WANDERERS", description: "SEHR SELTENER WOLFSLOOT", icon: "assets/items/SAECKCHEN EINES WANDERERS.svg", stackable: true });
+  const RADISH_ITEM = Object.freeze({ id: "radish", name: "RETTICH", description: "KEILERLOOT", icon: "assets/items/RETTICH.svg", stackable: true });
+  const CABBAGE_ITEM = Object.freeze({ id: "cabbage", name: "KOHL", description: "KEILERLOOT", icon: "assets/items/KOHL.svg", stackable: true });
+  const LETTUCE_ITEM = Object.freeze({ id: "lettuce", name: "SALATKOPF", description: "KEILERLOOT", icon: "assets/items/SALATKOPF.svg", stackable: true });
+  const BOAR_TUSK_ITEM = Object.freeze({ id: "boar-tusk", name: "KEILERSTOSSZAHN", description: "SELTENER KEILERLOOT", icon: "assets/items/KEILERSTOSSZAHN.svg", stackable: true });
+
+  const PINK_PIG_CLUB_ITEM = Object.freeze({
+    id: WEAPONS.pinkPigClub.id,
+    name: WEAPONS.pinkPigClub.name,
+    description: "PRIMITIVE HOLZKEULE · LEVEL 1–10",
+    icon: WEAPONS.pinkPigClub.icon,
+    stackable: false,
+    width: WEAPONS.pinkPigClub.inventoryWidth,
+    height: WEAPONS.pinkPigClub.inventoryHeight,
+    type: "weapon",
+    levelMin: WEAPONS.pinkPigClub.levelMin,
+    levelMax: WEAPONS.pinkPigClub.levelMax
+  });
+
+  const WOLF_LOOT_CONFIG = Object.freeze({ peltChance: .05, clawChance: .02, bagChance: .01 });
+  const BOAR_LOOT_CONFIG = Object.freeze({ radishChance: .20, cabbageChance: .10, lettuceChance: .05, tuskChance: .02 });
 
   let rabbitLootDrops = [];
 
@@ -4390,7 +6017,7 @@
     moleEvent.hp = Math.max(0, moleEvent.hp - amount);
 
     // Same damage popup and same hit sound as rabbits.
-    createRabbitDamageText(moleEvent, amount, critical);
+    createRabbitDamageText(moleEvent, amount, critical, Boolean(frame.saustark));
     playRabbitHitSound();
 
     if (moleEvent.hp <= 0) {
@@ -5177,7 +6804,18 @@
     const minY = PLAYER.height;
     const maxY = MAP.height - 10;
 
-    if (x < halfW || x > MAP.width - halfW) return false;
+    const inWinterbachOedsbachEastExit =
+      MAP.id === "winterbach-ranglehen" &&
+      y >= MAP_EXIT_CONFIG.winterbachOedsbachEast.y1 &&
+      y <= MAP_EXIT_CONFIG.winterbachOedsbachEast.y2;
+
+    if (x < halfW) return false;
+    if (x > MAP.width - halfW) {
+      const eastExitAllowed =
+        inWinterbachOedsbachEastExit &&
+        x <= MAP_EXIT_CONFIG.winterbachOedsbachEast.leaveX + 80;
+      if (!eastExitAllowed) return false;
+    }
 
     const inOberkirchNorthExit =
       MAP.id === "oberkirch-zentrum" &&
@@ -5278,6 +6916,11 @@
       if (!allowedNorth) return false;
     }
 
+    const inOedsbachWinterbachSouthExit =
+      MAP.id === "oedsbach" &&
+      x >= MAP_EXIT_CONFIG.oedsbachWinterbachSouth.x1 &&
+      x <= MAP_EXIT_CONFIG.oedsbachWinterbachSouth.x2;
+
     if (y > maxY) {
       const winterbachSouthAllowed =
         inWinterbachSouthExit &&
@@ -5302,12 +6945,17 @@
         inStadiumOberkirchSouthExit &&
         y <= MAP.height + MAP_EXIT_CONFIG.stadiumOberkirchSouth.leavePadding + 80;
 
+      const oedsbachWinterbachSouthAllowed =
+        inOedsbachWinterbachSouthExit &&
+        y <= MAP.height + MAP_EXIT_CONFIG.oedsbachWinterbachSouth.leavePadding + 80;
+
       if (
         !winterbachSouthAllowed &&
         !lautenbachSouthAllowed &&
         !hubackerSouthAllowed &&
         !oberkirchStadiumSouthAllowed &&
-        !stadiumOberkirchSouthAllowed
+        !stadiumOberkirchSouthAllowed &&
+        !oedsbachWinterbachSouthAllowed
       ) {
         return false;
       }
@@ -7286,6 +8934,2829 @@
     return startFlowState === "campaign";
   }
 
+
+  // ------------------------------------------------------------------
+  // R70 RENCHTALSTADION PHASE 1
+  // Scripted arrival -> choice menu -> locked spectator position.
+  // This is deliberately isolated from the normal campaign movement.
+  // ------------------------------------------------------------------
+  const STADIUM = Object.freeze({
+    mapId: "renchtalstadion",
+    arrivalStart: Object.freeze({ x: 5220, y: -40 }),
+    arrivalTarget: Object.freeze({ x: 6540, y: 725 }),
+    arrivalSpeed: 410,
+    spectatorPoint: Object.freeze({ x: 6910, y: 1680 }),
+    bookmakerPoint: Object.freeze({ x: 6380, y: 1440 }),
+    bookmakerWidth: 420,
+    bookmakerHeight: 630,
+    bookmakerBase: "assets/npcs/renchtalstadion/BUCHMACHER BASIS.png",
+    bookmakerActions: Object.freeze([
+      "assets/npcs/renchtalstadion/BUCHMACHER AKTION 1.png",
+      "assets/npcs/renchtalstadion/BUCHMACHER AKTION 2.png",
+      "assets/npcs/renchtalstadion/BUCHMACHER AKTION 3.png",
+      "assets/npcs/renchtalstadion/BUCHMACHER AKTION 4.png"
+    ]),
+    bookmakerWaitMs: 2000,
+    bookmakerActionMs: 1000,
+    bookmakerFadeMs: 190,
+
+    // R88 — final betting slip / bookmaker result artwork.
+    resultPlayerWin: "assets/npcs/renchtalstadion/BUCHMACHER AUSZAHLUNG.png",
+    resultBookmakerWin: "assets/npcs/renchtalstadion/BUCHMACHER GEWINN.png",
+
+    // R72 PHASE 2 — bookmaker interaction / derby betting UI.
+    bookmakerHoverAlphaThreshold: 24,
+    derby: Object.freeze({
+      schauenburgName: "DIE HERREN VON SCHAUENBURG",
+      neuensteinName: "DIE HERREN ROHART-NEUENSTEIN",
+      schauenburgChance: 0.70,
+      neuensteinChance: 0.30,
+      schauenburgOdds: 1 / 0.70,
+      neuensteinOdds: 1 / 0.30,
+      schauenburgCrest: "assets/ui/renchtalstadion/WAPPEN SCHAUENBURG.png",
+      neuensteinCrest: "assets/ui/renchtalstadion/WAPPEN ROHART-NEUENSTEIN.png"
+    }),
+
+    // Foreground slice from the existing 10K stadium map.
+    gateForeground: Object.freeze({
+      src: "assets/maps/foreground/RENCHTALSTADION TOR VORDERGRUND.png",
+      x: 4450,
+      y: 4250,
+      width: 1120,
+      height: 520
+    }),
+
+    // R73 — first arena fighter / scripted derby intro.
+    fightIntro: Object.freeze({
+      countdownStepMs: 1000,
+      pruegelMs: 980,
+      frameDuration: 190,
+      victoryDuration: 2000,
+
+      // R81 — exact final sync to the supplied "It's time" file.
+      finalPruegelAtMs: 5000,
+      finalCountdown3AtMs: 2000,
+      finalCountdown2AtMs: 3000,
+      finalCountdown1AtMs: 4000,
+      announcerFrame2AtMs: 2000,
+      announcerFrame3AtMs: 5000,
+      announcerPoint: Object.freeze({ x: 5035, y: 2910 }),
+      announcerWidth: 980,
+      announcerHeight: 1260,
+      announcerFrames: Object.freeze([
+        "assets/stadium/announcer/ANNOUNCER TRAPDOOR.png",
+        "assets/stadium/announcer/ANNOUNCER MEGAPHONE.png",
+        "assets/stadium/announcer/ANNOUNCER PRUEGEL.png"
+      ]),
+
+      // R79 TEAM ORDER:
+      // Fighter A / first entrant = ROHART-NEUENSTEIN.
+      // World-space foot anchors derived from the marked stadium reference.
+      start: Object.freeze({ x: 5000, y: 5585 }),
+      linePoint: Object.freeze({ x: 5035, y: 2910 }),
+      readyPoint: Object.freeze({ x: 7820, y: 3485 }),
+
+      speedUp: 620,
+      speedRight: 620,
+
+      fighterWidth: 700,
+      fighterHeight: 1080,
+
+      // R80 visual tuning.
+      // Fighter A = ROHART-NEUENSTEIN: backward/up and right run substantially smaller.
+      neuensteinWalkUpScale: 0.78,
+      neuensteinWalkRightScale: 0.76,
+      // Fighter B = SCHAUENBURG: left run is enlarged while keeping one fixed foot baseline.
+      schauenburgWalkLeftScale: 1.16,
+
+      walkUpFrames: Object.freeze([
+        "assets/stadium/fighters/FLEGEL WALK UP 1.png",
+        "assets/stadium/fighters/FLEGEL WALK UP 2.png"
+      ]),
+      victoryFrame: "assets/stadium/fighters/FLEGEL VICTORY.png",
+      walkRightFrames: Object.freeze([
+        "assets/stadium/fighters/FLEGEL WALK RIGHT 1.png",
+        "assets/stadium/fighters/FLEGEL WALK RIGHT 2.png",
+        "assets/stadium/fighters/FLEGEL WALK RIGHT 3.png",
+        "assets/stadium/fighters/FLEGEL WALK RIGHT 2.png"
+      ]),
+      readyFrame: "assets/stadium/fighters/FLEGEL READY.png",
+
+      // R79 — Fighter B / second entrant = SCHAUENBURG.
+      // IMPORTANT: the files themselves still carry the legacy "NEUENSTEIN"
+      // filenames from R78 so existing GitHub assets remain compatible.
+      schauenburgStart: Object.freeze({ x: 5000, y: 5585 }),
+      schauenburgLinePoint: Object.freeze({ x: 5035, y: 2910 }),
+      schauenburgLeftPoint: Object.freeze({ x: 2200, y: 3660 }),
+      schauenburgSpeedUp: 620,
+      schauenburgSpeedLeft: 620,
+      schauenburgWalkUpFrames: Object.freeze([
+        "assets/stadium/fighters/NEUENSTEIN WALK UP 1.png",
+        "assets/stadium/fighters/NEUENSTEIN WALK UP 2.png"
+      ]),
+      schauenburgVictoryFrame: "assets/stadium/fighters/NEUENSTEIN VICTORY.png",
+      schauenburgWalkLeftFrames: Object.freeze([
+        "assets/stadium/fighters/NEUENSTEIN WALK LEFT 1.png",
+        "assets/stadium/fighters/NEUENSTEIN WALK LEFT 2.png"
+      ]),
+      schauenburgReadyFrame: "assets/stadium/fighters/NEUENSTEIN READY.png",
+
+      // R82 — actual derby brawl. Existing R79-R81 intro values above stay untouched.
+      brawl: Object.freeze({
+        approachDurationMs: 3200,
+        attackMs: 650,
+        restMs: 500,
+        crossfadeMs: 85,
+        minCycles: 50,
+        maxCycles: 90,
+        targetOpaqueHeight: 900,
+        neuensteinContact: Object.freeze({ x: 5480, y: 3540 }),
+        schauenburgContact: Object.freeze({ x: 4700, y: 3540 }),
+        sharedPoint: Object.freeze({ x: 5090, y: 3540 }),
+        dustPoint: Object.freeze({ x: 5090, y: 3380 }),
+        neuensteinAttack: "assets/stadium/fighters/FLEGEL N2.png",
+        sharedRest: "assets/stadium/fighters/DERBY REST.png",
+        schauenburgAttack: "assets/stadium/fighters/SCHAUENBURG ATTACK.png",
+
+        // R84 — alternating hit-chance frames replace ONLY the shared rest slot.
+        // Chances reuse the exact bookmaker probabilities; no outcome logic is changed.
+        neuensteinHitFrame: "assets/stadium/fighters/DERBY HIT NEUENSTEIN.png",
+        // R87 — both normal Schauenburg hit frames remain available for hits 1-3.
+        schauenburgHitFrame: "assets/stadium/fighters/DERBY HIT SCHAUENBURG 1.png",
+        schauenburgHitFrameAlt: "assets/stadium/fighters/DERBY HIT SCHAUENBURG VARIANT 2.png",
+        schauenburgHitFourthFrame: "assets/stadium/fighters/DERBY HIT SCHAUENBURG 4.png",
+
+        // R85 — fatality branch after Schauenburg's 4th successful hit.
+        finishSetupFrame: "assets/stadium/fighters/DERBY FINISH SETUP.png",
+        finishEvadeFrame: "assets/stadium/fighters/DERBY FINISH NEUENSTEIN EVADE.png",
+        fatalityNeuensteinFrame: "assets/stadium/fighters/DERBY FATALITY NEUENSTEIN.png",
+        fatalitySchauenburgFrame: "assets/stadium/fighters/DERBY FATALITY SCHAUENBURG.png",
+        finishSetupMs: 750,
+        finishEvadeMs: 750,
+        fatalityMs: 2100
+      })
+    }),
+
+    arena: Object.freeze({
+      cx: 5090,
+      cy: 3422,
+      rx: 3450,
+      ry: 992,
+      entrance: Object.freeze({ x: 5000, y: 4414 })
+    })
+  });
+
+  let stadiumState = "inactive";
+  let stadiumArrivalFromOberkirch = false;
+  let stadiumUI = null;
+  let stadiumBookmaker = null;
+  let stadiumBookmakerNextAt = 0;
+  let stadiumBookmakerActionEndAt = 0;
+  let stadiumBookmakerShowingAction = false;
+
+  // R72 PHASE 2
+  let stadiumMenuOpen = false;
+  let stadiumBetUI = null;
+  let stadiumBetOpen = false;
+  let stadiumBetSelectedTeam = null;
+  let stadiumLockedBet = null;
+  let stadiumResultUI = null;
+  let stadiumResultOpen = false;
+  let stadiumResultShown = false;
+  let stadiumBookmakerAlphaMask = null;
+  let stadiumBookmakerHovered = false;
+  let stadiumGateForeground = null;
+
+  // R73 — scripted fight intro.
+  let stadiumFightOverlay = null;
+  let stadiumFightFighter = null;
+  let stadiumFightPhaseEndAt = 0;
+  let stadiumFightFrameIndex = 0;
+  let stadiumFightNextFrameAt = 0;
+  let stadiumFightLastState = "";
+  let stadiumFightStarted = false;
+  let stadiumFightFighterB = null;
+  let stadiumFightFighterBFrameIndex = 0;
+  let stadiumFightFighterBNextFrameAt = 0;
+  let stadiumFightFighterBSpriteToken = 0;
+
+  // R81 — arena announcer and final synchronized countdown.
+  let stadiumArenaAnnouncer = null;
+  let stadiumFinalSequenceStartedAt = 0;
+  let stadiumFinalSequenceStep = -1;
+
+  // R82 — isolated spectator derby brawl state.
+  let stadiumBrawlStarted = false;
+  let stadiumBrawlWinner = null;
+  let stadiumBrawlCyclesTarget = 0;
+  let stadiumBrawlCyclesDone = 0;
+  let stadiumBrawlPhaseEndAt = 0;
+  let stadiumBrawlApproachStartedAt = 0;
+  let stadiumBrawlApproachStartA = null;
+  let stadiumBrawlApproachStartB = null;
+  let stadiumBrawlVisuals = null;
+  let stadiumBrawlDust = null;
+
+  // R84 — rest slots alternate: Neuenstein first, then Schauenburg.
+  let stadiumBrawlRestTurn = "neuenstein";
+  let stadiumBrawlSchauenburgSuccessfulHits = 0;
+
+  // R85 — the 4th successful Schauenburg hit branches into the finish sequence.
+  let stadiumBrawlFatalityPending = false;
+  let stadiumBrawlFatalityEvaded = null;
+  let stadiumBrawlDamageTextRoot = null;
+  let stadiumBrawlFatalityText = null;
+
+  // R77 — normalize each movement direction to ITS OWN matching stand pose.
+  // WALK UP uses FLEGEL VICTORY as its size reference at the green circle.
+  // WALK RIGHT uses FLEGEL READY as its size reference at the green box.
+  // This keeps the already-correct stand-pose sizes while eliminating bounce inside each walk cycle.
+  const stadiumFightFrameMetrics = new Map();
+  const stadiumFightReferenceOpaqueHeights = { up: null, right: null };
+  let stadiumFightSpriteToken = 0;
+
+  function stadiumActive() {
+    return MAP.id === STADIUM.mapId && stadiumState !== "inactive";
+  }
+
+  function installStadiumStyles() {
+    if (document.getElementById("stadiumPhase1Styles")) return;
+
+    const style = document.createElement("style");
+    style.id = "stadiumPhase1Styles";
+    style.textContent = `
+      #stadiumChoiceUI {
+        position: fixed;
+        inset: 0;
+        z-index: 24000;
+        display: grid;
+        place-items: center;
+        pointer-events: none;
+        opacity: 0;
+        visibility: hidden;
+        transition: opacity 300ms ease, visibility 300ms ease;
+      }
+
+      #stadiumChoiceUI.stadium-choice--visible {
+        opacity: 1;
+        visibility: visible;
+        pointer-events: auto;
+      }
+
+      .stadium-choice__panel {
+        min-width: min(620px, 78vw);
+        padding: 30px 42px 34px;
+        border: 1px solid rgba(198, 151, 60, .55);
+        background: rgba(5, 5, 5, .80);
+        box-shadow: 0 18px 60px rgba(0,0,0,.72), inset 0 0 24px rgba(158,108,33,.10);
+        backdrop-filter: blur(3px);
+        text-align: center;
+        user-select: none;
+      }
+
+      .stadium-choice__title {
+        margin: 0 0 24px;
+        color: #d8ae55;
+        font-family: "Old English Text MT", "Lucida Blackletter", "UnifrakturCook", Georgia, serif;
+        font-size: clamp(34px, 4.1vw, 62px);
+        font-weight: 900;
+        letter-spacing: 2px;
+        text-shadow: 0 2px 2px #000, 0 0 13px rgba(216,174,85,.28);
+      }
+
+      .stadium-choice__item {
+        display: block;
+        width: 100%;
+        padding: 9px 14px;
+        border: 0;
+        background: transparent;
+        color: rgba(245,238,220,.76);
+        font-family: Georgia, "Times New Roman", serif;
+        font-size: clamp(18px, 1.75vw, 27px);
+        font-weight: 700;
+        letter-spacing: .8px;
+        text-align: center;
+        transition: color 150ms ease, text-shadow 150ms ease, transform 150ms ease;
+      }
+
+      .stadium-choice__item:hover {
+        color: #fff4d2;
+        text-shadow: 0 0 10px rgba(237,199,108,.72);
+        transform: scale(1.018);
+      }
+
+      .stadium-choice__item--active { cursor: pointer; }
+      .stadium-choice__item--locked { cursor: default; opacity: .58; }
+
+      #stadiumSoftCurtain {
+        position: fixed;
+        inset: 0;
+        z-index: 23990;
+        pointer-events: none;
+        background: #000;
+        opacity: 0;
+        visibility: hidden;
+        transition: opacity 360ms ease, visibility 360ms ease;
+      }
+
+      #stadiumSoftCurtain.stadium-curtain--visible {
+        opacity: 1;
+        visibility: visible;
+      }
+
+      .stadium-bookmaker {
+        position: absolute;
+        z-index: 9;
+        width: ${STADIUM.bookmakerWidth}px;
+        height: ${STADIUM.bookmakerHeight}px;
+        transform: translate(-50%, -100%);
+        transform-origin: 50% 100%;
+        pointer-events: none;
+        user-select: none;
+        display: none;
+        transition: filter 150ms ease, transform 150ms ease;
+      }
+
+      .stadium-bookmaker--hovered {
+        transform: translate(-50%, -100%) scale(1.018);
+        filter:
+          brightness(1.16)
+          drop-shadow(0 0 12px rgba(236,190,91,.70))
+          drop-shadow(0 0 24px rgba(236,190,91,.34));
+      }
+
+      .stadium-bookmaker__sprite {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+        object-position: 50% 100%;
+        opacity: 0;
+        transition: opacity ${STADIUM.bookmakerFadeMs}ms ease;
+        filter: drop-shadow(0 8px 5px rgba(0,0,0,.30));
+      }
+
+      .stadium-bookmaker__sprite--visible { opacity: 1; }
+
+      #game.stadium-bookmaker-cursor {
+        cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 32 32'%3E%3Cpath fill='%23e4d2a2' stroke='%235b4023' stroke-width='1.5' d='M8 5h17c2 0 3 1 3 3s-1 3-3 3H11v13c0 2-1 3-3 3s-3-1-3-3V8c0-2 1-3 3-3Z'/%3E%3Cpath fill='none' stroke='%2384663b' stroke-width='1.4' d='M11 13h12M11 17h10M11 21h8'/%3E%3C/svg%3E") 7 7, pointer;
+      }
+
+      #stadiumResultUI {
+        position: fixed;
+        inset: 0;
+        z-index: 24250;
+        display: grid;
+        place-items: center;
+        pointer-events: none;
+        opacity: 0;
+        visibility: hidden;
+        transition: opacity 260ms ease, visibility 260ms ease;
+      }
+      #stadiumResultUI.stadium-result--visible { opacity: 1; visibility: visible; pointer-events: auto; }
+      .stadium-result__panel {
+        position: relative; width: min(820px, 90vw); max-height: 92vh; overflow: auto;
+        box-sizing: border-box; padding: 28px 42px 30px; text-align: center;
+        color: #f4eddd; border: 1px solid rgba(198,151,60,.66);
+        background: rgba(3,3,3,.88); box-shadow: 0 22px 80px rgba(0,0,0,.84), inset 0 0 34px rgba(158,108,33,.12);
+        backdrop-filter: blur(4px);
+      }
+      .stadium-result__close { position:absolute; right:14px; top:8px; border:0; background:transparent; color:#d7b35b; font:700 31px Georgia,serif; cursor:pointer; }
+      .stadium-result__title { color:#d8ad48; font-family:"Old English Text MT","Lucida Blackletter","UnifrakturCook",Georgia,serif; font-size:52px; font-weight:900; letter-spacing:3px; text-shadow:0 2px 8px #000; }
+      .stadium-result__crest { display:block; width:132px; height:132px; object-fit:contain; margin:15px auto 4px; filter:drop-shadow(0 7px 8px rgba(0,0,0,.65)); }
+      .stadium-result__team { font:700 20px Georgia,serif; letter-spacing:1px; margin-bottom:12px; }
+      .stadium-result__numbers { display:grid; grid-template-columns:1fr 1fr; gap:8px 28px; max-width:520px; margin:0 auto 12px; font:700 20px Georgia,serif; }
+      .stadium-result__outcome { margin:8px 0 4px; font-family:"Old English Text MT","Lucida Blackletter","UnifrakturCook",Georgia,serif; font-size:36px; font-weight:900; }
+      .stadium-result__outcome--win { color:#d8ad48; } .stadium-result__outcome--loss { color:#b53a32; }
+      .stadium-result__bookmaker { display:block; width:min(350px,55vw); max-height:330px; object-fit:contain; margin:2px auto -2px; }
+      .stadium-result__speech { max-width:650px; margin:0 auto; padding:13px 18px; border:1px solid rgba(255,255,255,.18); border-radius:18px; background:rgba(255,255,255,.055); font:700 19px/1.38 Georgia,serif; }
+      .stadium-result__it--g { color:#34a853; } .stadium-result__it--w { color:#f5f1e8; } .stadium-result__it--r { color:#e34a42; }
+
+      #stadiumBetUI {
+        position: fixed;
+        inset: 0;
+        z-index: 24100;
+        display: grid;
+        place-items: center;
+        pointer-events: none;
+        opacity: 0;
+        visibility: hidden;
+        transition: opacity 260ms ease, visibility 260ms ease;
+      }
+
+      #stadiumBetUI.stadium-bet--visible {
+        opacity: 1;
+        visibility: visible;
+        pointer-events: auto;
+      }
+
+      .stadium-bet__panel {
+        width: min(760px, 86vw);
+        max-height: 90vh;
+        overflow: auto;
+        box-sizing: border-box;
+        padding: 28px 38px 32px;
+        border: 1px solid rgba(198,151,60,.62);
+        background: rgba(4,4,4,.84);
+        box-shadow: 0 20px 70px rgba(0,0,0,.78), inset 0 0 30px rgba(158,108,33,.10);
+        backdrop-filter: blur(3px);
+        text-align: center;
+        color: #f4eddd;
+      }
+
+      .stadium-bet__title,
+      .stadium-bet__today,
+      .stadium-bet__odds-title {
+        font-family: "Old English Text MT", "Lucida Blackletter", "UnifrakturCook", Georgia, serif;
+        color: #ddb45d;
+        font-weight: 900;
+        text-shadow: 0 2px 2px #000, 0 0 12px rgba(221,180,93,.28);
+      }
+
+      .stadium-bet__title {
+        font-size: clamp(32px, 4vw, 55px);
+        letter-spacing: 1.8px;
+        line-height: 1.02;
+      }
+
+      .stadium-bet__title span {
+        display: block;
+        white-space: nowrap;
+      }
+
+      .stadium-bet__today {
+        margin-top: 9px;
+        font-size: clamp(23px, 2.4vw, 34px);
+      }
+
+      .stadium-bet__matchup {
+        display: grid;
+        grid-template-columns: 1fr auto 1fr;
+        gap: 18px;
+        align-items: center;
+        margin: 22px 0 18px;
+        font-family: Georgia, "Times New Roman", serif;
+        font-size: clamp(17px, 1.65vw, 24px);
+        font-weight: 900;
+        line-height: 1.16;
+      }
+
+      .stadium-bet__team--schauenburg {
+        color: #d9463f;
+        text-shadow: 0 0 9px rgba(217,70,63,.25);
+      }
+
+      .stadium-bet__team--neuenstein {
+        color: #70dce3;
+        text-shadow: 0 0 9px rgba(112,220,227,.25);
+      }
+
+      .stadium-bet__swords {
+        color: #e7dfce;
+        font-size: 36px;
+        text-shadow: 0 2px 3px #000;
+      }
+
+      .stadium-bet__odds-title {
+        margin-top: 4px;
+        font-size: 26px;
+      }
+
+      .stadium-bet__odds {
+        display: flex;
+        justify-content: center;
+        gap: 42px;
+        margin: 8px 0 18px;
+        color: #ddb45d;
+        font-family: Georgia, "Times New Roman", serif;
+        font-size: 20px;
+        font-weight: 800;
+      }
+
+      .stadium-bet__crests {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        gap: 78px;
+        min-height: 180px;
+        margin: 8px 0 14px;
+      }
+
+      .stadium-bet__crest {
+        width: 150px;
+        height: 170px;
+        border: 0;
+        padding: 7px;
+        background: transparent;
+        cursor: pointer;
+        transition: transform 150ms ease, filter 150ms ease;
+      }
+
+      .stadium-bet__crest img {
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+        pointer-events: none;
+      }
+
+      .stadium-bet__crest:hover {
+        transform: scale(1.055);
+        filter: brightness(1.13) drop-shadow(0 0 10px rgba(237,199,108,.52));
+      }
+
+      .stadium-bet__crest--selected {
+        transform: scale(1.065);
+        filter:
+          brightness(1.18)
+          drop-shadow(0 0 11px rgba(237,199,108,.95))
+          drop-shadow(0 0 24px rgba(237,199,108,.42));
+      }
+
+      .stadium-bet__stake-label {
+        margin-top: 4px;
+        color: #fff;
+        font-family: Georgia, "Times New Roman", serif;
+        font-size: 21px;
+        font-weight: 800;
+      }
+
+      .stadium-bet__stake-row {
+        position: relative;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        width: 260px;
+        min-height: 44px;
+        margin: 9px auto 10px;
+      }
+
+      .stadium-bet__stake {
+        display: block;
+        width: 190px;
+        box-sizing: border-box;
+        margin: 0 auto;
+        padding: 9px 12px;
+        border: 1px solid rgba(216,174,85,.58);
+        background: rgba(0,0,0,.64);
+        color: #fff7e8;
+        font-family: Georgia, "Times New Roman", serif;
+        font-size: 22px;
+        text-align: center;
+        outline: none;
+      }
+
+      .stadium-bet__penny {
+        position: absolute;
+        left: calc(50% + 105px);
+        top: 50%;
+        transform: translateY(-50%);
+        width: 34px;
+        height: 34px;
+        border-radius: 50%;
+        display: grid;
+        place-items: center;
+        color: #d8ae55;
+        border: 2px solid #a67d31;
+        background: radial-gradient(circle at 35% 30%, #7d622f, #19150e 74%);
+        font-family: Georgia, serif;
+        font-weight: 900;
+        box-shadow: 0 2px 4px rgba(0,0,0,.65);
+      }
+
+      .stadium-bet__possible-win {
+        display: block;
+        width: 100%;
+        margin: 8px auto 12px;
+        white-space: nowrap;
+        color: #b87333;
+        font-family: Georgia, "Times New Roman", serif;
+        font-size: 18px;
+        font-weight: 900;
+        letter-spacing: .35px;
+        line-height: 1.15;
+        text-align: center;
+        text-shadow:
+          0 2px 2px rgba(0,0,0,.95),
+          0 0 8px rgba(184,115,51,.25);
+      }
+
+      @media (max-width: 760px) {
+        .stadium-bet__possible-win {
+          font-size: 15px;
+          white-space: normal;
+        }
+      }
+
+      .stadium-bet__submit {
+        display: block;
+        width: max-content;
+        margin: 0 auto;
+        border: 0;
+        background: transparent;
+        color: #fff;
+        padding: 8px 18px;
+        font-family: Georgia, "Times New Roman", serif;
+        font-size: 22px;
+        font-weight: 800;
+        text-align: center;
+        cursor: pointer;
+        transition: color 150ms ease, text-shadow 150ms ease, transform 150ms ease;
+      }
+
+      .stadium-bet__submit:hover {
+        color: #fff1c9;
+        text-shadow: 0 0 11px rgba(237,199,108,.75);
+        transform: scale(1.025);
+      }
+
+      .stadium-fight-overlay {
+        position: fixed;
+        inset: 0;
+        z-index: 24250;
+        display: grid;
+        place-items: center;
+        pointer-events: none;
+        user-select: none;
+        opacity: 0;
+        visibility: hidden;
+      }
+
+      .stadium-fight-overlay--visible {
+        opacity: 1;
+        visibility: visible;
+      }
+
+      .stadium-fight-countdown {
+        color: #9e1717;
+        font-family: "Old English Text MT", "Lucida Blackletter", "UnifrakturCook", Georgia, serif;
+        font-size: clamp(92px, 12vw, 190px);
+        font-weight: 900;
+        line-height: 1;
+        text-shadow:
+          0 4px 2px rgba(0,0,0,.98),
+          0 0 10px rgba(0,0,0,.95),
+          0 0 22px rgba(116,0,0,.62);
+      }
+
+      .stadium-fight-pruegel {
+        color: #a91818;
+        font-family: "Old English Text MT", "Lucida Blackletter", "UnifrakturCook", Georgia, serif;
+        font-size: clamp(78px, 11vw, 180px);
+        font-weight: 900;
+        line-height: .9;
+        letter-spacing: 2px;
+        text-shadow:
+          0 5px 2px rgba(0,0,0,.98),
+          0 0 13px rgba(0,0,0,.9),
+          0 0 28px rgba(126,0,0,.72);
+        animation: stadiumPruegelBurst ${STADIUM.fightIntro.pruegelMs}ms both;
+        will-change: transform, opacity, filter;
+      }
+
+      @keyframes stadiumPruegelBurst {
+        0% {
+          opacity: 0;
+          transform: scale(.05);
+          filter: blur(2px);
+        }
+        42% {
+          opacity: 1;
+          transform: scale(1.08);
+          filter: blur(0);
+        }
+        58% {
+          opacity: 1;
+          transform: scale(1);
+          filter: blur(0);
+        }
+        72% {
+          opacity: 1;
+          transform: scale(1);
+          filter: blur(0);
+        }
+        100% {
+          opacity: 0;
+          transform: scale(1.36);
+          filter: blur(4px);
+        }
+      }
+
+      .stadium-fighter {
+        position: absolute;
+        z-index: 17;
+        width: ${STADIUM.fightIntro.fighterWidth}px;
+        height: ${STADIUM.fightIntro.fighterHeight}px;
+        transform: translate(-50%, -100%);
+        transform-origin: 50% 100%;
+        pointer-events: none;
+        user-select: none;
+        display: none;
+        will-change: left, top;
+      }
+
+      .stadium-fighter--visible {
+        display: block;
+      }
+
+      .stadium-fighter__sprite {
+        position: absolute;
+        left: 50%;
+        bottom: 0;
+        top: auto;
+        right: auto;
+        width: auto;
+        height: auto;
+        max-width: none;
+        max-height: none;
+        object-fit: fill;
+        filter: drop-shadow(0 8px 5px rgba(0,0,0,.28));
+        transform: translateX(-50%);
+        transform-origin: 50% 100%;
+        opacity: 0;
+        visibility: hidden;
+        transition: none !important;
+        backface-visibility: hidden;
+        -webkit-backface-visibility: hidden;
+      }
+
+      .stadium-fighter__sprite--active {
+        opacity: 1;
+        visibility: visible;
+      }
+
+      .stadium-brawl-layer {
+        position: absolute;
+        z-index: 19;
+        transform: translate(-50%, -100%);
+        transform-origin: 50% 100%;
+        pointer-events: none;
+        user-select: none;
+        opacity: 0;
+        visibility: hidden;
+        transition: opacity ${STADIUM.fightIntro.brawl.crossfadeMs}ms linear,
+                    visibility ${STADIUM.fightIntro.brawl.crossfadeMs}ms linear;
+        will-change: opacity;
+      }
+
+      .stadium-brawl-layer--visible {
+        opacity: 1;
+        visibility: visible;
+      }
+
+      .stadium-brawl-layer__sprite {
+        position: absolute;
+        left: 50%;
+        bottom: 0;
+        width: auto;
+        height: auto;
+        max-width: none;
+        max-height: none;
+        transform-origin: 50% 100%;
+        filter: drop-shadow(0 8px 5px rgba(0,0,0,.30));
+        backface-visibility: hidden;
+        -webkit-backface-visibility: hidden;
+      }
+
+      .stadium-brawl-dust {
+        position: absolute;
+        z-index: 20;
+        width: 1px;
+        height: 1px;
+        pointer-events: none;
+        user-select: none;
+      }
+
+      .stadium-brawl-dust__puff {
+        position: absolute;
+        width: var(--dust-size, 120px);
+        height: calc(var(--dust-size, 120px) * .58);
+        left: var(--dust-x, 0px);
+        top: var(--dust-y, 0px);
+        margin-left: calc(var(--dust-size, 120px) * -.5);
+        margin-top: calc(var(--dust-size, 120px) * -.29);
+        border-radius: 48% 52% 44% 56%;
+        background: radial-gradient(ellipse at center,
+          rgba(214,196,157,.58) 0%,
+          rgba(178,154,113,.34) 45%,
+          rgba(120,95,64,.08) 72%,
+          rgba(90,70,46,0) 100%);
+        opacity: 0;
+        transform: scale(.28) translate(0, 0);
+        animation: stadiumBrawlDustPuff var(--dust-life, 330ms) ease-out forwards;
+        filter: blur(1.5px);
+      }
+
+      @keyframes stadiumBrawlDustPuff {
+        0% { opacity: 0; transform: scale(.28) translate(0, 0); }
+        18% { opacity: .92; }
+        100% {
+          opacity: 0;
+          transform: scale(1.55) translate(var(--dust-dx, 0px), var(--dust-dy, -18px));
+        }
+      }
+
+      .stadium-brawl-damage-root {
+        position: absolute;
+        inset: 0;
+        z-index: 23;
+        pointer-events: none;
+        user-select: none;
+      }
+
+      .stadium-brawl-damage {
+        position: absolute;
+        transform: translate(-50%, -100%);
+        font-family: Georgia, "Times New Roman", serif;
+        font-size: 104px;
+        font-weight: 900;
+        line-height: 1;
+        letter-spacing: 2px;
+        text-shadow:
+          0 4px 2px rgba(0,0,0,.92),
+          0 0 10px currentColor,
+          0 0 20px rgba(0,0,0,.55);
+        animation: stadiumBrawlDamageFloat 820ms ease-out forwards;
+        will-change: transform, opacity;
+      }
+
+      .stadium-brawl-damage--neuenstein {
+        color: #82dcff;
+      }
+
+      .stadium-brawl-damage--schauenburg {
+        color: #ff3737;
+      }
+
+      @keyframes stadiumBrawlDamageFloat {
+        0%   { opacity: 0; transform: translate(-50%, -72%) scale(.82); }
+        16%  { opacity: 1; transform: translate(-50%, -100%) scale(1.05); }
+        72%  { opacity: 1; }
+        100% { opacity: 0; transform: translate(-50%, -178%) scale(.98); }
+      }
+
+      .stadium-brawl-fatality-text {
+        position: absolute;
+        z-index: 24;
+        left: ${STADIUM.fightIntro.brawl.sharedPoint.x}px;
+        top: ${STADIUM.fightIntro.brawl.sharedPoint.y - 930}px;
+        transform: translate(-50%, -50%) scale(.88);
+        pointer-events: none;
+        user-select: none;
+        opacity: 0;
+        visibility: hidden;
+        font-family: "Old English Text MT", "Lucida Blackletter", "UnifrakturCook", Georgia, serif;
+        font-size: 172px;
+        font-weight: 900;
+        letter-spacing: 5px;
+        white-space: nowrap;
+        text-shadow: 0 5px 3px #000, 0 0 18px currentColor, 0 0 36px rgba(0,0,0,.72);
+        transition: opacity 150ms ease, transform 180ms ease, visibility 150ms ease;
+      }
+
+      .stadium-brawl-fatality-text--visible {
+        opacity: 1;
+        visibility: visible;
+        transform: translate(-50%, -50%) scale(1);
+      }
+
+      .stadium-brawl-fatality-text--neuenstein { color: #82dcff; }
+      .stadium-brawl-fatality-text--schauenburg { color: #ff3737; }
+
+      .stadium-gate-foreground {
+        position: absolute;
+        z-index: 18;
+        pointer-events: none;
+        user-select: none;
+        object-fit: fill;
+        display: none;
+      }
+
+      .stadium-arena-announcer {
+        position: absolute;
+        z-index: 21;
+        width: ${STADIUM.fightIntro.announcerWidth}px;
+        height: ${STADIUM.fightIntro.announcerHeight}px;
+        transform: translate(-50%, -100%);
+        transform-origin: 50% 100%;
+        pointer-events: none;
+        user-select: none;
+        display: none;
+      }
+
+      .stadium-arena-announcer--visible {
+        display: block;
+      }
+
+      .stadium-arena-announcer__sprite {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+        object-position: 50% 100%;
+        opacity: 0;
+        transition: opacity 180ms ease;
+        filter: drop-shadow(0 8px 5px rgba(0,0,0,.30));
+      }
+
+      .stadium-arena-announcer__sprite--active {
+        opacity: 1;
+      }
+    `;
+    document.head.appendChild(style);
+  }
+
+  function createStadiumPhase1() {
+    installStadiumStyles();
+    preloadStadiumArenaSfx();
+
+    const root = document.createElement("div");
+    root.id = "stadiumChoiceUI";
+    root.innerHTML = `
+      <div class="stadium-choice__panel" role="dialog" aria-modal="true" aria-label="RENCHTALSTADION">
+        <div class="stadium-choice__title">RENCHTALSTADION</div>
+        <button type="button" class="stadium-choice__item stadium-choice__item--active" data-stadium-choice="spectator">AUF TRIBÜNE PLATZNEHMEN</button>
+        <button type="button" class="stadium-choice__item stadium-choice__item--locked" data-stadium-choice="zusenhofen">WEITER NACH ZUSENHOFEN</button>
+        <button type="button" class="stadium-choice__item stadium-choice__item--locked" data-stadium-choice="nussbach">WEITER RICHTUNG NUSSBACH</button>
+        <button type="button" class="stadium-choice__item stadium-choice__item--active" data-stadium-choice="oberkirch">ZURÜCK NACH OBERKIRCH</button>
+      </div>`;
+    game.appendChild(root);
+
+    const curtain = document.createElement("div");
+    curtain.id = "stadiumSoftCurtain";
+    game.appendChild(curtain);
+
+    root.addEventListener("click", (event) => {
+      const button = event.target.closest("[data-stadium-choice]");
+      if (!button || !stadiumMenuOpen || MAP.id !== STADIUM.mapId) return;
+      const choice = button.dataset.stadiumChoice;
+
+      if (choice === "spectator") {
+        if (stadiumState === "entrance-menu") {
+          stadiumMoveToSpectator();
+        } else {
+          // R74: ESC menu may also be opened during countdown / arena intro / fight.
+          // Returning to the current stadium view simply closes the menu.
+          hideStadiumMenu();
+        }
+      } else if (choice === "oberkirch") {
+        stadiumReturnToOberkirch();
+      }
+    });
+
+    const bookmaker = document.createElement("div");
+    bookmaker.id = "stadiumBookmaker";
+    bookmaker.className = "stadium-bookmaker";
+    bookmaker.style.left = `${STADIUM.bookmakerPoint.x}px`;
+    bookmaker.style.top = `${STADIUM.bookmakerPoint.y}px`;
+
+    const base = document.createElement("img");
+    base.className = "stadium-bookmaker__sprite stadium-bookmaker__sprite--visible";
+    base.src = encodeURI(STADIUM.bookmakerBase);
+    base.alt = "";
+    base.draggable = false;
+
+    const action = document.createElement("img");
+    action.className = "stadium-bookmaker__sprite";
+    action.src = encodeURI(STADIUM.bookmakerActions[0]);
+    action.alt = "";
+    action.draggable = false;
+
+    bookmaker.append(base, action);
+    world.appendChild(bookmaker);
+
+    base.addEventListener("load", () => prepareStadiumBookmakerAlphaMask(base));
+
+    for (const src of [STADIUM.bookmakerBase, ...STADIUM.bookmakerActions]) {
+      const preload = new Image();
+      preload.src = encodeURI(src);
+    }
+
+    const betRoot = document.createElement("div");
+    betRoot.id = "stadiumBetUI";
+    betRoot.innerHTML = `
+      <div class="stadium-bet__panel" role="dialog" aria-modal="true" aria-label="BUCHMACHER DON FREDO">
+        <div class="stadium-bet__title">
+          <span>BUCHMACHER</span>
+          <span>DON FREDO</span>
+        </div>
+        <div class="stadium-bet__today">HEUTE: DERBY!</div>
+
+        <div class="stadium-bet__matchup">
+          <div class="stadium-bet__team stadium-bet__team--schauenburg">${STADIUM.derby.schauenburgName}</div>
+          <div class="stadium-bet__swords" aria-label="fehdet gegen">⚔</div>
+          <div class="stadium-bet__team stadium-bet__team--neuenstein">${STADIUM.derby.neuensteinName}</div>
+        </div>
+
+        <div class="stadium-bet__odds-title">QUOTE</div>
+        <div class="stadium-bet__odds">
+          <span>SCHAUENBURG&nbsp;&nbsp;${STADIUM.derby.schauenburgOdds.toFixed(2).replace(".", ",")}</span>
+          <span>ROHART-NEUENSTEIN&nbsp;&nbsp;${STADIUM.derby.neuensteinOdds.toFixed(2).replace(".", ",")}</span>
+        </div>
+
+        <div class="stadium-bet__crests">
+          <button type="button" class="stadium-bet__crest" data-bet-team="schauenburg" aria-label="Auf Schauenburg setzen">
+            <img src="${encodeURI(STADIUM.derby.schauenburgCrest)}" alt="">
+          </button>
+          <button type="button" class="stadium-bet__crest" data-bet-team="neuenstein" aria-label="Auf Rohart-Neuenstein setzen">
+            <img src="${encodeURI(STADIUM.derby.neuensteinCrest)}" alt="">
+          </button>
+        </div>
+
+        <div id="stadiumBetPossibleWin" class="stadium-bet__possible-win">MÖGLICHER GEWINN: —</div>
+
+        <div class="stadium-bet__stake-label">EINSATZ</div>
+        <div class="stadium-bet__stake-row">
+          <input id="stadiumBetStake" class="stadium-bet__stake" type="text" inputmode="numeric" maxlength="9" autocomplete="off" aria-label="Einsatz in Pfennig">
+          <span class="stadium-bet__penny" aria-hidden="true">₰</span>
+        </div>
+
+        <button type="button" class="stadium-bet__submit" id="stadiumBetSubmit">Wette abschließen</button>
+      </div>`;
+    game.appendChild(betRoot);
+
+    const resultRoot = document.createElement("div");
+    resultRoot.id = "stadiumResultUI";
+    resultRoot.innerHTML = `<div class="stadium-result__panel" role="dialog" aria-modal="true" aria-label="Euer Wettschein"><button class="stadium-result__close" type="button" aria-label="Schließen">×</button><div class="stadium-result__body"></div></div>`;
+    game.appendChild(resultRoot);
+    stadiumResultUI = { root: resultRoot, body: resultRoot.querySelector(".stadium-result__body") };
+    resultRoot.addEventListener("click", (event) => { if (event.target.closest(".stadium-result__close")) closeStadiumResultUI(); });
+
+    const stake = betRoot.querySelector("#stadiumBetStake");
+    const possibleWin = betRoot.querySelector("#stadiumBetPossibleWin");
+
+    function updateStadiumPossibleWin() {
+      if (!possibleWin) return;
+
+      const stakeValue = Number.parseInt(stake.value || "0", 10);
+      if (
+        !stadiumBetSelectedTeam ||
+        !Number.isFinite(stakeValue) ||
+        stakeValue <= 0
+      ) {
+        possibleWin.textContent = "MÖGLICHER GEWINN: —";
+        return;
+      }
+
+      const odds = stadiumBetSelectedTeam === "schauenburg"
+        ? STADIUM.derby.schauenburgOdds
+        : STADIUM.derby.neuensteinOdds;
+
+      // Decimal quote is applied directly to the entered Pfennig.
+      // Payout stays in whole Pfennig.
+      const payout = Math.floor(stakeValue * odds);
+      possibleWin.textContent =
+        `MÖGLICHER GEWINN: ${payout.toLocaleString("de-DE")}`;
+    }
+
+    stake.addEventListener("input", () => {
+      stake.value = stake.value.replace(/\D+/g, "").replace(/^0+(?=\d)/, "");
+      updateStadiumPossibleWin();
+    });
+
+    betRoot.addEventListener("click", (event) => {
+      const crest = event.target.closest("[data-bet-team]");
+      if (crest) {
+        stadiumBetSelectedTeam = crest.dataset.betTeam;
+        for (const node of betRoot.querySelectorAll("[data-bet-team]")) {
+          node.classList.toggle(
+            "stadium-bet__crest--selected",
+            node.dataset.betTeam === stadiumBetSelectedTeam
+          );
+        }
+        updateStadiumPossibleWin();
+        return;
+      }
+
+      if (event.target.closest("#stadiumBetSubmit")) {
+        const stakeValue = Number.parseInt(stake.value || "0", 10);
+        if (!stadiumBetSelectedTeam || !Number.isFinite(stakeValue) || stakeValue <= 0) return;
+        const odds = stadiumBetSelectedTeam === "schauenburg"
+          ? STADIUM.derby.schauenburgOdds : STADIUM.derby.neuensteinOdds;
+        stadiumLockedBet = Object.freeze({
+          team: stadiumBetSelectedTeam, stake: stakeValue, odds, payout: Math.floor(stakeValue * odds)
+        });
+        stadiumResultShown = false;
+        closeStadiumBetUI();
+        beginStadiumFightIntro();
+        return;
+      }
+    });
+
+    // R73 — screen-space countdown / PRÜGEL overlay.
+    const fightOverlay = document.createElement("div");
+    fightOverlay.id = "stadiumFightOverlay";
+    fightOverlay.className = "stadium-fight-overlay";
+    game.appendChild(fightOverlay);
+
+    // R73 — world-space arena fighter. The existing gate foreground remains above it
+    // so the fighter is progressively hidden while passing through the south gate.
+    const fighterRoot = document.createElement("div");
+    fighterRoot.id = "stadiumFighterA";
+    fighterRoot.className = "stadium-fighter";
+    fighterRoot.style.left = `${STADIUM.fightIntro.start.x}px`;
+    fighterRoot.style.top = `${STADIUM.fightIntro.start.y}px`;
+
+    // R75: double-buffered fighter sprites. Two image layers guarantee that
+    // WALK UP 1 <-> WALK UP 2 and all side-running frames visibly alternate
+    // without a blank frame while the next PNG is decoded.
+    const fighterImageA = document.createElement("img");
+    fighterImageA.className = "stadium-fighter__sprite stadium-fighter__sprite--active";
+    fighterImageA.src = encodeURI(STADIUM.fightIntro.walkUpFrames[0]);
+    fighterImageA.alt = "";
+    fighterImageA.draggable = false;
+
+    const fighterImageB = document.createElement("img");
+    fighterImageB.className = "stadium-fighter__sprite";
+    fighterImageB.alt = "";
+    fighterImageB.draggable = false;
+
+    fighterRoot.append(fighterImageA, fighterImageB);
+    world.appendChild(fighterRoot);
+
+    // R78 — second fighter uses the same proven double-buffer / foot-anchor setup.
+    const fighterBRoot = document.createElement("div");
+    fighterBRoot.id = "stadiumFighterB";
+    fighterBRoot.className = "stadium-fighter";
+    fighterBRoot.style.left = `${STADIUM.fightIntro.schauenburgStart.x}px`;
+    fighterBRoot.style.top = `${STADIUM.fightIntro.schauenburgStart.y}px`;
+
+    const fighterBImageA = document.createElement("img");
+    fighterBImageA.className = "stadium-fighter__sprite stadium-fighter__sprite--active";
+    fighterBImageA.src = encodeURI(STADIUM.fightIntro.schauenburgWalkUpFrames[0]);
+    fighterBImageA.alt = "";
+    fighterBImageA.draggable = false;
+
+    const fighterBImageB = document.createElement("img");
+    fighterBImageB.className = "stadium-fighter__sprite";
+    fighterBImageB.alt = "";
+    fighterBImageB.draggable = false;
+
+    fighterBRoot.append(fighterBImageA, fighterBImageB);
+    world.appendChild(fighterBRoot);
+
+    // R82 — three isolated brawl layers: A attack, ONE shared rest image, B attack.
+    // Keeping these separate from the proven entry sprites prevents R79-R81 size/mirror regressions.
+    function makeBrawlLayer(id, src, point, mirror) {
+      const layer = document.createElement("div");
+      layer.id = id;
+      layer.className = "stadium-brawl-layer";
+      layer.style.left = `${point.x}px`;
+      layer.style.top = `${point.y}px`;
+
+      const img = document.createElement("img");
+      img.className = "stadium-brawl-layer__sprite";
+      img.src = encodeURI(src);
+      img.alt = "";
+      img.draggable = false;
+      layer.appendChild(img);
+      world.appendChild(layer);
+
+      const layout = () => layoutStadiumBrawlSprite(img, mirror);
+      img.addEventListener("load", layout);
+      if (img.complete && img.naturalWidth > 0) layout();
+      return { root: layer, image: img, src, mirror };
+    }
+
+    const brawlAttackA = makeBrawlLayer(
+      "stadiumBrawlAttackA",
+      STADIUM.fightIntro.brawl.neuensteinAttack,
+      STADIUM.fightIntro.brawl.neuensteinContact,
+      true
+    );
+    const brawlShared = makeBrawlLayer(
+      "stadiumBrawlShared",
+      STADIUM.fightIntro.brawl.sharedRest,
+      STADIUM.fightIntro.brawl.sharedPoint,
+      true
+    );
+    const brawlAttackB = makeBrawlLayer(
+      "stadiumBrawlAttackB",
+      STADIUM.fightIntro.brawl.schauenburgAttack,
+      STADIUM.fightIntro.brawl.schauenburgContact,
+      false
+    );
+
+    // R84 — these are full two-fighter hit compositions and therefore live at
+    // the exact same shared world anchor as DERBY REST. All three are mirrored.
+    const brawlHitNeuenstein = makeBrawlLayer(
+      "stadiumBrawlHitNeuenstein",
+      STADIUM.fightIntro.brawl.neuensteinHitFrame,
+      STADIUM.fightIntro.brawl.sharedPoint,
+      true
+    );
+    const brawlHitSchauenburg = makeBrawlLayer(
+      "stadiumBrawlHitSchauenburg",
+      STADIUM.fightIntro.brawl.schauenburgHitFrame,
+      STADIUM.fightIntro.brawl.sharedPoint,
+      true
+    );
+    const brawlHitSchauenburgAlt = makeBrawlLayer(
+      "stadiumBrawlHitSchauenburgAlt",
+      STADIUM.fightIntro.brawl.schauenburgHitFrameAlt,
+      STADIUM.fightIntro.brawl.sharedPoint,
+      true
+    );
+    const brawlHitSchauenburgFourth = makeBrawlLayer(
+      "stadiumBrawlHitSchauenburgFourth",
+      STADIUM.fightIntro.brawl.schauenburgHitFourthFrame,
+      STADIUM.fightIntro.brawl.sharedPoint,
+      true
+    );
+
+    // R85 — full two-fighter finish compositions, isolated from the normal brawl.
+    const brawlFinishSetup = makeBrawlLayer(
+      "stadiumBrawlFinishSetup",
+      STADIUM.fightIntro.brawl.finishSetupFrame,
+      STADIUM.fightIntro.brawl.sharedPoint,
+      true
+    );
+    const brawlFinishEvade = makeBrawlLayer(
+      "stadiumBrawlFinishEvade",
+      STADIUM.fightIntro.brawl.finishEvadeFrame,
+      STADIUM.fightIntro.brawl.sharedPoint,
+      true
+    );
+    const brawlFatalityNeuenstein = makeBrawlLayer(
+      "stadiumBrawlFatalityNeuenstein",
+      STADIUM.fightIntro.brawl.fatalityNeuensteinFrame,
+      STADIUM.fightIntro.brawl.sharedPoint,
+      true
+    );
+    const brawlFatalitySchauenburg = makeBrawlLayer(
+      "stadiumBrawlFatalitySchauenburg",
+      STADIUM.fightIntro.brawl.fatalitySchauenburgFrame,
+      STADIUM.fightIntro.brawl.sharedPoint,
+      true
+    );
+
+    const brawlDust = document.createElement("div");
+    brawlDust.id = "stadiumBrawlDust";
+    brawlDust.className = "stadium-brawl-dust";
+    brawlDust.style.left = `${STADIUM.fightIntro.brawl.dustPoint.x}px`;
+    brawlDust.style.top = `${STADIUM.fightIntro.brawl.dustPoint.y}px`;
+    world.appendChild(brawlDust);
+
+    stadiumBrawlVisuals = {
+      attackA: brawlAttackA,
+      shared: brawlShared,
+      attackB: brawlAttackB,
+      hitNeuenstein: brawlHitNeuenstein,
+      hitSchauenburg: brawlHitSchauenburg,
+      hitSchauenburgAlt: brawlHitSchauenburgAlt,
+      hitSchauenburgFourth: brawlHitSchauenburgFourth,
+      finishSetup: brawlFinishSetup,
+      finishEvade: brawlFinishEvade,
+      fatalityNeuenstein: brawlFatalityNeuenstein,
+      fatalitySchauenburg: brawlFatalitySchauenburg
+    };
+    stadiumBrawlDust = brawlDust;
+
+    const brawlDamageRoot = document.createElement("div");
+    brawlDamageRoot.id = "stadiumBrawlDamageRoot";
+    brawlDamageRoot.className = "stadium-brawl-damage-root";
+    world.appendChild(brawlDamageRoot);
+    stadiumBrawlDamageTextRoot = brawlDamageRoot;
+
+    const fatalityText = document.createElement("div");
+    fatalityText.id = "stadiumBrawlFatalityText";
+    fatalityText.className = "stadium-brawl-fatality-text";
+    fatalityText.textContent = "FATALITÄT!";
+    world.appendChild(fatalityText);
+    stadiumBrawlFatalityText = fatalityText;
+
+    for (const brawlSrc of [
+      STADIUM.fightIntro.brawl.neuensteinAttack,
+      STADIUM.fightIntro.brawl.sharedRest,
+      STADIUM.fightIntro.brawl.schauenburgAttack,
+      STADIUM.fightIntro.brawl.neuensteinHitFrame,
+      STADIUM.fightIntro.brawl.schauenburgHitFrame,
+      STADIUM.fightIntro.brawl.schauenburgHitFrameAlt,
+      STADIUM.fightIntro.brawl.schauenburgHitFourthFrame,
+      STADIUM.fightIntro.brawl.finishSetupFrame,
+      STADIUM.fightIntro.brawl.finishEvadeFrame,
+      STADIUM.fightIntro.brawl.fatalityNeuensteinFrame,
+      STADIUM.fightIntro.brawl.fatalitySchauenburgFrame
+    ]) {
+      const preload = new Image();
+      preload.src = encodeURI(brawlSrc);
+      if (typeof preload.decode === "function") preload.decode().catch(() => {});
+    }
+
+    // R81 — announcer appears at the same arena presentation point.
+    const announcerRoot = document.createElement("div");
+    announcerRoot.id = "stadiumArenaAnnouncer";
+    announcerRoot.className = "stadium-arena-announcer";
+    announcerRoot.style.left = `${STADIUM.fightIntro.announcerPoint.x}px`;
+    announcerRoot.style.top = `${STADIUM.fightIntro.announcerPoint.y}px`;
+
+    const announcerImages = STADIUM.fightIntro.announcerFrames.map((announcerSrc) => {
+      const img = document.createElement("img");
+      img.className = "stadium-arena-announcer__sprite";
+      img.src = encodeURI(announcerSrc);
+      img.alt = "";
+      img.draggable = false;
+      announcerRoot.appendChild(img);
+      return img;
+    });
+
+    world.appendChild(announcerRoot);
+    stadiumArenaAnnouncer = {
+      root: announcerRoot,
+      images: announcerImages,
+      activeIndex: -1
+    };
+
+    for (const fighterSrc of [
+      ...STADIUM.fightIntro.walkUpFrames,
+      STADIUM.fightIntro.victoryFrame,
+      ...STADIUM.fightIntro.walkRightFrames,
+      STADIUM.fightIntro.readyFrame,
+      ...STADIUM.fightIntro.schauenburgWalkUpFrames,
+      STADIUM.fightIntro.schauenburgVictoryFrame,
+      ...STADIUM.fightIntro.schauenburgWalkLeftFrames,
+      STADIUM.fightIntro.schauenburgReadyFrame
+    ]) {
+      const preload = new Image();
+      preload.onload = () => {
+        const metrics = getStadiumFightOpaqueMetrics(preload);
+        if (!metrics) return;
+
+        let referenceKey = null;
+        if (fighterSrc === STADIUM.fightIntro.victoryFrame) referenceKey = "up";
+        if (fighterSrc === STADIUM.fightIntro.readyFrame) referenceKey = "right";
+
+        if (referenceKey) {
+          const fit = Math.min(
+            STADIUM.fightIntro.fighterWidth / metrics.naturalWidth,
+            STADIUM.fightIntro.fighterHeight / metrics.naturalHeight
+          );
+          stadiumFightReferenceOpaqueHeights[referenceKey] = metrics.height * fit;
+        }
+      };
+      preload.src = encodeURI(fighterSrc);
+      if (preload.complete && preload.naturalWidth > 0) preload.onload();
+    }
+
+    for (const announcerSrc of STADIUM.fightIntro.announcerFrames) {
+      const preload = new Image();
+      preload.src = encodeURI(announcerSrc);
+    }
+
+    const gate = document.createElement("img");
+    gate.id = "stadiumGateForeground";
+    gate.className = "stadium-gate-foreground";
+    gate.src = encodeURI(STADIUM.gateForeground.src);
+    gate.alt = "";
+    gate.draggable = false;
+    gate.style.left = `${STADIUM.gateForeground.x}px`;
+    gate.style.top = `${STADIUM.gateForeground.y}px`;
+    gate.style.width = `${STADIUM.gateForeground.width}px`;
+    gate.style.height = `${STADIUM.gateForeground.height}px`;
+    world.appendChild(gate);
+
+    stadiumUI = { root, curtain };
+    stadiumBookmaker = { root: bookmaker, base, action };
+    stadiumBetUI = { root: betRoot, stake };
+    stadiumFightOverlay = fightOverlay;
+    stadiumFightFighter = {
+      root: fighterRoot,
+      images: [fighterImageA, fighterImageB],
+      activeIndex: 0,
+      currentSrc: STADIUM.fightIntro.walkUpFrames[0],
+      x: STADIUM.fightIntro.start.x,
+      y: STADIUM.fightIntro.start.y
+    };
+    stadiumFightFighterB = {
+      root: fighterBRoot,
+      images: [fighterBImageA, fighterBImageB],
+      activeIndex: 0,
+      currentSrc: STADIUM.fightIntro.schauenburgWalkUpFrames[0],
+      x: STADIUM.fightIntro.schauenburgStart.x,
+      y: STADIUM.fightIntro.schauenburgStart.y
+    };
+    ensureStadiumFightBReference("up");
+    ensureStadiumFightBReference("left");
+    stadiumGateForeground = gate;
+
+    if (base.complete && base.naturalWidth > 0) {
+      prepareStadiumBookmakerAlphaMask(base);
+    }
+
+    game.addEventListener("pointermove", updateStadiumBookmakerHoverFromPointer);
+    game.addEventListener("pointerleave", clearStadiumBookmakerHover);
+    game.addEventListener("click", (event) => {
+      if (
+        stadiumBookmakerHovered &&
+        stadiumState === "spectator" &&
+        !stadiumMenuOpen &&
+        !stadiumBetOpen &&
+        !event.target.closest("#stadiumBetUI")
+      ) {
+        openStadiumBetUI();
+      }
+    });
+  }
+
+  function prepareStadiumBookmakerAlphaMask(image) {
+    if (!image || !image.naturalWidth || !image.naturalHeight) return;
+
+    try {
+      const canvas = document.createElement("canvas");
+      canvas.width = image.naturalWidth;
+      canvas.height = image.naturalHeight;
+      const ctx = canvas.getContext("2d", { willReadFrequently: true });
+      if (!ctx) return;
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(image, 0, 0);
+      const pixels = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+      const alpha = new Uint8Array(canvas.width * canvas.height);
+
+      for (let srcIndex = 3, dst = 0; srcIndex < pixels.length; srcIndex += 4, dst += 1) {
+        alpha[dst] = pixels[srcIndex];
+      }
+
+      stadiumBookmakerAlphaMask = {
+        width: canvas.width,
+        height: canvas.height,
+        alpha
+      };
+    } catch (error) {
+      stadiumBookmakerAlphaMask = null;
+      console.warn("Stadium bookmaker alpha mask unavailable:", error);
+    }
+  }
+
+  function clientPointToStadiumWorld(clientX, clientY) {
+    const rect = world.getBoundingClientRect();
+    if (!rect.width || !rect.height) return null;
+
+    return {
+      x: ((clientX - rect.left) / rect.width) * MAP.width,
+      y: ((clientY - rect.top) / rect.height) * MAP.height
+    };
+  }
+
+  function stadiumBookmakerOpaqueAtWorldPoint(x, y) {
+    if (!stadiumBookmakerAlphaMask) return false;
+
+    const left = STADIUM.bookmakerPoint.x - STADIUM.bookmakerWidth / 2;
+    const top = STADIUM.bookmakerPoint.y - STADIUM.bookmakerHeight;
+    const u = (x - left) / STADIUM.bookmakerWidth;
+    const v = (y - top) / STADIUM.bookmakerHeight;
+
+    if (u < 0 || u > 1 || v < 0 || v > 1) return false;
+
+    const mask = stadiumBookmakerAlphaMask;
+    const px = Math.max(0, Math.min(mask.width - 1, Math.round(u * (mask.width - 1))));
+    const py = Math.max(0, Math.min(mask.height - 1, Math.round(v * (mask.height - 1))));
+    return mask.alpha[py * mask.width + px] >= STADIUM.bookmakerHoverAlphaThreshold;
+  }
+
+  function clearStadiumBookmakerHover() {
+    stadiumBookmakerHovered = false;
+    game.classList.remove("stadium-bookmaker-cursor");
+    if (stadiumBookmaker) {
+      stadiumBookmaker.root.classList.remove("stadium-bookmaker--hovered");
+    }
+  }
+
+  function updateStadiumBookmakerHoverFromPointer(event) {
+    if (
+      MAP.id !== STADIUM.mapId ||
+      stadiumState !== "spectator" ||
+      stadiumMenuOpen ||
+      stadiumBetOpen ||
+      !stadiumBookmaker ||
+      !stadiumBookmakerAlphaMask
+    ) {
+      clearStadiumBookmakerHover();
+      return;
+    }
+
+    const point = clientPointToStadiumWorld(event.clientX, event.clientY);
+    const hovered = !!point && stadiumBookmakerOpaqueAtWorldPoint(point.x, point.y);
+
+    stadiumBookmakerHovered = hovered;
+    game.classList.toggle("stadium-bookmaker-cursor", hovered);
+    stadiumBookmaker.root.classList.toggle("stadium-bookmaker--hovered", hovered);
+  }
+
+  function openStadiumBetUI() {
+    if (!stadiumBetUI || stadiumState !== "spectator" || stadiumMenuOpen) return;
+    stadiumBetOpen = true;
+    clearStadiumBookmakerHover();
+    stadiumBetUI.root.classList.add("stadium-bet--visible");
+  }
+
+  function closeStadiumBetUI() {
+    if (!stadiumBetUI) return;
+    stadiumBetOpen = false;
+    stadiumBetUI.root.classList.remove("stadium-bet--visible");
+    if (document.activeElement === stadiumBetUI.stake) stadiumBetUI.stake.blur();
+  }
+
+  function stadiumItalianSpeech(text) {
+    const colors = ["g", "w", "r"];
+    let i = 0;
+    return text.split(/(\s+)/).map((part) => {
+      if (/^\s+$/.test(part)) return part;
+      const cls = colors[i++ % colors.length];
+      const safe = part.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+      return `<span class="stadium-result__it--${cls}">${safe}</span>`;
+    }).join("");
+  }
+
+  function showStadiumResultUI() {
+    if (!stadiumResultUI || !stadiumLockedBet || !stadiumBrawlWinner || stadiumResultShown) return;
+    stadiumResultShown = true;
+    stadiumResultOpen = true;
+    const won = stadiumLockedBet.team === stadiumBrawlWinner;
+    const crest = stadiumLockedBet.team === "schauenburg" ? STADIUM.derby.schauenburgCrest : STADIUM.derby.neuensteinCrest;
+    const teamName = stadiumLockedBet.team === "schauenburg" ? STADIUM.derby.schauenburgName : STADIUM.derby.neuensteinName;
+    const bookmakerImage = won ? STADIUM.resultPlayerWin : STADIUM.resultBookmakerWin;
+    const speech = won
+      ? "Vaffanculo! Da, nimm deine Pfennige. Und jetzt verschwinde! Arrivederci!"
+      : "Ahhh, mein aufrichtigstes Beileid! Wirklich tragisch. Für dich. Für mich war es ein ausgesprochen schöner Abend. Bis zum nächsten Mal!";
+    stadiumResultUI.body.innerHTML = `
+      <div class="stadium-result__title">EUER WETTSCHEIN</div>
+      <img class="stadium-result__crest" src="${encodeURI(crest)}" alt="">
+      <div class="stadium-result__team">${teamName}</div>
+      <div class="stadium-result__numbers"><span>QUOTE</span><span>${stadiumLockedBet.odds.toFixed(2).replace(".",",")}</span><span>EINSATZ</span><span>${stadiumLockedBet.stake.toLocaleString("de-DE")} ₰</span></div>
+      <div class="stadium-result__outcome ${won ? "stadium-result__outcome--win" : "stadium-result__outcome--loss"}">${won ? `GEWINN: ${stadiumLockedBet.payout.toLocaleString("de-DE")} ₰` : `VERLUST: ${stadiumLockedBet.stake.toLocaleString("de-DE")} ₰`}</div>
+      <img class="stadium-result__bookmaker" src="${encodeURI(bookmakerImage)}" alt="">
+      <div class="stadium-result__speech">${stadiumItalianSpeech(speech)}</div>`;
+    stadiumResultUI.root.classList.add("stadium-result--visible");
+  }
+
+  function closeStadiumResultUI() {
+    if (!stadiumResultUI || !stadiumResultOpen) return;
+    stadiumResultOpen = false;
+    stadiumResultUI.root.classList.remove("stadium-result--visible");
+    // The spectator remains on the stand; only the fight/bet state is reset for a new wager.
+    resetStadiumFightIntro();
+    stadiumState = "spectator";
+    stadiumLockedBet = null;
+    stadiumBetSelectedTeam = null;
+    if (stadiumBetUI) {
+      stadiumBetUI.stake.value = "";
+      for (const node of stadiumBetUI.root.querySelectorAll("[data-bet-team]")) node.classList.remove("stadium-bet__crest--selected");
+      const possible = stadiumBetUI.root.querySelector("#stadiumBetPossibleWin");
+      if (possible) possible.textContent = "MÖGLICHER GEWINN: —";
+    }
+  }
+
+  function setStadiumFightOverlay(kind, text = "") {
+    if (!stadiumFightOverlay) return;
+    stadiumFightOverlay.innerHTML = "";
+
+    if (!kind) {
+      stadiumFightOverlay.classList.remove("stadium-fight-overlay--visible");
+      return;
+    }
+
+    const node = document.createElement("div");
+    node.className = kind === "pruegel"
+      ? "stadium-fight-pruegel"
+      : "stadium-fight-countdown";
+    node.textContent = text;
+    stadiumFightOverlay.appendChild(node);
+    stadiumFightOverlay.classList.add("stadium-fight-overlay--visible");
+  }
+
+  function getStadiumFightOpaqueMetrics(image) {
+    if (!image || !image.naturalWidth || !image.naturalHeight) return null;
+
+    const key = image.currentSrc || image.src;
+    if (stadiumFightFrameMetrics.has(key)) return stadiumFightFrameMetrics.get(key);
+
+    try {
+      const canvas = document.createElement("canvas");
+      canvas.width = image.naturalWidth;
+      canvas.height = image.naturalHeight;
+      const ctx = canvas.getContext("2d", { willReadFrequently: true });
+      if (!ctx) return null;
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(image, 0, 0);
+      const data = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+
+      let minX = canvas.width, minY = canvas.height, maxX = -1, maxY = -1;
+      for (let y = 0; y < canvas.height; y += 1) {
+        for (let x = 0; x < canvas.width; x += 1) {
+          if (data[(y * canvas.width + x) * 4 + 3] < 20) continue;
+          if (x < minX) minX = x;
+          if (x > maxX) maxX = x;
+          if (y < minY) minY = y;
+          if (y > maxY) maxY = y;
+        }
+      }
+
+      if (maxX < minX || maxY < minY) return null;
+
+      // Ground anchor: ignore only the extreme outer 8% of the canvas so a
+      // dangling flail/cape edge can never pull the character's feet up/down.
+      const footX1 = Math.floor(canvas.width * 0.08);
+      const footX2 = Math.ceil(canvas.width * 0.92);
+      let footBottomY = -1;
+      for (let y = canvas.height - 1; y >= minY && footBottomY < 0; y -= 1) {
+        for (let x = footX1; x <= footX2; x += 1) {
+          if (data[(y * canvas.width + x) * 4 + 3] >= 20) {
+            footBottomY = y;
+            break;
+          }
+        }
+      }
+      if (footBottomY < 0) footBottomY = maxY;
+
+      const metrics = {
+        width: maxX - minX + 1,
+        height: maxY - minY + 1,
+        minY,
+        maxY,
+        footBottomY,
+        naturalWidth: canvas.width,
+        naturalHeight: canvas.height
+      };
+      stadiumFightFrameMetrics.set(key, metrics);
+      return metrics;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  function stadiumFightReferenceKeyForSrc(src) {
+    if (
+      src === STADIUM.fightIntro.victoryFrame ||
+      STADIUM.fightIntro.walkUpFrames.includes(src)
+    ) {
+      return "up";
+    }
+    return "right";
+  }
+
+  function ensureStadiumFightReference(referenceKey) {
+    if (stadiumFightReferenceOpaqueHeights[referenceKey] != null) return true;
+
+    const referenceSrc = referenceKey === "up"
+      ? STADIUM.fightIntro.victoryFrame
+      : STADIUM.fightIntro.readyFrame;
+
+    const reference = new Image();
+    reference.src = encodeURI(referenceSrc);
+    if (!reference.complete || !reference.naturalWidth) return false;
+
+    const metrics = getStadiumFightOpaqueMetrics(reference);
+    if (!metrics) return false;
+
+    const fit = Math.min(
+      STADIUM.fightIntro.fighterWidth / metrics.naturalWidth,
+      STADIUM.fightIntro.fighterHeight / metrics.naturalHeight
+    );
+    stadiumFightReferenceOpaqueHeights[referenceKey] = metrics.height * fit;
+    return true;
+  }
+
+  function layoutStadiumFightSprite(image, src) {
+    if (!stadiumFightFighter || !image || !image.naturalWidth || !image.naturalHeight) return;
+    const metrics = getStadiumFightOpaqueMetrics(image);
+    if (!metrics) return;
+
+    // R77 SIZE FIX:
+    // Backward/up walking is scaled to the exact visual size of FLEGEL VICTORY.
+    // Right walking is scaled to the exact visual size of FLEGEL READY.
+    // The stand poses themselves therefore do NOT change size when reached.
+    const referenceKey = stadiumFightReferenceKeyForSrc(src);
+    if (stadiumFightReferenceOpaqueHeights[referenceKey] == null) {
+      ensureStadiumFightReference(referenceKey);
+    }
+    const targetOpaqueHeight = stadiumFightReferenceOpaqueHeights[referenceKey];
+    if (targetOpaqueHeight == null) return;
+
+    let scale = targetOpaqueHeight / Math.max(1, metrics.height);
+
+    // R80: Fighter A is ROHART-NEUENSTEIN.
+    // Only his moving sprites are reduced; victory/ready poses stay unchanged.
+    if (STADIUM.fightIntro.walkUpFrames.includes(src)) {
+      scale *= STADIUM.fightIntro.neuensteinWalkUpScale;
+    } else if (STADIUM.fightIntro.walkRightFrames.includes(src)) {
+      scale *= STADIUM.fightIntro.neuensteinWalkRightScale;
+    }
+
+    const renderedWidth = metrics.naturalWidth * scale;
+    const renderedHeight = metrics.naturalHeight * scale;
+
+    // Preserve the proven anti-bounce foot anchor exactly.
+    const footGap = (metrics.naturalHeight - 1 - metrics.footBottomY) * scale;
+
+    image.style.width = `${renderedWidth.toFixed(3)}px`;
+    image.style.height = `${renderedHeight.toFixed(3)}px`;
+    image.style.bottom = `${(-footGap).toFixed(3)}px`;
+    image.style.transform = "translateX(-50%)";
+  }
+
+  function setStadiumFightSprite(src, force = false) {
+    if (!stadiumFightFighter || !src) return;
+    if (!force && stadiumFightFighter.currentSrc === src) return;
+
+    const token = ++stadiumFightSpriteToken;
+    const nextIndex = 1 - stadiumFightFighter.activeIndex;
+    const nextImage = stadiumFightFighter.images[nextIndex];
+    const oldImage = stadiumFightFighter.images[stadiumFightFighter.activeIndex];
+    const encoded = encodeURI(src);
+
+    const reveal = () => {
+      if (token !== stadiumFightSpriteToken) return;
+      layoutStadiumFightSprite(nextImage, src);
+      nextImage.classList.add("stadium-fighter__sprite--active");
+      oldImage.classList.remove("stadium-fighter__sprite--active");
+      stadiumFightFighter.activeIndex = nextIndex;
+      stadiumFightFighter.currentSrc = src;
+    };
+
+    nextImage.onload = reveal;
+    nextImage.src = encoded;
+    if (nextImage.complete && nextImage.naturalWidth > 0) reveal();
+  }
+
+  function setStadiumFightPosition(x, y) {
+    if (!stadiumFightFighter) return;
+    stadiumFightFighter.x = x;
+    stadiumFightFighter.y = y;
+    stadiumFightFighter.root.style.left = `${x}px`;
+    stadiumFightFighter.root.style.top = `${y}px`;
+  }
+
+  const stadiumFightBReferenceOpaqueHeights = {
+    up: null,
+    left: null
+  };
+
+  function stadiumFightBGroupForSrc(src) {
+    return STADIUM.fightIntro.schauenburgWalkLeftFrames.includes(src) ? "left" : "up";
+  }
+
+  function ensureStadiumFightBReference(group) {
+    if (stadiumFightBReferenceOpaqueHeights[group] != null) return true;
+
+    const refSrc = group === "left"
+      ? STADIUM.fightIntro.schauenburgWalkLeftFrames[0]
+      : STADIUM.fightIntro.schauenburgVictoryFrame;
+
+    const reference = new Image();
+    reference.src = encodeURI(refSrc);
+    if (!reference.complete || !reference.naturalWidth) return false;
+
+    const metrics = getStadiumFightOpaqueMetrics(reference);
+    if (!metrics) return false;
+
+    const fit = Math.min(
+      STADIUM.fightIntro.fighterWidth / metrics.naturalWidth,
+      STADIUM.fightIntro.fighterHeight / metrics.naturalHeight
+    );
+
+    stadiumFightBReferenceOpaqueHeights[group] =
+      metrics.height * fit *
+      (group === "left" ? STADIUM.fightIntro.schauenburgWalkLeftScale : 1);
+
+    return true;
+  }
+
+  function layoutStadiumFightSpriteB(image, src) {
+    if (!stadiumFightFighterB || !image || !image.naturalWidth || !image.naturalHeight) return;
+    const metrics = getStadiumFightOpaqueMetrics(image);
+    if (!metrics) return;
+
+    const group = stadiumFightBGroupForSrc(src);
+    if (stadiumFightBReferenceOpaqueHeights[group] == null) {
+      ensureStadiumFightBReference(group);
+    }
+
+    let targetOpaqueHeight = stadiumFightBReferenceOpaqueHeights[group];
+
+    // Fallback is deterministic and still uses the requested left enlargement.
+    if (targetOpaqueHeight == null) {
+      const fit = Math.min(
+        STADIUM.fightIntro.fighterWidth / metrics.naturalWidth,
+        STADIUM.fightIntro.fighterHeight / metrics.naturalHeight
+      );
+      targetOpaqueHeight = metrics.height * fit *
+        (group === "left" ? STADIUM.fightIntro.schauenburgWalkLeftScale : 1);
+    }
+
+    // Every frame in a movement group gets the SAME visible opaque height.
+    // Combined with the opaque foot anchor this eliminates the left-run bounce.
+    const scale = targetOpaqueHeight / Math.max(1, metrics.height);
+    const footGap = (metrics.naturalHeight - 1 - metrics.footBottomY) * scale;
+
+    image.style.width = `${(metrics.naturalWidth * scale).toFixed(3)}px`;
+    image.style.height = `${(metrics.naturalHeight * scale).toFixed(3)}px`;
+    image.style.bottom = `${(-footGap).toFixed(3)}px`;
+    image.style.transform = "translateX(-50%)";
+  }
+
+  function setStadiumFightSpriteB(src, force = false) {
+    if (!stadiumFightFighterB || !src) return;
+    if (!force && stadiumFightFighterB.currentSrc === src) return;
+    const token = ++stadiumFightFighterBSpriteToken;
+    const nextIndex = 1 - stadiumFightFighterB.activeIndex;
+    const nextImage = stadiumFightFighterB.images[nextIndex];
+    const oldImage = stadiumFightFighterB.images[stadiumFightFighterB.activeIndex];
+    const reveal = () => {
+      if (token !== stadiumFightFighterBSpriteToken) return;
+      layoutStadiumFightSpriteB(nextImage, src);
+      nextImage.classList.add("stadium-fighter__sprite--active");
+      oldImage.classList.remove("stadium-fighter__sprite--active");
+      stadiumFightFighterB.activeIndex = nextIndex;
+      stadiumFightFighterB.currentSrc = src;
+    };
+    nextImage.onload = reveal;
+    nextImage.src = encodeURI(src);
+    if (nextImage.complete && nextImage.naturalWidth > 0) reveal();
+  }
+
+  function setStadiumFightPositionB(x, y) {
+    if (!stadiumFightFighterB) return;
+    stadiumFightFighterB.x = x;
+    stadiumFightFighterB.y = y;
+    stadiumFightFighterB.root.style.left = `${x}px`;
+    stadiumFightFighterB.root.style.top = `${y}px`;
+  }
+
+  function moveStadiumFighterBToward(target, speed, deltaSeconds) {
+    if (!stadiumFightFighterB) return true;
+    const dx = target.x - stadiumFightFighterB.x;
+    const dy = target.y - stadiumFightFighterB.y;
+    const distance = Math.hypot(dx, dy);
+    if (distance <= 4) { setStadiumFightPositionB(target.x, target.y); return true; }
+    const step = Math.min(distance, speed * deltaSeconds);
+    setStadiumFightPositionB(
+      stadiumFightFighterB.x + (dx / distance) * step,
+      stadiumFightFighterB.y + (dy / distance) * step
+    );
+    if (step >= distance) { setStadiumFightPositionB(target.x, target.y); return true; }
+    return false;
+  }
+
+  function updateStadiumFighterBWalkAnimation(now, frames, mirror = false) {
+    if (!stadiumFightFighterB || !frames.length) return;
+    if (now >= stadiumFightFighterBNextFrameAt) {
+      while (now >= stadiumFightFighterBNextFrameAt) {
+        stadiumFightFighterBFrameIndex = (stadiumFightFighterBFrameIndex + 1) % frames.length;
+        stadiumFightFighterBNextFrameAt += STADIUM.fightIntro.frameDuration;
+      }
+      setStadiumFightSpriteB(frames[stadiumFightFighterBFrameIndex]);
+    }
+    for (const img of stadiumFightFighterB.images) {
+      const base = "translateX(-50%)";
+      img.style.transform = mirror ? `${base} scaleX(-1)` : base;
+    }
+  }
+
+  function layoutStadiumBrawlSprite(image, mirror = false) {
+    if (!image || !image.naturalWidth || !image.naturalHeight) return;
+    const metrics = getStadiumFightOpaqueMetrics(image);
+    if (!metrics) return;
+    const scale = STADIUM.fightIntro.brawl.targetOpaqueHeight / Math.max(1, metrics.height);
+    const footGap = (metrics.naturalHeight - 1 - metrics.footBottomY) * scale;
+    image.style.width = `${(metrics.naturalWidth * scale).toFixed(3)}px`;
+    image.style.height = `${(metrics.naturalHeight * scale).toFixed(3)}px`;
+    image.style.bottom = `${(-footGap).toFixed(3)}px`;
+    image.style.transform = mirror ? "translateX(-50%) scaleX(-1)" : "translateX(-50%)";
+  }
+
+  function setStadiumBrawlLayerVisible(layer, visible) {
+    if (!layer || !layer.root) return;
+    layer.root.classList.toggle("stadium-brawl-layer--visible", visible);
+  }
+
+  function hideAllStadiumBrawlLayers() {
+    if (!stadiumBrawlVisuals) return;
+    setStadiumBrawlLayerVisible(stadiumBrawlVisuals.attackA, false);
+    setStadiumBrawlLayerVisible(stadiumBrawlVisuals.shared, false);
+    setStadiumBrawlLayerVisible(stadiumBrawlVisuals.attackB, false);
+    setStadiumBrawlLayerVisible(stadiumBrawlVisuals.hitNeuenstein, false);
+    setStadiumBrawlLayerVisible(stadiumBrawlVisuals.hitSchauenburg, false);
+    setStadiumBrawlLayerVisible(stadiumBrawlVisuals.hitSchauenburgAlt, false);
+    setStadiumBrawlLayerVisible(stadiumBrawlVisuals.hitSchauenburgFourth, false);
+    setStadiumBrawlLayerVisible(stadiumBrawlVisuals.finishSetup, false);
+    setStadiumBrawlLayerVisible(stadiumBrawlVisuals.finishEvade, false);
+    setStadiumBrawlLayerVisible(stadiumBrawlVisuals.fatalityNeuenstein, false);
+    setStadiumBrawlLayerVisible(stadiumBrawlVisuals.fatalitySchauenburg, false);
+  }
+
+  function showStadiumBrawlAttack() {
+    if (!stadiumBrawlVisuals) return;
+    setStadiumBrawlLayerVisible(stadiumBrawlVisuals.shared, false);
+    setStadiumBrawlLayerVisible(stadiumBrawlVisuals.hitNeuenstein, false);
+    setStadiumBrawlLayerVisible(stadiumBrawlVisuals.hitSchauenburg, false);
+    setStadiumBrawlLayerVisible(stadiumBrawlVisuals.hitSchauenburgAlt, false);
+    setStadiumBrawlLayerVisible(stadiumBrawlVisuals.hitSchauenburgFourth, false);
+    setStadiumBrawlLayerVisible(stadiumBrawlVisuals.finishSetup, false);
+    setStadiumBrawlLayerVisible(stadiumBrawlVisuals.finishEvade, false);
+    setStadiumBrawlLayerVisible(stadiumBrawlVisuals.fatalityNeuenstein, false);
+    setStadiumBrawlLayerVisible(stadiumBrawlVisuals.fatalitySchauenburg, false);
+    setStadiumBrawlLayerVisible(stadiumBrawlVisuals.attackA, true);
+    setStadiumBrawlLayerVisible(stadiumBrawlVisuals.attackB, true);
+    spawnStadiumBrawlDust();
+  }
+
+  function spawnStadiumBrawlDamageText(targetTeam) {
+    if (!stadiumBrawlDamageTextRoot) return;
+
+    const isNeuensteinTarget = targetTeam === "neuenstein";
+    const point = isNeuensteinTarget
+      ? STADIUM.fightIntro.brawl.neuensteinContact
+      : STADIUM.fightIntro.brawl.schauenburgContact;
+
+    const text = document.createElement("span");
+    text.className =
+      "stadium-brawl-damage " +
+      (isNeuensteinTarget
+        ? "stadium-brawl-damage--neuenstein"
+        : "stadium-brawl-damage--schauenburg");
+    text.textContent = "-20";
+    text.style.left = `${point.x}px`;
+    text.style.top = `${point.y - 870}px`;
+    stadiumBrawlDamageTextRoot.appendChild(text);
+    text.addEventListener("animationend", () => text.remove(), { once: true });
+  }
+
+  function clearStadiumBrawlDamageText() {
+    if (stadiumBrawlDamageTextRoot) stadiumBrawlDamageTextRoot.replaceChildren();
+  }
+
+  function hideStadiumBrawlFatalityText() {
+    if (!stadiumBrawlFatalityText) return;
+    stadiumBrawlFatalityText.classList.remove(
+      "stadium-brawl-fatality-text--visible",
+      "stadium-brawl-fatality-text--neuenstein",
+      "stadium-brawl-fatality-text--schauenburg"
+    );
+  }
+
+  function showStadiumBrawlFatalityText(winner) {
+    if (!stadiumBrawlFatalityText) return;
+    stadiumBrawlFatalityText.classList.remove(
+      "stadium-brawl-fatality-text--neuenstein",
+      "stadium-brawl-fatality-text--schauenburg"
+    );
+    stadiumBrawlFatalityText.classList.add(
+      winner === "neuenstein"
+        ? "stadium-brawl-fatality-text--neuenstein"
+        : "stadium-brawl-fatality-text--schauenburg",
+      "stadium-brawl-fatality-text--visible"
+    );
+  }
+
+  function showStadiumBrawlRest(allowHitRoll = true) {
+    if (!stadiumBrawlVisuals) return;
+
+    setStadiumBrawlLayerVisible(stadiumBrawlVisuals.attackA, false);
+    setStadiumBrawlLayerVisible(stadiumBrawlVisuals.attackB, false);
+    setStadiumBrawlLayerVisible(stadiumBrawlVisuals.shared, false);
+    setStadiumBrawlLayerVisible(stadiumBrawlVisuals.hitNeuenstein, false);
+    setStadiumBrawlLayerVisible(stadiumBrawlVisuals.hitSchauenburg, false);
+    setStadiumBrawlLayerVisible(stadiumBrawlVisuals.hitSchauenburgAlt, false);
+    setStadiumBrawlLayerVisible(stadiumBrawlVisuals.hitSchauenburgFourth, false);
+
+    // Final/result holds remain neutral and must never consume another hit slot.
+    if (!allowHitRoll) {
+      setStadiumBrawlLayerVisible(stadiumBrawlVisuals.shared, true);
+      return;
+    }
+
+    if (stadiumBrawlRestTurn === "neuenstein") {
+      // First shared slot is always Neuenstein's 30% opportunity.
+      const landed = Math.random() < STADIUM.derby.neuensteinChance;
+      setStadiumBrawlLayerVisible(
+        landed ? stadiumBrawlVisuals.hitNeuenstein : stadiumBrawlVisuals.shared,
+        true
+      );
+      if (landed) {
+        // Neuenstein hits Schauenburg: red -20 + one random successful-hit sound (2-4).
+        spawnStadiumBrawlDamageText("schauenburg");
+        playRandomStadiumArenaSfx(STADIUM_ARENA_SFX.neuensteinHits);
+      } else {
+        // No hit: two different neutral-rest sounds (available attachments 8-10),
+        // always played directly one after another.
+        playStadiumArenaNeutralRestPair();
+      }
+      stadiumBrawlRestTurn = "schauenburg";
+      return;
+    }
+
+    // Next shared slot is Schauenburg's 70% opportunity.
+    const landed = Math.random() < STADIUM.derby.schauenburgChance;
+    if (!landed) {
+      setStadiumBrawlLayerVisible(stadiumBrawlVisuals.shared, true);
+      // No hit: two different neutral-rest sounds, directly sequential.
+      playStadiumArenaNeutralRestPair();
+    } else {
+      stadiumBrawlSchauenburgSuccessfulHits += 1;
+      const fourthSuccessfulHit = stadiumBrawlSchauenburgSuccessfulHits % 4 === 0;
+
+      // R87 — hit 4 is still ALWAYS the established leg-pull frame.
+      // Hits 1-3 randomly use either normal Schauenburg hit composition.
+      const normalSchauenburgHitLayer = Math.random() < 0.5
+        ? stadiumBrawlVisuals.hitSchauenburg
+        : stadiumBrawlVisuals.hitSchauenburgAlt;
+
+      setStadiumBrawlLayerVisible(
+        fourthSuccessfulHit
+          ? stadiumBrawlVisuals.hitSchauenburgFourth
+          : normalSchauenburgHitLayer,
+        true
+      );
+
+      // Schauenburg hits Neuenstein: light-blue -20 + random successful-hit sound (5-6).
+      spawnStadiumBrawlDamageText("neuenstein");
+      playRandomStadiumArenaSfx(STADIUM_ARENA_SFX.schauenburgHits);
+
+      // R85: after this existing 4th-hit frame has held for the normal restMs,
+      // the normal attack/rest loop stops and the finish branch begins.
+      if (fourthSuccessfulHit) stadiumBrawlFatalityPending = true;
+    }
+    stadiumBrawlRestTurn = "neuenstein";
+  }
+
+  function clearStadiumBrawlDust() {
+    if (stadiumBrawlDust) stadiumBrawlDust.replaceChildren();
+  }
+
+  function spawnStadiumBrawlDust() {
+    if (!stadiumBrawlDust) return;
+    const count = 4 + Math.floor(Math.random() * 2);
+    for (let i = 0; i < count; i += 1) {
+      const puff = document.createElement("span");
+      puff.className = "stadium-brawl-dust__puff";
+      puff.style.setProperty("--dust-size", `${90 + Math.round(Math.random() * 95)}px`);
+      puff.style.setProperty("--dust-x", `${Math.round((Math.random() - .5) * 260)}px`);
+      puff.style.setProperty("--dust-y", `${Math.round((Math.random() - .5) * 105)}px`);
+      puff.style.setProperty("--dust-dx", `${Math.round((Math.random() - .5) * 95)}px`);
+      puff.style.setProperty("--dust-dy", `${-10 - Math.round(Math.random() * 42)}px`);
+      puff.style.setProperty("--dust-life", `${270 + Math.round(Math.random() * 120)}ms`);
+      stadiumBrawlDust.appendChild(puff);
+      puff.addEventListener("animationend", () => puff.remove(), { once: true });
+    }
+  }
+
+  function setStadiumFighterAMirrored(mirrored) {
+    if (!stadiumFightFighter) return;
+    for (const img of stadiumFightFighter.images) {
+      img.style.transform = mirrored
+        ? "translateX(-50%) scaleX(-1)"
+        : "translateX(-50%)";
+    }
+  }
+
+  function beginStadiumBrawlFatalitySetup(now) {
+    stadiumBrawlFatalityPending = false;
+    stadiumBrawlFatalityEvaded = null;
+    clearStadiumBrawlDust();
+    clearStadiumBrawlDamageText();
+    hideStadiumBrawlFatalityText();
+    hideAllStadiumBrawlLayers();
+    setStadiumBrawlLayerVisible(stadiumBrawlVisuals.finishSetup, true);
+    stadiumBrawlPhaseEndAt = now + STADIUM.fightIntro.brawl.finishSetupMs;
+    stadiumState = "fight-fatality-setup";
+  }
+
+  function resolveStadiumBrawlFatalityEvade(now) {
+    // Exactly one 30% evade roll, using the existing bookmaker chance.
+    stadiumBrawlFatalityEvaded = Math.random() < STADIUM.derby.neuensteinChance;
+    hideAllStadiumBrawlLayers();
+
+    if (stadiumBrawlFatalityEvaded) {
+      setStadiumBrawlLayerVisible(stadiumBrawlVisuals.finishEvade, true);
+      stadiumBrawlPhaseEndAt = now + STADIUM.fightIntro.brawl.finishEvadeMs;
+      stadiumState = "fight-fatality-evade";
+      return;
+    }
+
+    stadiumBrawlWinner = "schauenburg";
+    setStadiumBrawlLayerVisible(stadiumBrawlVisuals.fatalitySchauenburg, true);
+    showStadiumBrawlFatalityText("schauenburg");
+    playStadiumArenaKillSequenceOnce();
+    stadiumBrawlPhaseEndAt = now + STADIUM.fightIntro.brawl.fatalityMs;
+    stadiumState = "fight-fatality-schauenburg";
+  }
+
+  function beginStadiumBrawlNeuensteinFatality(now) {
+    hideAllStadiumBrawlLayers();
+    stadiumBrawlWinner = "neuenstein";
+    setStadiumBrawlLayerVisible(stadiumBrawlVisuals.fatalityNeuenstein, true);
+    showStadiumBrawlFatalityText("neuenstein");
+    playStadiumArenaKillSequenceOnce();
+    stadiumBrawlPhaseEndAt = now + STADIUM.fightIntro.brawl.fatalityMs;
+    stadiumState = "fight-fatality-neuenstein";
+  }
+
+  function beginStadiumBrawl(now = performance.now()) {
+    if (stadiumBrawlStarted || !stadiumFightFighter || !stadiumFightFighterB) return;
+    stadiumBrawlStarted = true;
+
+    // One and only one outcome roll. Uses the exact existing bookmaker chance.
+    stadiumBrawlWinner = Math.random() < STADIUM.derby.schauenburgChance
+      ? "schauenburg"
+      : "neuenstein";
+    stadiumBrawlCyclesTarget = STADIUM.fightIntro.brawl.minCycles +
+      Math.floor(Math.random() * (STADIUM.fightIntro.brawl.maxCycles - STADIUM.fightIntro.brawl.minCycles + 1));
+    stadiumBrawlCyclesDone = 0;
+    stadiumBrawlRestTurn = "neuenstein";
+    stadiumBrawlSchauenburgSuccessfulHits = 0;
+    stadiumBrawlFatalityPending = false;
+    stadiumBrawlFatalityEvaded = null;
+    stadiumBrawlApproachStartedAt = now;
+    stadiumBrawlApproachStartA = { x: stadiumFightFighter.x, y: stadiumFightFighter.y };
+    stadiumBrawlApproachStartB = { x: stadiumFightFighterB.x, y: stadiumFightFighterB.y };
+    stadiumFightFrameIndex = 0;
+    stadiumFightFighterBFrameIndex = 0;
+    stadiumFightNextFrameAt = now + STADIUM.fightIntro.frameDuration;
+    stadiumFightFighterBNextFrameAt = now + STADIUM.fightIntro.frameDuration;
+    hideAllStadiumBrawlLayers();
+    clearStadiumBrawlDust();
+    clearStadiumBrawlDamageText();
+    hideStadiumBrawlFatalityText();
+
+    // Reuse the already-proven side-run animation groups in the reverse direction.
+    setStadiumFightSprite(STADIUM.fightIntro.walkRightFrames[0], true);
+    setStadiumFightSpriteB(STADIUM.fightIntro.schauenburgWalkLeftFrames[0], true);
+    setStadiumFighterAMirrored(true);
+    for (const img of stadiumFightFighterB.images) img.style.transform = "translateX(-50%)";
+    stadiumState = "fight-brawl-approach";
+  }
+
+  function updateStadiumBrawlApproach(now) {
+    if (!stadiumBrawlApproachStartA || !stadiumBrawlApproachStartB) return;
+    updateStadiumFighterWalkAnimation(now, STADIUM.fightIntro.walkRightFrames);
+    updateStadiumFighterBWalkAnimation(now, STADIUM.fightIntro.schauenburgWalkLeftFrames, false);
+    setStadiumFighterAMirrored(true);
+
+    const duration = Math.max(1, STADIUM.fightIntro.brawl.approachDurationMs);
+    const t = Math.min(1, Math.max(0, (now - stadiumBrawlApproachStartedAt) / duration));
+    const eased = t * t * (3 - 2 * t);
+    const aTarget = STADIUM.fightIntro.brawl.neuensteinContact;
+    const bTarget = STADIUM.fightIntro.brawl.schauenburgContact;
+
+    setStadiumFightPosition(
+      stadiumBrawlApproachStartA.x + (aTarget.x - stadiumBrawlApproachStartA.x) * eased,
+      stadiumBrawlApproachStartA.y + (aTarget.y - stadiumBrawlApproachStartA.y) * eased
+    );
+    setStadiumFightPositionB(
+      stadiumBrawlApproachStartB.x + (bTarget.x - stadiumBrawlApproachStartB.x) * eased,
+      stadiumBrawlApproachStartB.y + (bTarget.y - stadiumBrawlApproachStartB.y) * eased
+    );
+
+    if (t < 1) return;
+
+    // The entry roots are replaced only now; the actual hit images are isolated R82 layers.
+    stadiumFightFighter.root.classList.remove("stadium-fighter--visible");
+    stadiumFightFighterB.root.classList.remove("stadium-fighter--visible");
+    showStadiumBrawlAttack();
+    stadiumBrawlPhaseEndAt = now + STADIUM.fightIntro.brawl.attackMs;
+    stadiumState = "fight-brawl-attack";
+  }
+
+  function updateStadiumBrawl(now) {
+    if (stadiumState === "fight-brawl-approach") {
+      updateStadiumBrawlApproach(now);
+      return true;
+    }
+
+    if (stadiumState === "fight-brawl-attack") {
+      if (now < stadiumBrawlPhaseEndAt) return true;
+      showStadiumBrawlRest();
+      stadiumBrawlPhaseEndAt = now + STADIUM.fightIntro.brawl.restMs;
+      stadiumState = "fight-brawl-rest";
+      return true;
+    }
+
+    if (stadiumState === "fight-brawl-rest") {
+      if (now < stadiumBrawlPhaseEndAt) return true;
+
+      // R85: the existing 4th Schauenburg hit held for its full normal restMs.
+      // From here on, no more normal hit rolls, dust or 50–90-cycle loop.
+      if (stadiumBrawlFatalityPending) {
+        beginStadiumBrawlFatalitySetup(now);
+        return true;
+      }
+
+      stadiumBrawlCyclesDone += 1;
+      if (stadiumBrawlCyclesDone >= stadiumBrawlCyclesTarget) {
+        // Fallback remains the neutral shared frame if no fatality branch was reached.
+        showStadiumBrawlRest(false);
+        stadiumState = "fight-brawl-result";
+        return true;
+      }
+      showStadiumBrawlAttack();
+      stadiumBrawlPhaseEndAt = now + STADIUM.fightIntro.brawl.attackMs;
+      stadiumState = "fight-brawl-attack";
+      return true;
+    }
+
+    if (stadiumState === "fight-fatality-setup") {
+      if (now < stadiumBrawlPhaseEndAt) return true;
+      resolveStadiumBrawlFatalityEvade(now);
+      return true;
+    }
+
+    if (stadiumState === "fight-fatality-evade") {
+      if (now < stadiumBrawlPhaseEndAt) return true;
+      beginStadiumBrawlNeuensteinFatality(now);
+      return true;
+    }
+
+    if (
+      stadiumState === "fight-fatality-neuenstein" ||
+      stadiumState === "fight-fatality-schauenburg"
+    ) {
+      if (now < stadiumBrawlPhaseEndAt) return true;
+      stadiumState = "fight-brawl-result";
+      showStadiumResultUI();
+      return true;
+    }
+
+    if (stadiumState === "fight-brawl-result") return true;
+    return false;
+  }
+
+  function setStadiumArenaAnnouncerFrame(index, visible = true) {
+    if (!stadiumArenaAnnouncer) return;
+    const safeIndex = Math.max(0, Math.min(stadiumArenaAnnouncer.images.length - 1, index));
+
+    stadiumArenaAnnouncer.root.classList.toggle(
+      "stadium-arena-announcer--visible",
+      visible
+    );
+
+    stadiumArenaAnnouncer.images.forEach((img, i) => {
+      img.classList.toggle(
+        "stadium-arena-announcer__sprite--active",
+        visible && i === safeIndex
+      );
+    });
+
+    stadiumArenaAnnouncer.activeIndex = visible ? safeIndex : -1;
+  }
+
+  function hideStadiumArenaAnnouncer() {
+    if (!stadiumArenaAnnouncer) return;
+    stadiumArenaAnnouncer.root.classList.remove("stadium-arena-announcer--visible");
+    stadiumArenaAnnouncer.images.forEach((img) => {
+      img.classList.remove("stadium-arena-announcer__sprite--active");
+    });
+    stadiumArenaAnnouncer.activeIndex = -1;
+  }
+
+  function beginStadiumFinalCountdown(now = performance.now()) {
+    if (stadiumState !== "schauenburg-ready") return;
+
+    stadiumState = "fight-final-sync";
+    stadiumFinalSequenceStartedAt = 0;
+    stadiumFinalSequenceStep = -1;
+    setStadiumFightOverlay(null);
+
+    // Prompt Anhang 2: first image appears exactly with the sound.
+    setStadiumArenaAnnouncerFrame(0, true);
+
+    playStadiumFightAnnouncerOnce().then(() => {
+      const currentMs = Number.isFinite(stadiumFightAnnouncerAudio.currentTime)
+        ? stadiumFightAnnouncerAudio.currentTime * 1000
+        : 0;
+      stadiumFinalSequenceStartedAt = performance.now() - currentMs;
+    });
+  }
+
+  function updateStadiumFinalCountdown(now) {
+    if (stadiumState !== "fight-final-sync" || !stadiumFinalSequenceStartedAt) return;
+
+    // The audio itself is the master clock.
+    const elapsedMs =
+      !stadiumFightAnnouncerAudio.paused &&
+      Number.isFinite(stadiumFightAnnouncerAudio.currentTime)
+        ? stadiumFightAnnouncerAudio.currentTime * 1000
+        : Math.max(0, now - stadiumFinalSequenceStartedAt);
+
+    if (
+      elapsedMs >= STADIUM.fightIntro.finalCountdown3AtMs &&
+      stadiumFinalSequenceStep < 1
+    ) {
+      stadiumFinalSequenceStep = 1;
+      // Prompt Anhang 3 after exactly 2 seconds.
+      setStadiumArenaAnnouncerFrame(1, true);
+      setStadiumFightOverlay("countdown", "3");
+    }
+
+    if (
+      elapsedMs >= STADIUM.fightIntro.finalCountdown2AtMs &&
+      stadiumFinalSequenceStep < 2
+    ) {
+      stadiumFinalSequenceStep = 2;
+      setStadiumFightOverlay("countdown", "2");
+    }
+
+    if (
+      elapsedMs >= STADIUM.fightIntro.finalCountdown1AtMs &&
+      stadiumFinalSequenceStep < 3
+    ) {
+      stadiumFinalSequenceStep = 3;
+      setStadiumFightOverlay("countdown", "1");
+    }
+
+    if (
+      elapsedMs >= STADIUM.fightIntro.finalPruegelAtMs &&
+      stadiumFinalSequenceStep < 4
+    ) {
+      stadiumFinalSequenceStep = 4;
+      // Prompt Anhang 4 + PRÜGEL exactly on TIME at 5.000 seconds.
+      setStadiumArenaAnnouncerFrame(2, true);
+      setStadiumFightOverlay("pruegel", "PRÜGEL!");
+      stadiumState = "fight-pruegel-ready";
+      stadiumFightPhaseEndAt = now + STADIUM.fightIntro.pruegelMs;
+    }
+  }
+
+  function resetStadiumFightIntro() {
+    stadiumFightStarted = false;
+    stadiumFightAnnouncerPlayed = false;
+    stadiumBattleHornPlayed = false;
+    stadiumArenaKillSequencePlayed = false;
+    stopAllStadiumArenaSfx();
+    stadiumFinalSequenceStartedAt = 0;
+    stadiumFinalSequenceStep = -1;
+    stadiumBrawlStarted = false;
+    stadiumBrawlWinner = null;
+    stadiumResultShown = false;
+    stadiumBrawlCyclesTarget = 0;
+    stadiumBrawlCyclesDone = 0;
+    stadiumBrawlRestTurn = "neuenstein";
+    stadiumBrawlSchauenburgSuccessfulHits = 0;
+    stadiumBrawlFatalityPending = false;
+    stadiumBrawlFatalityEvaded = null;
+    stadiumBrawlPhaseEndAt = 0;
+    stadiumBrawlApproachStartedAt = 0;
+    stadiumBrawlApproachStartA = null;
+    stadiumBrawlApproachStartB = null;
+    hideAllStadiumBrawlLayers();
+    clearStadiumBrawlDust();
+    clearStadiumBrawlDamageText();
+    hideStadiumBrawlFatalityText();
+    try {
+      stadiumFightAnnouncerAudio.pause();
+      stadiumFightAnnouncerAudio.currentTime = 0;
+      stadiumBattleHornAudio.pause();
+      stadiumBattleHornAudio.currentTime = 0;
+    } catch (_) {}
+    hideStadiumArenaAnnouncer();
+    stadiumFightPhaseEndAt = 0;
+    stadiumFightFrameIndex = 0;
+    stadiumFightNextFrameAt = 0;
+    stadiumFightLastState = "";
+    ensureStadiumFightReference("up");
+    ensureStadiumFightReference("right");
+    setStadiumFightOverlay(null);
+
+    if (stadiumFightFighter) {
+      stadiumFightFighter.root.classList.remove("stadium-fighter--visible");
+      setStadiumFightPosition(STADIUM.fightIntro.start.x, STADIUM.fightIntro.start.y);
+      setStadiumFightSprite(STADIUM.fightIntro.walkUpFrames[0], true);
+      setStadiumFighterAMirrored(false);
+    }
+    if (stadiumFightFighterB) {
+      stadiumFightFighterB.root.classList.remove("stadium-fighter--visible");
+      setStadiumFightPositionB(STADIUM.fightIntro.schauenburgStart.x, STADIUM.fightIntro.schauenburgStart.y);
+      setStadiumFightSpriteB(STADIUM.fightIntro.schauenburgWalkUpFrames[0], true);
+      for (const img of stadiumFightFighterB.images) img.style.transform = "translateX(-50%)";
+    }
+  }
+
+  function beginStadiumFightIntro(now = performance.now()) {
+    if (
+      MAP.id !== STADIUM.mapId ||
+      stadiumState !== "spectator" ||
+      stadiumFightStarted
+    ) return;
+
+    stadiumFightStarted = true;
+    keys.clear();
+    clearStadiumBookmakerHover();
+    closeStadiumBetUI();
+
+    // R79: only NOW does RENCHTALSTADION switch from the continuing
+    // OBERKIRCH music to its already existing dedicated battle track.
+    stadiumBattleMusicStarted = true;
+    crossfadeMapMusic("renchtalstadion");
+
+    if (stadiumFightFighter) {
+      stadiumFightFighter.root.classList.remove("stadium-fighter--visible");
+      setStadiumFightPosition(STADIUM.fightIntro.start.x, STADIUM.fightIntro.start.y);
+      setStadiumFightSprite(STADIUM.fightIntro.walkUpFrames[0], true);
+    }
+
+    // R81: after betting only the horn, music switch and normal entrance happen.
+    // NO countdown and NO "It's time" effect at this moment.
+    playStadiumBattleHornOnce();
+    beginStadiumFighterWalkUp(now);
+  }
+
+  function advanceStadiumFightCountdown(now) {
+    if (stadiumState === "fight-pre-countdown") {
+      stadiumState = "fight-countdown-3";
+      stadiumFightPhaseEndAt = now + STADIUM.fightIntro.countdownStepMs;
+      setStadiumFightOverlay("countdown", "3");
+      return true;
+    }
+
+    if (stadiumState === "fight-countdown-3") {
+      stadiumState = "fight-countdown-2";
+      stadiumFightPhaseEndAt = now + STADIUM.fightIntro.countdownStepMs;
+      setStadiumFightOverlay("countdown", "2");
+      return true;
+    }
+
+    if (stadiumState === "fight-countdown-2") {
+      stadiumState = "fight-countdown-1";
+      stadiumFightPhaseEndAt = now + STADIUM.fightIntro.countdownStepMs;
+      setStadiumFightOverlay("countdown", "1");
+      return true;
+    }
+
+    if (stadiumState === "fight-countdown-1") {
+      stadiumState = "fight-countdown-0";
+      stadiumFightPhaseEndAt = now + STADIUM.fightIntro.countdownStepMs;
+      setStadiumFightOverlay("countdown", "0");
+      return true;
+    }
+
+    if (stadiumState === "fight-countdown-0") {
+      stadiumState = "fight-pruegel";
+      stadiumFightPhaseEndAt = now + STADIUM.fightIntro.pruegelMs;
+      setStadiumFightOverlay("pruegel", "PRÜGEL!");
+      return true;
+    }
+
+    return false;
+  }
+
+  function beginStadiumFighterWalkUp(now) {
+    stadiumState = "fighter-entry-up";
+    stadiumFightFrameIndex = 0;
+    stadiumFightNextFrameAt = now + STADIUM.fightIntro.frameDuration;
+    setStadiumFightOverlay(null);
+    setStadiumFightPosition(STADIUM.fightIntro.start.x, STADIUM.fightIntro.start.y);
+    setStadiumFightSprite(STADIUM.fightIntro.walkUpFrames[0], true);
+    if (stadiumFightFighter) {
+      stadiumFightFighter.root.classList.add("stadium-fighter--visible");
+    }
+  }
+
+  function updateStadiumFighterWalkAnimation(now, frames) {
+    if (!stadiumFightFighter || !frames.length) return;
+    if (now < stadiumFightNextFrameAt) return;
+
+    while (now >= stadiumFightNextFrameAt) {
+      stadiumFightFrameIndex = (stadiumFightFrameIndex + 1) % frames.length;
+      stadiumFightNextFrameAt += STADIUM.fightIntro.frameDuration;
+    }
+    setStadiumFightSprite(frames[stadiumFightFrameIndex]);
+  }
+
+  function moveStadiumFighterToward(target, speed, deltaSeconds) {
+    if (!stadiumFightFighter) return true;
+
+    const dx = target.x - stadiumFightFighter.x;
+    const dy = target.y - stadiumFightFighter.y;
+    const distance = Math.hypot(dx, dy);
+
+    if (distance <= 4) {
+      setStadiumFightPosition(target.x, target.y);
+      return true;
+    }
+
+    const step = Math.min(distance, speed * deltaSeconds);
+    setStadiumFightPosition(
+      stadiumFightFighter.x + (dx / distance) * step,
+      stadiumFightFighter.y + (dy / distance) * step
+    );
+
+    if (step >= distance) {
+      setStadiumFightPosition(target.x, target.y);
+      return true;
+    }
+    return false;
+  }
+
+  function updateStadiumFightIntro(deltaSeconds, now) {
+    if (!stadiumFightStarted || MAP.id !== STADIUM.mapId) return;
+
+    if (stadiumState === "fight-final-sync") {
+      updateStadiumFinalCountdown(now);
+      return;
+    }
+
+    if (stadiumState === "fight-pruegel-ready") {
+      if (now >= stadiumFightPhaseEndAt) {
+        setStadiumFightOverlay(null);
+        hideStadiumArenaAnnouncer();
+        stadiumState = "fight-await-brawl";
+      }
+      return;
+    }
+
+    if (stadiumState === "fight-await-brawl") {
+      beginStadiumBrawl(now);
+      return;
+    }
+
+    if (
+      stadiumState === "fight-brawl-approach" ||
+      stadiumState === "fight-brawl-attack" ||
+      stadiumState === "fight-brawl-rest" ||
+      stadiumState === "fight-fatality-setup" ||
+      stadiumState === "fight-fatality-evade" ||
+      stadiumState === "fight-fatality-neuenstein" ||
+      stadiumState === "fight-fatality-schauenburg" ||
+      stadiumState === "fight-brawl-result"
+    ) {
+      updateStadiumBrawl(now);
+      return;
+    }
+
+    if (stadiumState === "fighter-entry-up") {
+      updateStadiumFighterWalkAnimation(now, STADIUM.fightIntro.walkUpFrames);
+
+      if (
+        moveStadiumFighterToward(
+          STADIUM.fightIntro.linePoint,
+          STADIUM.fightIntro.speedUp,
+          deltaSeconds
+        )
+      ) {
+        stadiumState = "fighter-victory";
+        stadiumFightPhaseEndAt = now + STADIUM.fightIntro.victoryDuration;
+        setStadiumFightSprite(STADIUM.fightIntro.victoryFrame);
+      }
+      return;
+    }
+
+    if (stadiumState === "fighter-victory") {
+      if (now < stadiumFightPhaseEndAt) return;
+
+      stadiumState = "fighter-entry-right";
+      stadiumFightFrameIndex = 0;
+      stadiumFightNextFrameAt = now + STADIUM.fightIntro.frameDuration;
+      setStadiumFightSprite(STADIUM.fightIntro.walkRightFrames[0]);
+      return;
+    }
+
+    if (stadiumState === "fighter-entry-right") {
+      updateStadiumFighterWalkAnimation(now, STADIUM.fightIntro.walkRightFrames);
+
+      if (
+        moveStadiumFighterToward(
+          STADIUM.fightIntro.readyPoint,
+          STADIUM.fightIntro.speedRight,
+          deltaSeconds
+        )
+      ) {
+        stadiumState = "fighter-ready";
+        setStadiumFightSprite(STADIUM.fightIntro.readyFrame);
+        stadiumFightPhaseEndAt = now;
+      }
+      return;
+    }
+
+    // R79: Fighter A = Rohart-Neuenstein. As soon as he reaches his green
+    // final position, Fighter B = Schauenburg enters through the same gate.
+    if (stadiumState === "fighter-ready") {
+      stadiumState = "schauenburg-entry-up";
+      stadiumFightFighterBFrameIndex = 0;
+      stadiumFightFighterBNextFrameAt = now + STADIUM.fightIntro.frameDuration;
+      setStadiumFightPositionB(STADIUM.fightIntro.schauenburgStart.x, STADIUM.fightIntro.schauenburgStart.y);
+      setStadiumFightSpriteB(STADIUM.fightIntro.schauenburgWalkUpFrames[0], true);
+      if (stadiumFightFighterB) stadiumFightFighterB.root.classList.add("stadium-fighter--visible");
+      return;
+    }
+
+    if (stadiumState === "schauenburg-entry-up") {
+      updateStadiumFighterBWalkAnimation(now, STADIUM.fightIntro.schauenburgWalkUpFrames, false);
+      if (moveStadiumFighterBToward(STADIUM.fightIntro.schauenburgLinePoint, STADIUM.fightIntro.schauenburgSpeedUp, deltaSeconds)) {
+        stadiumState = "schauenburg-victory";
+        stadiumFightPhaseEndAt = now + STADIUM.fightIntro.victoryDuration;
+        setStadiumFightSpriteB(STADIUM.fightIntro.schauenburgVictoryFrame);
+      }
+      return;
+    }
+
+    if (stadiumState === "schauenburg-victory") {
+      if (now < stadiumFightPhaseEndAt) return;
+      stadiumState = "schauenburg-entry-left";
+      stadiumFightFighterBFrameIndex = 0;
+      stadiumFightFighterBNextFrameAt = now + STADIUM.fightIntro.frameDuration;
+      setStadiumFightSpriteB(STADIUM.fightIntro.schauenburgWalkLeftFrames[0]);
+      for (const img of stadiumFightFighterB.images) img.style.transform = "translateX(-50%) scaleX(-1)";
+      return;
+    }
+
+    if (stadiumState === "schauenburg-entry-left") {
+      updateStadiumFighterBWalkAnimation(now, STADIUM.fightIntro.schauenburgWalkLeftFrames, true);
+      if (moveStadiumFighterBToward(STADIUM.fightIntro.schauenburgLeftPoint, STADIUM.fightIntro.schauenburgSpeedLeft, deltaSeconds)) {
+        stadiumState = "schauenburg-ready";
+        setStadiumFightSpriteB(STADIUM.fightIntro.schauenburgReadyFrame);
+        for (const img of stadiumFightFighterB.images) img.style.transform = "translateX(-50%)";
+
+        // Both fighters are in position: NOW start "It's time" + announcer.
+        beginStadiumFinalCountdown(now);
+      }
+      return;
+    }
+  }
+
+  function setStadiumBookmakerVisibility() {
+    if (!stadiumBookmaker) return;
+    stadiumBookmaker.root.style.display = MAP.id === STADIUM.mapId ? "block" : "none";
+    if (MAP.id !== STADIUM.mapId) clearStadiumBookmakerHover();
+  }
+
+  function setStadiumGateVisibility() {
+    if (!stadiumGateForeground) return;
+    stadiumGateForeground.style.display = MAP.id === STADIUM.mapId ? "block" : "none";
+  }
+
+  function resetStadiumBookmaker(now = performance.now()) {
+    if (!stadiumBookmaker) return;
+    stadiumBookmaker.base.classList.add("stadium-bookmaker__sprite--visible");
+    stadiumBookmaker.action.classList.remove("stadium-bookmaker__sprite--visible");
+    stadiumBookmakerShowingAction = false;
+    stadiumBookmakerActionEndAt = 0;
+    stadiumBookmakerNextAt = now + STADIUM.bookmakerWaitMs;
+  }
+
+  function updateStadiumBookmaker(now) {
+    if (!stadiumBookmaker || MAP.id !== STADIUM.mapId) return;
+
+    if (stadiumBookmakerShowingAction) {
+      if (now < stadiumBookmakerActionEndAt) return;
+      stadiumBookmaker.action.classList.remove("stadium-bookmaker__sprite--visible");
+      stadiumBookmaker.base.classList.add("stadium-bookmaker__sprite--visible");
+      stadiumBookmakerShowingAction = false;
+      stadiumBookmakerNextAt = now + STADIUM.bookmakerWaitMs;
+      return;
+    }
+
+    if (now < stadiumBookmakerNextAt) return;
+    const src = STADIUM.bookmakerActions[Math.floor(Math.random() * STADIUM.bookmakerActions.length)];
+    stadiumBookmaker.action.src = encodeURI(src);
+    stadiumBookmaker.base.classList.remove("stadium-bookmaker__sprite--visible");
+    stadiumBookmaker.action.classList.add("stadium-bookmaker__sprite--visible");
+    stadiumBookmakerShowingAction = true;
+    stadiumBookmakerActionEndAt = now + STADIUM.bookmakerActionMs;
+  }
+
+  function showStadiumMenu() {
+    if (!stadiumUI || MAP.id !== STADIUM.mapId) return;
+    closeStadiumBetUI();
+    clearStadiumBookmakerHover();
+    stadiumMenuOpen = true;
+    stadiumUI.root.classList.add("stadium-choice--visible");
+  }
+
+  function hideStadiumMenu() {
+    if (!stadiumUI) return;
+    stadiumMenuOpen = false;
+    stadiumUI.root.classList.remove("stadium-choice--visible");
+  }
+
+  function beginStadiumArrival() {
+    if (MAP.id !== STADIUM.mapId) return;
+    stadiumBattleMusicStarted = false;
+    resetStadiumFightIntro();
+    stadiumState = "arrival-walk";
+    keys.clear();
+    cancelAttackImmediately();
+    if (blocking) stopBlocking();
+    playerX = STADIUM.arrivalStart.x;
+    playerY = STADIUM.arrivalStart.y;
+    cameraX = playerX;
+    cameraY = playerY;
+    facing = "down";
+    moving = true;
+    playerEl.classList.add("player--moving");
+    playerEl.classList.remove("player--idle");
+    setAnimation("down");
+    resetStadiumBookmaker();
+    setStadiumBookmakerVisibility();
+    renderPlayer();
+  }
+
+  function finishStadiumArrival() {
+    playerX = STADIUM.arrivalTarget.x;
+    playerY = STADIUM.arrivalTarget.y;
+    cameraX = playerX;
+    cameraY = playerY;
+    moving = false;
+    facing = "down";
+    setAnimation("idle");
+    forceSprite(PLAYER.standDown);
+    playerEl.classList.remove("player--moving");
+    playerEl.classList.add("player--idle");
+    stadiumState = "entrance-menu";
+    showStadiumMenu();
+  }
+
+  function updateStadiumArrival(deltaSeconds) {
+    const dx = STADIUM.arrivalTarget.x - playerX;
+    const dy = STADIUM.arrivalTarget.y - playerY;
+    const distance = Math.hypot(dx, dy);
+
+    if (distance <= 8) {
+      finishStadiumArrival();
+      return;
+    }
+
+    const step = Math.min(distance, STADIUM.arrivalSpeed * deltaSeconds);
+    playerX += (dx / distance) * step;
+    playerY += (dy / distance) * step;
+    cameraX = playerX;
+    cameraY = playerY;
+    facing = "down";
+    setAnimation("down");
+    renderMovementFrame("down", deltaSeconds);
+  }
+
+  async function stadiumMoveToSpectator() {
+    if (!stadiumUI || stadiumState !== "entrance-menu") return;
+    stadiumState = "spectator-transition";
+    hideStadiumMenu();
+    stadiumUI.curtain.classList.add("stadium-curtain--visible");
+    await waitMs(380);
+
+    playerX = STADIUM.spectatorPoint.x;
+    playerY = STADIUM.spectatorPoint.y;
+    cameraX = playerX;
+    cameraY = playerY;
+    facing = "down";
+    lastHorizontalFacing = "right";
+    moving = false;
+    forceSprite(PLAYER.standDown);
+    renderPlayer();
+    renderWorld();
+
+    await waitMs(90);
+    stadiumUI.curtain.classList.remove("stadium-curtain--visible");
+    stadiumState = "spectator";
+  }
+
+  async function stadiumReturnToOberkirch() {
+    if (MAP.id !== STADIUM.mapId || !stadiumMenuOpen || mapTransitioning) return;
+    stadiumState = "spectator-transition";
+    hideStadiumMenu();
+    closeStadiumBetUI();
+    await switchMap(MAPS.oberkirch, MAP_EXIT_CONFIG.oberkirchFromStadiumSpawn, true);
+    stadiumState = "inactive";
+    stadiumArrivalFromOberkirch = false;
+    stadiumBattleMusicStarted = false;
+    resetStadiumFightIntro();
+    setStadiumBookmakerVisibility();
+    setStadiumGateVisibility();
+  }
+
+  function setStadiumSpectatorFacing(code) {
+    if (stadiumState !== "spectator") return false;
+    if (code === "KeyW" || code === "ArrowUp") {
+      facing = "up";
+      forceSprite(PLAYER.standUp);
+    } else if (code === "KeyS" || code === "ArrowDown") {
+      facing = "down";
+      forceSprite(PLAYER.standDown);
+    } else if (code === "KeyA" || code === "ArrowLeft") {
+      facing = "left";
+      lastHorizontalFacing = "left";
+      forceSprite(PLAYER.standLeft);
+    } else if (code === "KeyD" || code === "ArrowRight") {
+      facing = "right";
+      lastHorizontalFacing = "right";
+      forceSprite(PLAYER.standRight);
+    } else {
+      return false;
+    }
+    return true;
+  }
+
+  function updateStadiumPhase1(deltaSeconds, now) {
+    setStadiumBookmakerVisibility();
+    setStadiumGateVisibility();
+    updateStadiumBookmaker(now);
+
+    if (stadiumState === "arrival-walk") {
+      updateStadiumArrival(deltaSeconds);
+      return;
+    }
+
+    updateStadiumFightIntro(deltaSeconds, now);
+  }
+
   function installStartFlowStyles() {
     if (document.getElementById("startFlowStyles")) return;
 
@@ -7858,23 +12329,30 @@
     rows: 6,
     slotCount: 36,
 
-    // Coordinates measured on the 507 x 1241 PAGE I source image.
-    // The overlay never redraws the raster; it only aligns logical slots
-    // to the already-painted cells in the supplied artwork.
-    grid: Object.freeze({
-      // R62 MINIFIX: align logical slots to the INNER painted cell edges,
-      // not the decorative outer inventory frame.
-      left: 34,
-      top: 780,
-      right: 465,
-      bottom: 1190
-    }),
+    // R66 PIXELFIX — measured directly against the painted 6x6 raster.
+    // The visible metal grid-line centers on the 507x1241 source are:
+    // X: 41,110,180,250,320,389,459
+    // Y: 782,846,913,979,1047,1114,1182
+    //
+    // Every logical slot receives the EXACT SAME 64x60 hitbox and is
+    // centered inside its painted cell. No slot touches the ornament frame.
+    slotCentersX: Object.freeze([75.5, 145, 215, 285, 354.5, 424]),
+    slotCentersY: Object.freeze([814, 879.5, 946, 1013, 1080.5, 1148]),
+    slotWidth: 64,
+    slotHeight: 60,
 
     // Invisible mouse hit areas over the painted controls.
     closeRect: Object.freeze({ x1: 430, y1: 16, x2: 490, y2: 77 }),
     page1Rect: Object.freeze({ x1: 18, y1: 713, x2: 246, y2: 772 }),
-    page2Rect: Object.freeze({ x1: 252, y1: 713, x2: 490, y2: 772 })
+    page2Rect: Object.freeze({ x1: 252, y1: 713, x2: 490, y2: 772 }),
+
+    // Painted top-left weapon equipment slot on the supplied inventory artwork.
+    weaponEquipRect: Object.freeze({ x1: 45, y1: 196, x2: 125, y2: 300 })
   });
+
+  let playerLevel = 1;
+  let equippedWeapon = null;
+  let equippedWeaponItem = null;
 
   const inventoryState = {
     open: false,
@@ -7888,7 +12366,8 @@
     image: null,
     slotsLayer: null,
     closeButton: null,
-    pageButtons: []
+    pageButtons: [],
+    weaponEquipZone: null
   };
 
   function installInventoryStyles() {
@@ -7922,6 +12401,7 @@
 
       .inventory-panel__image {
         position: absolute;
+        z-index: 1;
         inset: 0;
         width: 100%;
         height: 100%;
@@ -7981,38 +12461,49 @@
 
       .inventory-slots-layer {
         position: absolute;
+        z-index: 4;
         inset: 0;
         pointer-events: none;
       }
 
       .inventory-item {
         position: absolute;
-        display: grid;
-        place-items: center;
+        z-index: 1;
+        display: block;
         pointer-events: auto;
         box-sizing: border-box;
-        padding: 8%;
+        padding: 0;
+        overflow: visible;
       }
 
       .inventory-item__icon {
-        position: relative;
-        z-index: 2;
-        width: 78%;
-        height: 78%;
+        position: absolute;
+        z-index: 3;
+        left: 50%;
+        top: 50%;
+        width: 68%;
+        height: 68%;
+        transform: translate(-50%, -50%);
+        transform-origin: 50% 50%;
+        max-width: none !important;
+        max-height: none !important;
         object-fit: contain;
         object-position: 50% 50%;
-        display: block;
-        opacity: 1;
-        visibility: visible;
-        filter:
-          drop-shadow(0 1px 0 rgba(255,255,255,.28))
-          drop-shadow(0 3px 4px rgba(0,0,0,.78));
+        display: block !important;
+        opacity: 1 !important;
+        visibility: visible !important;
+        pointer-events: none;
+        filter: drop-shadow(0 2px 2px rgba(0,0,0,.7));
       }
 
       .inventory-item__penny {
-        position: relative;
-        width: 72%;
-        aspect-ratio: 1;
+        position: absolute;
+        z-index: 3;
+        left: 50%;
+        top: 50%;
+        width: 68%;
+        height: 68%;
+        transform: translate(-50%, -50%);
         border-radius: 50%;
         background:
           radial-gradient(circle at 34% 28%, #444 0%, #171717 28%, #050505 63%, #000 100%);
@@ -8036,23 +12527,13 @@
         text-shadow: 1px 1px 0 #555;
       }
 
-      /* R62: visible fallback if an item asset ever fails to load. */
-      .inventory-item--icon-missing::before {
-        content: "?";
-        position: relative;
-        z-index: 2;
-        color: #d9c7a0;
-        font: 900 clamp(18px, 3vh, 34px)/1 Georgia, serif;
-        text-shadow: 0 2px 3px #000;
-      }
-
       .inventory-item__quantity {
         position: absolute;
-        z-index: 4;
-        right: 4%;
-        bottom: 4%;
+        z-index: 5;
+        right: 0;
+        bottom: 0;
         min-width: 24%;
-        padding: 0 3%;
+        padding: 0;
         color: #fff;
         font: 900 clamp(10px, 1.45vh, 17px)/1 Georgia, "Times New Roman", serif;
         text-align: right;
@@ -8062,6 +12543,111 @@
           -1px 1px 0 #000,
           1px 1px 0 #000,
           0 2px 3px #000;
+      }
+
+      .inventory-item--weapon {
+        cursor: grab;
+      }
+
+      .inventory-item--weapon:active {
+        cursor: grabbing;
+      }
+
+      /* R68 SAUKEULE hover tooltip. */
+      .inventory-weapon-tooltip {
+        position: absolute;
+        z-index: 40;
+        left: calc(100% + 14px);
+        top: 50%;
+        width: clamp(250px, 25vw, 390px);
+        transform: translateY(-50%);
+        box-sizing: border-box;
+        padding: 18px 20px;
+        border: 1px solid rgba(218,174,72,.72);
+        border-radius: 7px;
+        background: rgba(10,10,10,.94);
+        box-shadow: 0 10px 28px rgba(0,0,0,.72);
+        color: #f2f2f2;
+        font-family: Georgia, "Times New Roman", serif;
+        pointer-events: none;
+        opacity: 0;
+        visibility: hidden;
+        transition: opacity 100ms ease, visibility 100ms ease;
+        white-space: normal;
+      }
+
+      .inventory-item--weapon:hover .inventory-weapon-tooltip,
+      .inventory-weapon-equip-zone:hover .inventory-weapon-tooltip {
+        opacity: 1;
+        visibility: visible;
+      }
+
+      .inventory-weapon-tooltip__title {
+        margin-bottom: 10px;
+        color: #e6bd55;
+        font-size: clamp(18px, 2.1vh, 27px);
+        font-weight: 900;
+        letter-spacing: 1px;
+      }
+
+      .inventory-weapon-tooltip__description {
+        margin-bottom: 14px;
+        color: #f0eadb;
+        font-size: clamp(13px, 1.55vh, 18px);
+        font-style: italic;
+        line-height: 1.3;
+      }
+
+      .inventory-weapon-tooltip__stat {
+        margin-top: 5px;
+        color: #ffffff;
+        font-size: clamp(13px, 1.55vh, 18px);
+        font-weight: 800;
+        line-height: 1.25;
+      }
+
+      .inventory-weapon-tooltip__stat--saustark {
+        color: #ff6fbd;
+      }
+
+      .inventory-item--equipped {
+        filter:
+          drop-shadow(0 0 4px rgba(255,245,195,.96))
+          drop-shadow(0 0 8px rgba(255,218,130,.72));
+      }
+
+      .inventory-item--equipped::after {
+        content: "E";
+        position: absolute;
+        z-index: 8;
+        right: 2px;
+        top: 2px;
+        color: #fff7d6;
+        font: 900 clamp(10px, 1.35vh, 16px)/1 Georgia, serif;
+        text-shadow: 0 1px 2px #000, 0 0 4px #000;
+        pointer-events: none;
+      }
+
+      .inventory-weapon-equip-zone {
+        position: absolute;
+        z-index: 7;
+        box-sizing: border-box;
+        pointer-events: auto;
+        background: transparent;
+      }
+
+      .inventory-weapon-equip-zone.inventory-weapon-equip-zone--dragover {
+        filter: drop-shadow(0 0 7px rgba(255,245,195,.9));
+      }
+
+      .inventory-weapon-equip-icon {
+        position: absolute;
+        inset: 5%;
+        width: 90%;
+        height: 90%;
+        object-fit: contain;
+        pointer-events: none;
+        filter: drop-shadow(0 2px 2px rgba(0,0,0,.75));
       }
 
       @media (max-width: 680px) {
@@ -8089,18 +12675,279 @@
   }
 
   function inventorySlotRect(slotIndex) {
-    const grid = INVENTORY_CONFIG.grid;
     const col = slotIndex % INVENTORY_CONFIG.columns;
     const row = Math.floor(slotIndex / INVENTORY_CONFIG.columns);
-    const cellW = (grid.right - grid.left) / INVENTORY_CONFIG.columns;
-    const cellH = (grid.bottom - grid.top) / INVENTORY_CONFIG.rows;
+
+    const centerX = INVENTORY_CONFIG.slotCentersX[col];
+    const centerY = INVENTORY_CONFIG.slotCentersY[row];
+    const width = INVENTORY_CONFIG.slotWidth;
+    const height = INVENTORY_CONFIG.slotHeight;
 
     return {
-      x: grid.left + col * cellW,
-      y: grid.top + row * cellH,
-      width: cellW,
-      height: cellH
+      x: centerX - width / 2,
+      y: centerY - height / 2,
+      width,
+      height
     };
+  }
+
+  function inventoryItemRect(slotIndex, width = 1, height = 1) {
+    const start = inventorySlotRect(slotIndex);
+    const col = slotIndex % INVENTORY_CONFIG.columns;
+    const row = Math.floor(slotIndex / INVENTORY_CONFIG.columns);
+    const endIndex =
+      (row + height - 1) * INVENTORY_CONFIG.columns + (col + width - 1);
+    const end = inventorySlotRect(endIndex);
+
+    return {
+      x: start.x,
+      y: start.y,
+      width: (end.x + end.width) - start.x,
+      height: (end.y + end.height) - start.y
+    };
+  }
+
+  function isInventoryOccupancyMarker(value) {
+    return Boolean(value && value.occupiedBy !== undefined);
+  }
+
+  function clearInventoryItem(pageIndex, slotIndex) {
+    const page = inventoryState.pages[pageIndex];
+    if (!page) return null;
+
+    let anchorIndex = slotIndex;
+    const found = page[slotIndex];
+    if (isInventoryOccupancyMarker(found)) {
+      anchorIndex = found.occupiedBy;
+    }
+
+    const stack = page[anchorIndex];
+    if (!stack || isInventoryOccupancyMarker(stack)) return null;
+
+    const width = Math.max(1, Number(stack.width) || 1);
+    const height = Math.max(1, Number(stack.height) || 1);
+    const col = anchorIndex % INVENTORY_CONFIG.columns;
+    const row = Math.floor(anchorIndex / INVENTORY_CONFIG.columns);
+
+    for (let dy = 0; dy < height; dy += 1) {
+      for (let dx = 0; dx < width; dx += 1) {
+        const index = (row + dy) * INVENTORY_CONFIG.columns + (col + dx);
+        if (page[index] && (
+          index === anchorIndex ||
+          page[index].occupiedBy === anchorIndex
+        )) {
+          page[index] = null;
+        }
+      }
+    }
+
+    return stack;
+  }
+
+  function canPlaceInventoryItem(pageIndex, slotIndex, width = 1, height = 1) {
+    const page = inventoryState.pages[pageIndex];
+    if (!page) return false;
+
+    const col = slotIndex % INVENTORY_CONFIG.columns;
+    const row = Math.floor(slotIndex / INVENTORY_CONFIG.columns);
+    if (col + width > INVENTORY_CONFIG.columns) return false;
+    if (row + height > INVENTORY_CONFIG.rows) return false;
+
+    for (let dy = 0; dy < height; dy += 1) {
+      for (let dx = 0; dx < width; dx += 1) {
+        const index = (row + dy) * INVENTORY_CONFIG.columns + (col + dx);
+        if (page[index]) return false;
+      }
+    }
+    return true;
+  }
+
+  function placeInventoryItem(pageIndex, slotIndex, stack) {
+    if (!stack) return false;
+    const width = Math.max(1, Number(stack.width) || 1);
+    const height = Math.max(1, Number(stack.height) || 1);
+    if (!canPlaceInventoryItem(pageIndex, slotIndex, width, height)) return false;
+
+    const page = inventoryState.pages[pageIndex];
+    const col = slotIndex % INVENTORY_CONFIG.columns;
+    const row = Math.floor(slotIndex / INVENTORY_CONFIG.columns);
+
+    page[slotIndex] = stack;
+    for (let dy = 0; dy < height; dy += 1) {
+      for (let dx = 0; dx < width; dx += 1) {
+        if (dx === 0 && dy === 0) continue;
+        const index = (row + dy) * INVENTORY_CONFIG.columns + (col + dx);
+        page[index] = { occupiedBy: slotIndex };
+      }
+    }
+    return true;
+  }
+
+  function findFirstFreeInventoryArea(width = 1, height = 1) {
+    for (let pageIndex = 0; pageIndex < inventoryState.pages.length; pageIndex += 1) {
+      for (let slotIndex = 0; slotIndex < INVENTORY_CONFIG.slotCount; slotIndex += 1) {
+        if (canPlaceInventoryItem(pageIndex, slotIndex, width, height)) {
+          return { pageIndex, slotIndex };
+        }
+      }
+    }
+    return null;
+  }
+
+  function inventorySlotIndexFromClientPoint(clientX, clientY) {
+    if (!inventoryState.panel) return -1;
+    const box = inventoryState.panel.getBoundingClientRect();
+    if (!box.width || !box.height) return -1;
+
+    const px = ((clientX - box.left) / box.width) * 507;
+    const py = ((clientY - box.top) / box.height) * 1241;
+
+    for (let slotIndex = 0; slotIndex < INVENTORY_CONFIG.slotCount; slotIndex += 1) {
+      const rect = inventorySlotRect(slotIndex);
+      if (
+        px >= rect.x && px <= rect.x + rect.width &&
+        py >= rect.y && py <= rect.y + rect.height
+      ) {
+        return slotIndex;
+      }
+    }
+    return -1;
+  }
+
+  function moveInventoryWeaponToSlot(fromPage, fromSlot, toPage, toSlot) {
+    const page = inventoryState.pages[fromPage];
+    if (!page) return false;
+    let anchorIndex = fromSlot;
+    if (isInventoryOccupancyMarker(page[fromSlot])) anchorIndex = page[fromSlot].occupiedBy;
+    const original = page[anchorIndex];
+    if (!original || original.type !== "weapon") return false;
+
+    const removed = clearInventoryItem(fromPage, anchorIndex);
+    if (!removed) return false;
+    if (placeInventoryItem(toPage, toSlot, removed)) {
+      renderInventory();
+      return true;
+    }
+
+    placeInventoryItem(fromPage, anchorIndex, removed);
+    renderInventory();
+    return false;
+  }
+
+  function placeEquippedWeaponAtInventorySlot(pageIndex, slotIndex) {
+    if (!equippedWeaponItem) return false;
+    const item = equippedWeaponItem;
+    if (!canPlaceInventoryItem(pageIndex, slotIndex, item.width || 1, item.height || 1)) return false;
+    if (!placeInventoryItem(pageIndex, slotIndex, item)) return false;
+    equippedWeaponItem = null;
+    equippedWeapon = null;
+    renderInventory();
+    return true;
+  }
+
+  function weaponCanBeEquipped(stack) {
+    if (!stack || stack.type !== "weapon") return false;
+    const min = Number(stack.levelMin ?? 1);
+    const max = Number(stack.levelMax ?? Infinity);
+    return playerLevel >= min && playerLevel <= max;
+  }
+
+  function equipWeaponFromInventory(pageIndex, slotIndex) {
+    const page = inventoryState.pages[pageIndex];
+    if (!page) return false;
+
+    let anchorIndex = slotIndex;
+    if (isInventoryOccupancyMarker(page[slotIndex])) {
+      anchorIndex = page[slotIndex].occupiedBy;
+    }
+
+    const stack = page[anchorIndex];
+    if (!weaponCanBeEquipped(stack)) return false;
+
+    // Only one weapon slot exists. Put the previous weapon back first.
+    if (equippedWeaponItem) {
+      const old = equippedWeaponItem;
+      equippedWeaponItem = null;
+      equippedWeapon = null;
+      const freeOld = findFirstFreeInventoryArea(old.width || 1, old.height || 1);
+      if (!freeOld || !placeInventoryItem(freeOld.pageIndex, freeOld.slotIndex, old)) {
+        equippedWeaponItem = old;
+        equippedWeapon = old.id;
+        return false;
+      }
+    }
+
+    const removed = clearInventoryItem(pageIndex, anchorIndex);
+    if (!removed) return false;
+
+    equippedWeaponItem = removed;
+    equippedWeapon = removed.id;
+    renderInventory();
+    return true;
+  }
+
+  function unequipWeaponToInventory() {
+    if (!equippedWeaponItem) return false;
+    const item = equippedWeaponItem;
+    const free = findFirstFreeInventoryArea(item.width || 1, item.height || 1);
+    if (!free) return false;
+
+    if (!placeInventoryItem(free.pageIndex, free.slotIndex, item)) return false;
+    equippedWeaponItem = null;
+    equippedWeapon = null;
+    inventoryState.currentPage = free.pageIndex;
+    renderInventory();
+    return true;
+  }
+
+  function createSaukeuleTooltip() {
+    const weapon = WEAPONS.pinkPigClub;
+    const tooltip = document.createElement("div");
+    tooltip.className = "inventory-weapon-tooltip";
+
+    const title = document.createElement("div");
+    title.className = "inventory-weapon-tooltip__title";
+    title.textContent = weapon.tooltipName;
+
+    const description = document.createElement("div");
+    description.className = "inventory-weapon-tooltip__description";
+    description.textContent = weapon.tooltipDescription;
+
+    const damage = document.createElement("div");
+    damage.className = "inventory-weapon-tooltip__stat";
+    damage.textContent = `${weapon.damage} DMG`;
+
+    const critical = document.createElement("div");
+    critical.className = "inventory-weapon-tooltip__stat";
+    critical.textContent = `${weapon.criticalDamage} KRIT`;
+
+    const special = document.createElement("div");
+    special.className = "inventory-weapon-tooltip__stat inventory-weapon-tooltip__stat--saustark";
+    special.textContent = `${Math.round(weapon.saustarkChance * 100)}% CHANCE SAUSTARKER TREFFER`;
+
+    tooltip.append(title, description, damage, critical, special);
+    return tooltip;
+  }
+
+
+  function renderEquippedWeapon() {
+    const zone = inventoryState.weaponEquipZone;
+    if (!zone) return;
+    zone.replaceChildren();
+    zone.classList.remove("inventory-weapon-equip-zone--dragover");
+
+    zone.draggable = Boolean(equippedWeaponItem);
+    if (!equippedWeaponItem) return;
+    const icon = document.createElement("img");
+    icon.className = "inventory-weapon-equip-icon";
+    icon.src = encodeURI(equippedWeaponItem.icon || WEAPONS.pinkPigClub.icon);
+    icon.alt = "";
+    icon.draggable = false;
+    zone.appendChild(icon);
+
+    if (equippedWeaponItem.id === WEAPONS.pinkPigClub.id) {
+      zone.appendChild(createSaukeuleTooltip());
+    }
   }
 
   function renderInventory() {
@@ -8112,11 +12959,8 @@
 
     inventoryState.pageButtons.forEach((button, index) => {
       if (!button) return;
-      if (index === inventoryState.currentPage) {
-        button.setAttribute("aria-current", "page");
-      } else {
-        button.removeAttribute("aria-current");
-      }
+      if (index === inventoryState.currentPage) button.setAttribute("aria-current", "page");
+      else button.removeAttribute("aria-current");
     });
 
     inventoryState.slotsLayer.replaceChildren();
@@ -8124,45 +12968,67 @@
     const page = inventoryState.pages[inventoryState.currentPage];
     for (let slotIndex = 0; slotIndex < page.length; slotIndex += 1) {
       const stack = page[slotIndex];
-      if (!stack) continue;
+      if (!stack || isInventoryOccupancyMarker(stack)) continue;
 
-      const rect = inventorySlotRect(slotIndex);
+      const width = Math.max(1, Number(stack.width) || 1);
+      const height = Math.max(1, Number(stack.height) || 1);
+      const rect = inventoryItemRect(slotIndex, width, height);
       const item = document.createElement("div");
-      item.className = "inventory-item";
+      item.className = "inventory-item" + (stack.type === "weapon" ? " inventory-item--weapon" : "");
       item.dataset.itemId = stack.id;
       item.dataset.slotIndex = String(slotIndex);
+      item.dataset.pageIndex = String(inventoryState.currentPage);
       item.style.left = `${inventoryPercentX(rect.x)}%`;
       item.style.top = `${inventoryPercentY(rect.y)}%`;
       item.style.width = `${inventoryPercentX(rect.width)}%`;
       item.style.height = `${inventoryPercentY(rect.height)}%`;
 
-      // V1: the black penny is the first real inventory item.
       if (stack.id === "black-penny") {
         const icon = document.createElement("div");
         icon.className = "inventory-item__penny";
         item.appendChild(icon);
       } else if (stack.icon) {
         const icon = document.createElement("img");
-        icon.className = `inventory-item__icon inventory-item__icon--${stack.id}`;
+        icon.className = "inventory-item__icon";
         icon.src = encodeURI(stack.icon);
         icon.alt = "";
         icon.draggable = false;
-        // Keep a broken/missing SVG from silently leaving only the quantity visible.
-        icon.addEventListener("error", () => {
-          console.warn("Inventory icon failed to load:", stack.icon);
-          icon.style.display = "none";
-          item.classList.add("inventory-item--icon-missing");
-        }, { once: true });
+        icon.addEventListener("error", () => console.warn("Inventory icon failed to load:", stack.icon));
         item.appendChild(icon);
       }
 
-      const quantity = document.createElement("span");
-      quantity.className = "inventory-item__quantity";
-      quantity.textContent = String(stack.quantity || 1);
-      item.appendChild(quantity);
+      if (stack.stackable || (stack.quantity || 1) > 1) {
+        const quantity = document.createElement("span");
+        quantity.className = "inventory-item__quantity";
+        quantity.textContent = String(stack.quantity || 1);
+        item.appendChild(quantity);
+      }
+
+      if (stack.type === "weapon") {
+        if (stack.id === WEAPONS.pinkPigClub.id) {
+          item.appendChild(createSaukeuleTooltip());
+        }
+
+        item.draggable = true;
+        item.addEventListener("contextmenu", (event) => {
+          event.preventDefault();
+          equipWeaponFromInventory(inventoryState.currentPage, slotIndex);
+        });
+        item.addEventListener("dragstart", (event) => {
+          if (!event.dataTransfer) return;
+          event.dataTransfer.effectAllowed = "move";
+          event.dataTransfer.setData("text/plain", JSON.stringify({
+            kind: "inventory-weapon",
+            pageIndex: inventoryState.currentPage,
+            slotIndex
+          }));
+        });
+      }
 
       inventoryState.slotsLayer.appendChild(item);
     }
+
+    renderEquippedWeapon();
   }
 
   function setInventoryPage(pageIndex) {
@@ -8174,15 +13040,12 @@
 
   function openInventory() {
     if (!inventoryState.root) return;
-
-    // Every fresh I-open starts on Roman page I, as requested.
     inventoryState.currentPage = 0;
     inventoryState.open = true;
     keys.clear();
     attackHeld = false;
     cancelAttackImmediately();
     if (blocking) stopBlocking();
-
     renderInventory();
     inventoryState.root.classList.add("inventory-ui--open");
     inventoryState.root.setAttribute("aria-hidden", "false");
@@ -8197,11 +13060,8 @@
   }
 
   function toggleInventory() {
-    if (inventoryState.open) {
-      closeInventory();
-    } else {
-      openInventory();
-    }
+    if (inventoryState.open) closeInventory();
+    else openInventory();
   }
 
   function findInventoryStack(itemId) {
@@ -8209,7 +13069,7 @@
       const page = inventoryState.pages[pageIndex];
       for (let slotIndex = 0; slotIndex < page.length; slotIndex += 1) {
         const stack = page[slotIndex];
-        if (stack && stack.id === itemId) {
+        if (stack && !isInventoryOccupancyMarker(stack) && stack.id === itemId) {
           return { pageIndex, slotIndex, stack };
         }
       }
@@ -8218,19 +13078,12 @@
   }
 
   function findFirstFreeInventorySlot() {
-    for (let pageIndex = 0; pageIndex < inventoryState.pages.length; pageIndex += 1) {
-      const page = inventoryState.pages[pageIndex];
-      for (let slotIndex = 0; slotIndex < page.length; slotIndex += 1) {
-        if (!page[slotIndex]) return { pageIndex, slotIndex };
-      }
-    }
-    return null;
+    return findFirstFreeInventoryArea(1, 1);
   }
 
   function addItemToInventory(item) {
     if (!item || !item.id) return false;
 
-    // R61: loot resources stack cleanly in one exact raster slot.
     if (item.id === "black-penny" || item.stackable) {
       const existing = findInventoryStack(item.id);
       if (existing) {
@@ -8240,19 +13093,26 @@
       }
     }
 
-    const free = findFirstFreeInventorySlot();
+    const width = Math.max(1, Number(item.width) || 1);
+    const height = Math.max(1, Number(item.height) || 1);
+    const free = findFirstFreeInventoryArea(width, height);
     if (!free) return false;
 
-    inventoryState.pages[free.pageIndex][free.slotIndex] = {
+    const stack = {
       id: item.id,
       name: item.name || item.id,
       description: item.description || "",
       icon: item.icon || "",
-      width: 1,
-      height: 1,
-      quantity: 1
+      width,
+      height,
+      quantity: 1,
+      stackable: Boolean(item.stackable),
+      type: item.type || "resource",
+      levelMin: item.levelMin,
+      levelMax: item.levelMax
     };
 
+    if (!placeInventoryItem(free.pageIndex, free.slotIndex, stack)) return false;
     if (inventoryState.open) renderInventory();
     return true;
   }
@@ -8266,7 +13126,12 @@
       preload.src = encodeURI(src);
     }
 
-    for (const src of [CARROT_ITEM.icon, RABBIT_FOOT_ITEM.icon]) {
+    for (const src of [
+      CARROT_ITEM.icon, RABBIT_FOOT_ITEM.icon,
+      WOLF_PELT_ITEM.icon, WOLF_CLAW_ITEM.icon, WANDERER_BAG_ITEM.icon,
+      RADISH_ITEM.icon, CABBAGE_ITEM.icon, LETTUCE_ITEM.icon, BOAR_TUSK_ITEM.icon,
+      PINK_PIG_CLUB_ITEM.icon
+    ]) {
       const preload = new Image();
       preload.src = encodeURI(src);
     }
@@ -8286,6 +13151,42 @@
 
     const slotsLayer = document.createElement("div");
     slotsLayer.className = "inventory-slots-layer";
+
+    const weaponEquipZone = document.createElement("div");
+    weaponEquipZone.className = "inventory-weapon-equip-zone";
+    setInventoryRect(weaponEquipZone, INVENTORY_CONFIG.weaponEquipRect);
+    weaponEquipZone.setAttribute("aria-label", "Waffenplatz");
+    weaponEquipZone.addEventListener("dragstart", (event) => {
+      if (!equippedWeaponItem || !event.dataTransfer) {
+        event.preventDefault();
+        return;
+      }
+      event.dataTransfer.effectAllowed = "move";
+      event.dataTransfer.setData("text/plain", JSON.stringify({ kind: "equipped-weapon" }));
+    });
+    weaponEquipZone.addEventListener("contextmenu", (event) => {
+      event.preventDefault();
+      if (equippedWeaponItem) unequipWeaponToInventory();
+    });
+    weaponEquipZone.addEventListener("dragover", (event) => {
+      event.preventDefault();
+      weaponEquipZone.classList.add("inventory-weapon-equip-zone--dragover");
+      if (event.dataTransfer) event.dataTransfer.dropEffect = "move";
+    });
+    weaponEquipZone.addEventListener("dragleave", () => {
+      weaponEquipZone.classList.remove("inventory-weapon-equip-zone--dragover");
+    });
+    weaponEquipZone.addEventListener("drop", (event) => {
+      event.preventDefault();
+      weaponEquipZone.classList.remove("inventory-weapon-equip-zone--dragover");
+      if (!event.dataTransfer) return;
+      try {
+        const payload = JSON.parse(event.dataTransfer.getData("text/plain") || "{}");
+        if (payload.kind === "inventory-weapon") {
+          equipWeaponFromInventory(Number(payload.pageIndex), Number(payload.slotIndex));
+        }
+      } catch (_) {}
+    });
 
     const closeButton = document.createElement("button");
     closeButton.type = "button";
@@ -8308,7 +13209,34 @@
     setInventoryRect(page2Button, INVENTORY_CONFIG.page2Rect);
     page2Button.addEventListener("click", () => setInventoryPage(1));
 
-    panel.append(image, slotsLayer, closeButton, page1Button, page2Button);
+    panel.addEventListener("dragover", (event) => {
+      const slotIndex = inventorySlotIndexFromClientPoint(event.clientX, event.clientY);
+      if (slotIndex < 0) return;
+      event.preventDefault();
+      if (event.dataTransfer) event.dataTransfer.dropEffect = "move";
+    });
+
+    panel.addEventListener("drop", (event) => {
+      const slotIndex = inventorySlotIndexFromClientPoint(event.clientX, event.clientY);
+      if (slotIndex < 0 || !event.dataTransfer) return;
+      event.preventDefault();
+
+      try {
+        const payload = JSON.parse(event.dataTransfer.getData("text/plain") || "{}");
+        if (payload.kind === "equipped-weapon") {
+          placeEquippedWeaponAtInventorySlot(inventoryState.currentPage, slotIndex);
+        } else if (payload.kind === "inventory-weapon") {
+          moveInventoryWeaponToSlot(
+            Number(payload.pageIndex),
+            Number(payload.slotIndex),
+            inventoryState.currentPage,
+            slotIndex
+          );
+        }
+      } catch (_) {}
+    });
+
+    panel.append(image, slotsLayer, weaponEquipZone, closeButton, page1Button, page2Button);
     root.appendChild(panel);
     document.body.appendChild(root);
 
@@ -8318,6 +13246,7 @@
     inventoryState.slotsLayer = slotsLayer;
     inventoryState.closeButton = closeButton;
     inventoryState.pageButtons = [page1Button, page2Button];
+    inventoryState.weaponEquipZone = weaponEquipZone;
 
     renderInventory();
   }
@@ -8489,6 +13418,8 @@
       label = "HUBACKER";
     } else if (map.id === "renchtalstadion") {
       label = "RENCHTALSTADION";
+    } else if (map.id === "oedsbach") {
+      label = "ÖDSBACH";
     } else if (map.id === "oberkirch-zentrum") {
       label = "OBERKIRCH";
     } else {
@@ -8511,6 +13442,9 @@
 
   async function switchMap(nextMap, spawn, showRegionTitle = false) {
     if (mapTransitioning) return;
+    const sourceMapId = MAP.id;
+    const scriptedStadiumArrival =
+      sourceMapId === "oberkirch-zentrum" && nextMap.id === STADIUM.mapId;
     mapTransitioning = true;
     keys.clear();
     cancelAttackImmediately();
@@ -8525,8 +13459,13 @@
     overlay.style.maskImage = "none";
     overlay.style.opacity = "1";
 
-    // R33: music begins changing at the SAME moment as the visual map fade.
-    crossfadeMapMusic(nextMap.id);
+    // R79: OBERKIRCH -> RENCHTALSTADION keeps the exact same OBERKIRCH
+    // track running seamlessly. The dedicated stadium battle track begins
+    // only once "Wette abschließen" starts the fight.
+    const nextMusicId = scriptedStadiumArrival
+      ? "oberkirch-zentrum"
+      : nextMap.id;
+    crossfadeMapMusic(nextMusicId);
 
     await waitMs(200);
 
@@ -8545,8 +13484,23 @@
       return;
     }
 
-    playerX = spawn.x;
-    playerY = spawn.y;
+    if (scriptedStadiumArrival) {
+      playerX = STADIUM.arrivalStart.x;
+      playerY = STADIUM.arrivalStart.y;
+      stadiumState = "inactive";
+      stadiumArrivalFromOberkirch = true;
+      hideStadiumMenu();
+    } else {
+      playerX = spawn.x;
+      playerY = spawn.y;
+      if (nextMap.id !== STADIUM.mapId) {
+        stadiumState = "inactive";
+        stadiumArrivalFromOberkirch = false;
+        hideStadiumMenu();
+        closeStadiumBetUI();
+        clearStadiumBookmakerHover();
+      }
+    }
     cameraX = playerX;
     cameraY = playerY;
     activeBridge = null;
@@ -8554,6 +13508,7 @@
     setOberkirchWorldVisibility(MAP.id === "oberkirch-zentrum");
     setWinterbachWorldVisibility(MAP.id === "winterbach-ranglehen");
     setLautenbachWorldVisibility(MAP.id === "lautenbach");
+    setOedegardVisibility(MAP.id === "oedsbach");
 
     // Sync map-specific animals while the transition overlay is still covering the map.
     updateRabbits(0, performance.now());
@@ -8601,6 +13556,11 @@
 
     lastFrame = performance.now();
     mapTransitioning = false;
+
+    setStadiumBookmakerVisibility();
+    if (scriptedStadiumArrival && stadiumArrivalFromOberkirch) {
+      beginStadiumArrival();
+    }
   }
 
   function playerInOberkirchNorthExitLane() {
@@ -8699,11 +13659,48 @@
     );
   }
 
+  function playerInWinterbachOedsbachEastExitLane() {
+    return (
+      MAP.id === "winterbach-ranglehen" &&
+      playerY >= MAP_EXIT_CONFIG.winterbachOedsbachEast.y1 &&
+      playerY <= MAP_EXIT_CONFIG.winterbachOedsbachEast.y2
+    );
+  }
+
+  function playerInOedsbachWinterbachSouthExitLane() {
+    return (
+      MAP.id === "oedsbach" &&
+      playerX >= MAP_EXIT_CONFIG.oedsbachWinterbachSouth.x1 &&
+      playerX <= MAP_EXIT_CONFIG.oedsbachWinterbachSouth.x2
+    );
+  }
+
   function checkMapExit() {
     if (mapTransitioning) return false;
 
     const movingUp = keys.has("KeyW") || keys.has("ArrowUp");
     const movingDown = keys.has("KeyS") || keys.has("ArrowDown");
+    const movingRight = keys.has("KeyD") || keys.has("ArrowRight");
+
+    // R91 MAP 2 red east arrow -> ÖDSBACH blue bottom road.
+    if (
+      playerInWinterbachOedsbachEastExitLane() &&
+      movingRight &&
+      playerX >= MAP_EXIT_CONFIG.winterbachOedsbachEast.leaveX
+    ) {
+      switchMap(MAPS.oedsbach, MAP_EXIT_CONFIG.oedsbachFromWinterbachSpawn, true);
+      return true;
+    }
+
+    // R91 ÖDSBACH blue bottom road -> MAP 2 red east road.
+    if (
+      playerInOedsbachWinterbachSouthExitLane() &&
+      movingDown &&
+      playerY >= MAP.height + MAP_EXIT_CONFIG.oedsbachWinterbachSouth.leavePadding
+    ) {
+      switchMap(MAPS.winterbach, MAP_EXIT_CONFIG.winterbachFromOedsbachSpawn, true);
+      return true;
+    }
 
     // R18 GREEN ARROW: MAP 1 -> MAP 2 RED ARROW.
     // Same existing transition / iris system, only a second exit pair.
@@ -8819,19 +13816,8 @@
       return true;
     }
 
-    // R51 MAP 5 red bottom arrow -> matching south lane on OBERKIRCH.
-    if (
-      playerInStadiumOberkirchSouthExitLane() &&
-      movingDown &&
-      playerY >= MAP.height + MAP_EXIT_CONFIG.stadiumOberkirchSouth.leavePadding
-    ) {
-      switchMap(
-        MAPS.oberkirch,
-        MAP_EXIT_CONFIG.oberkirchFromStadiumSpawn,
-        true
-      );
-      return true;
-    }
+    // R70: RENCHTALSTADION no longer has a physical south exit.
+    // Return to OBERKIRCH is now exclusively handled by the stadium choice menu.
 
     // R26 MAP 3 lower-left road -> corresponding MAP 2 north-left road.
     if (
@@ -8916,6 +13902,11 @@
     PLAYER.attackUp2,
     PLAYER.attackUp3,
     PLAYER.attackUp4,
+
+    ...WEAPONS.pinkPigClub.attacks.left,
+    ...WEAPONS.pinkPigClub.attacks.right,
+    ...WEAPONS.pinkPigClub.attacks.down,
+    ...WEAPONS.pinkPigClub.attacks.up,
 
     PLAYER.attackFinish,
     PLAYER.attackFinishLeft,
@@ -9015,7 +14006,24 @@
     const topClearance = PLAYER.height;
     const bottomClearance = 10;
 
-    playerX = Math.max(halfW, Math.min(MAP.width - halfW, playerX));
+    const eastExitOpen =
+      playerInWinterbachOedsbachEastExitLane() &&
+      (keys.has("KeyD") || keys.has("ArrowRight"));
+
+    if (eastExitOpen) {
+      playerX = Math.max(
+        halfW,
+        Math.min(
+          MAP_EXIT_CONFIG.winterbachOedsbachEast.leaveX + 80,
+          playerX
+        )
+      );
+    } else {
+      playerX = Math.max(
+        halfW,
+        Math.min(MAP.width - halfW, playerX)
+      );
+    }
 
     const northExitOpen =
       (
@@ -9152,7 +14160,21 @@
 
     let spriteScale = 1;
 
-    if (src === PLAYER.standUp || isUpAttack) {
+    const club = WEAPONS.pinkPigClub.attacks;
+    const isClubLeft = club.left.includes(src);
+    const isClubRight = club.right.includes(src);
+    const isClubDown = club.down.includes(src);
+    const isClubUp = club.up.includes(src);
+
+    if (isClubLeft || isClubRight) {
+      // Source sheet is a wide 2x2 composition; normalized 2:3 canvases need
+      // this fixed bottom-center scale to match the existing player's world size.
+      spriteScale = 2.50;
+    } else if (isClubDown) {
+      spriteScale = 1.25;
+    } else if (isClubUp) {
+      spriteScale = 1.75;
+    } else if (src === PLAYER.standUp || isUpAttack) {
       spriteScale = 1.16;
     } else if (isRightAttack || isLeftAttack) {
       spriteScale = 1.20;
@@ -9241,12 +14263,48 @@
   }
 
   function chooseAttackSequence() {
+    if (equippedWeapon === WEAPONS.pinkPigClub.id) {
+      if (facing === "down") return CLUB_ATTACK_DOWN;
+      if (facing === "up") return CLUB_ATTACK_UP;
+      if (facing === "left") return CLUB_ATTACK_LEFT;
+      if (facing === "right") return CLUB_ATTACK_RIGHT;
+      return lastHorizontalFacing === "left" ? CLUB_ATTACK_LEFT : CLUB_ATTACK_RIGHT;
+    }
+
     if (facing === "down") return ATTACK_DOWN;
     if (facing === "up") return ATTACK_UP;
     if (facing === "left") return ATTACK_LEFT;
     if (facing === "right") return ATTACK_RIGHT;
 
     return lastHorizontalFacing === "left" ? ATTACK_LEFT : ATTACK_RIGHT;
+  }
+
+
+  // R68 SAUKEULE — resolve one combat result per strike, not once per target.
+  // A SAUSTARKER TREFFER overrides the strike's normal/critical damage with 120.
+  function resolvePlayerAttackFrame(frame) {
+    if (!frame) return;
+
+    let resolvedFrame = frame;
+
+    if (
+      frame.hit &&
+      equippedWeapon === WEAPONS.pinkPigClub.id &&
+      Math.random() < WEAPONS.pinkPigClub.saustarkChance
+    ) {
+      resolvedFrame = {
+        ...frame,
+        damage: WEAPONS.pinkPigClub.saustarkDamage,
+        critical: false,
+        saustark: true
+      };
+    }
+
+    resolveRabbitAttackFrame(resolvedFrame);
+    resolveWolfAttackFrame(resolvedFrame);
+    resolveBoarAttackFrame(resolvedFrame);
+    resolveTierbannsteinAttackFrame(resolvedFrame);
+    resolveMoleAttackFrame(resolvedFrame);
   }
 
 
@@ -9295,8 +14353,7 @@
     attackTimer = 0;
 
     setSprite(attackSequence[0].sprite);
-    resolveRabbitAttackFrame(attackSequence[0]);
-    resolveMoleAttackFrame(attackSequence[0]);
+    resolvePlayerAttackFrame(attackSequence[0]);
   }
 
   function finishAttackState() {
@@ -9327,8 +14384,7 @@
           attackTimer = 0;
           startAttackSound();
           setSprite(attackSequence[0].sprite);
-          resolveRabbitAttackFrame(attackSequence[0]);
-    resolveMoleAttackFrame(attackSequence[0]);
+          resolvePlayerAttackFrame(attackSequence[0]);
         } else {
           finishAttackState();
         }
@@ -9336,8 +14392,7 @@
       }
 
       setSprite(attackSequence[attackStep].sprite);
-      resolveRabbitAttackFrame(attackSequence[attackStep]);
-      resolveMoleAttackFrame(attackSequence[attackStep]);
+      resolvePlayerAttackFrame(attackSequence[attackStep]);
     }
   }
 
@@ -9503,8 +14558,12 @@
 
     if (gameplayUnlocked() && !mapTransitioning) {
       if (!inventoryState.open) {
-        updatePlayer(deltaSeconds);
-        checkMapExit();
+        if (stadiumActive()) {
+          updateStadiumPhase1(deltaSeconds, now);
+        } else {
+          updatePlayer(deltaSeconds);
+          checkMapExit();
+        }
       }
       updateAreaSigns();
       updateTrunkenbold(deltaSeconds, now);
@@ -9513,7 +14572,9 @@
       updateWolves(deltaSeconds, now);
       updateGoat(deltaSeconds, now);
       updateBoars(deltaSeconds, now);
+      updateTierbannsteine(deltaSeconds, now);
       updateMole(now);
+      updateOedegard(now);
     }
 
     renderPlayer();
@@ -9540,6 +14601,45 @@
 
       // No gameplay key may leak into the campaign while either start screen is open.
       event.preventDefault();
+      return;
+    }
+
+    // R72 RENCHTALSTADION: spectator input + ESC menu + bookmaker dialog.
+    if (stadiumActive()) {
+      const isBetStakeField =
+        stadiumBetOpen &&
+        stadiumBetUI &&
+        event.target === stadiumBetUI.stake;
+
+      if (event.code === "Escape") {
+        event.preventDefault();
+
+        if (stadiumResultOpen) {
+          closeStadiumResultUI();
+          return;
+        }
+
+        if (stadiumBetOpen) {
+          closeStadiumBetUI();
+          return;
+        }
+
+        // R74: outside the bookmaker bet dialog, ESC is ALWAYS available in the
+        // stadium — including countdown, PRÜGEL, fighter walk/victory/ready phases.
+        if (stadiumMenuOpen) hideStadiumMenu();
+        else showStadiumMenu();
+        return;
+      }
+
+      if (isBetStakeField) return;
+
+      event.preventDefault();
+
+      if (stadiumBetOpen || stadiumMenuOpen) return;
+
+      if (stadiumState === "spectator") {
+        setStadiumSpectatorFacing(event.code);
+      }
       return;
     }
 
@@ -9687,6 +14787,10 @@
     installMapTransitionUI();
     createInventorySystem();
 
+    // R67 TEST: first weapon starts in page I at the first free vertical 1x2 area.
+    // Later this single line can be removed when the weapon becomes a world reward.
+    addItemToInventory(PINK_PIG_CLUB_ITEM);
+
     // Install immediately as a black curtain so OBERKIRCH never flashes before
     // the new-game sequence. It is screen UI only; no map state is changed.
     createStartFlowUI();
@@ -9705,12 +14809,15 @@
     currentAnimation = "idle";
     setIdleSprite();
 
-    createAreaSigns();
+    installOedegardStyles();
+  createOedegard();
+  createAreaSigns();
     installIcePlayerStyles();
     createRabbits();
     createWolves();
     createGoat();
     createBoars();
+    createTierbannsteinSystem();
     createMoleSystem();
     createOberkirchBuildings();
     createR11Buildings();
@@ -9718,6 +14825,7 @@
     createLautenbachBuildings();
     createHubackerBuildings();
     createTrunkenbold();
+    createStadiumPhase1();
 
     clampPlayer();
     updateAreaSigns();
