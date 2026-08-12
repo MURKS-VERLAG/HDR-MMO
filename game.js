@@ -9688,7 +9688,11 @@
         left: 0;
         bottom: 0;
         width: min(40vw, 750px);
+        /* R102: crop the PNG's transparent bottom canvas in the HUD viewport.
+           The artwork itself stays at the exact existing scale. */
+        aspect-ratio: 1536 / 884;
         height: auto;
+        overflow: hidden;
         pointer-events: none;
         user-select: none;
         -webkit-user-drag: none;
@@ -9697,18 +9701,22 @@
         transition: opacity 160ms ease, visibility 160ms ease;
         filter: drop-shadow(0 4px 5px rgba(0,0,0,.24));
         isolation: isolate;
-        transform: translateY(20%);
+        transform: none;
         transform-origin: left bottom;
         margin: 0;
         padding: 0;
       }
 
       #playerHud.player-hud--hidden {
+        display: none !important;
         opacity: 0;
         visibility: hidden;
       }
 
       #playerHud img {
+        position: absolute;
+        left: 0;
+        top: 0;
         display: block;
         width: 100%;
         height: auto;
@@ -13159,6 +13167,10 @@
     startFlowUI = null;
     startFlowState = "campaign";
 
+    // R102: HUD is created ONLY after login/name + hero selection are finished.
+    // It therefore cannot exist on either start screen.
+    createPlayerHud();
+
     // R60: NOW — and only now — leave the RENCHTALSTADION intro music
     // and enter OBERKIRCH's original existing music with the normal crossfade.
     crossfadeMapMusic("oberkirch-zentrum");
@@ -15682,7 +15694,9 @@
     startBackgroundMusic();
     installMapTransitionUI();
     createInventorySystem();
-    createPlayerHud();
+
+    // R102: do NOT create the HUD here. The start flow is still active.
+    // createPlayerHud() is called only when startFlowState becomes "campaign".
 
     // R67 TEST: first weapon starts in page I at the first free vertical 1x2 area.
     // Later this single line can be removed when the weapon becomes a world reward.
