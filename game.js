@@ -1272,65 +1272,167 @@
     oedegard.nextAt = now + OEDEGARD_CONFIG.interval;
   }
 
-  // R95 ÖDSBACH: dense translucent fog veils continuously drifting left -> right.
-  let oedsbachFogRoot = null;
+  // ------------------------------------------------------------------
+  // R97 ÖDSBACH — HARD-VISIBLE MOOR FOG + CALIPH APPARITIONS
+  // ------------------------------------------------------------------
 
-  function installOedsbachFogStyles() {
-    if (document.getElementById("oedsbachFogStyles")) return;
+  // Reference artwork is the PURE 10000 x 6655 map (no black game side bars).
+  // Red painted areas from the supplied reference are converted to world-space
+  // polygons and block the PLAYER FOOT anchor only.
+  const OEDSBACH_BLOCK_ZONES = Object.freeze([
+    Object.freeze([
+      { x: 0, y: 1217 }, { x: 463, y: 1418 }, { x: 927, y: 1710 },
+      { x: 1328, y: 2049 }, { x: 1653, y: 2165 }, { x: 1197, y: 2126 },
+      { x: 695, y: 1941 }, { x: 0, y: 1810 }
+    ]),
+    Object.freeze([
+      { x: 4069, y: 1841 }, { x: 4301, y: 1533 }, { x: 4741, y: 1279 },
+      { x: 5452, y: 1225 }, { x: 5876, y: 1379 }, { x: 6108, y: 1541 },
+      { x: 6131, y: 1818 }, { x: 5822, y: 1941 }, { x: 5351, y: 1872 },
+      { x: 5097, y: 1741 }, { x: 4811, y: 1618 }, { x: 4556, y: 1726 },
+      { x: 4308, y: 1926 }
+    ]),
+    Object.freeze([
+      { x: 8595, y: 2079 }, { x: 8934, y: 1903 }, { x: 9317, y: 1579 },
+      { x: 9737, y: 1202 }, { x: 10000, y: 917 }, { x: 10000, y: 1464 },
+      { x: 9768, y: 1672 }, { x: 9340, y: 1918 }, { x: 9019, y: 2079 },
+      { x: 8726, y: 2180 }
+    ])
+  ]);
+
+  function isOedsbachBlockedFootPoint(x, y) {
+    if (MAP.id !== "oedsbach") return false;
+    for (const polygon of OEDSBACH_BLOCK_ZONES) {
+      if (worldPointInPolygon(x, y, polygon)) return true;
+    }
+    return false;
+  }
+
+  // Yellow reference circles: centred on Ödegard. Radii are world-space,
+  // derived from the supplied pure-map reference.
+  const OEDSBACH_SHADOW_CONFIG = Object.freeze({
+    centerX: 5570,
+    centerY: 1900,
+    radii: Object.freeze({
+      outer: 3320,
+      second: 2080,
+      third: 1570,
+      inner: 1050
+    }),
+    oneShotHoldMs: 2000,
+    fadeMs: 460,
+    innerIntervalMs: 3000,
+    sprites: Object.freeze({
+      zone1: Object.freeze([
+        "assets/npcs/oedsbach-shadows/CALIPH SHADOW 1.png",
+        "assets/npcs/oedsbach-shadows/CALIPH SHADOW 2.png"
+      ]),
+      zone2: "assets/npcs/oedsbach-shadows/CALIPH SHADOW 3.png",
+      zone3: "assets/npcs/oedsbach-shadows/CALIPH SHADOW 4.png",
+      inner: Object.freeze([
+        "assets/npcs/oedsbach-shadows/CALIPH SHADOW 5.png",
+        "assets/npcs/oedsbach-shadows/CALIPH SHADOW 6.png",
+        "assets/npcs/oedsbach-shadows/CALIPH SHADOW 7.png"
+      ])
+    })
+  });
+
+  let oedsbachFogRoot = null;
+  let oedsbachShadowRoot = null;
+  let oedsbachInnerSprite = null;
+  let oedsbachInnerNextAt = 0;
+  let oedsbachInnerVisible = false;
+  let oedsbachShadowVisit = { zone1: false, zone2: false, zone3: false };
+  const oedsbachShadowTimeouts = new Set();
+
+  function installOedsbachAtmosphereStyles() {
+    if (document.getElementById("oedsbachAtmosphereStyles")) return;
     const style = document.createElement("style");
-    style.id = "oedsbachFogStyles";
+    style.id = "oedsbachAtmosphereStyles";
     style.textContent = `
       .oedsbach-fog {
         position:absolute;
-        inset:0;
-        z-index:105;
+        left:0;
+        top:0;
+        width:10000px;
+        height:6655px;
+        z-index:6;
         overflow:hidden;
         pointer-events:none;
-        user-select:none;
         display:none;
       }
-
       .oedsbach-fog__veil {
         position:absolute;
-        left:-55%;
-        width:155%;
-        border-radius:48%;
-        pointer-events:none;
-        will-change:transform,opacity;
-        filter:blur(30px);
+        left:-2600px;
+        width:7600px;
+        height:760px;
+        border-radius:50%;
+        opacity:.68;
+        filter:blur(38px);
         background:
-          radial-gradient(ellipse at 18% 52%,
-            rgba(226,232,230,0) 0%,
-            rgba(218,225,223,.55) 18%,
-            rgba(230,235,233,.76) 38%,
-            rgba(210,219,216,.62) 57%,
-            rgba(226,232,230,0) 78%),
-          radial-gradient(ellipse at 58% 46%,
-            rgba(224,231,228,0) 0%,
-            rgba(214,222,219,.48) 20%,
-            rgba(232,236,235,.72) 43%,
-            rgba(210,219,216,.50) 63%,
-            rgba(224,231,228,0) 82%),
-          radial-gradient(ellipse at 88% 54%,
-            rgba(226,232,230,0) 0%,
-            rgba(219,226,224,.46) 23%,
-            rgba(234,238,237,.68) 45%,
-            rgba(226,232,230,0) 76%);
-        animation:oedsbachFogDrift linear infinite;
+          radial-gradient(ellipse at 32% 50%, rgba(238,242,240,.80) 0%, rgba(220,227,224,.62) 28%, rgba(197,207,203,.38) 57%, rgba(197,207,203,0) 78%),
+          radial-gradient(ellipse at 72% 46%, rgba(235,240,238,.70) 0%, rgba(211,220,217,.52) 32%, rgba(194,204,201,0) 76%);
+        animation:oedsbachFogHardDrift linear infinite;
+        will-change:transform;
+      }
+      .oedsbach-fog__veil:nth-child(1){top:220px; animation-duration:27s; animation-delay:-6s}
+      .oedsbach-fog__veil:nth-child(2){top:1030px; animation-duration:34s; animation-delay:-21s; opacity:.58}
+      .oedsbach-fog__veil:nth-child(3){top:1870px; animation-duration:24s; animation-delay:-13s; opacity:.72}
+      .oedsbach-fog__veil:nth-child(4){top:2760px; animation-duration:39s; animation-delay:-29s; opacity:.57}
+      .oedsbach-fog__veil:nth-child(5){top:3640px; animation-duration:30s; animation-delay:-17s; opacity:.70}
+      .oedsbach-fog__veil:nth-child(6){top:4510px; animation-duration:36s; animation-delay:-8s; opacity:.61}
+      .oedsbach-fog__veil:nth-child(7){top:5420px; animation-duration:26s; animation-delay:-19s; opacity:.69}
+      .oedsbach-fog__veil:nth-child(8){top:6150px; animation-duration:41s; animation-delay:-33s; opacity:.56}
+      @keyframes oedsbachFogHardDrift {
+        from { transform:translate3d(-1600px,0,0) scaleX(1.0); }
+        to   { transform:translate3d(12800px,0,0) scaleX(1.14); }
       }
 
-      .oedsbach-fog__veil:nth-child(1){top:1%; height:720px; opacity:.72; animation-duration:30s; animation-delay:-14s}
-      .oedsbach-fog__veil:nth-child(2){top:13%;height:560px; opacity:.62; animation-duration:24s; animation-delay:-7s}
-      .oedsbach-fog__veil:nth-child(3){top:26%;height:760px; opacity:.78; animation-duration:37s; animation-delay:-25s}
-      .oedsbach-fog__veil:nth-child(4){top:40%;height:520px; opacity:.60; animation-duration:28s; animation-delay:-18s}
-      .oedsbach-fog__veil:nth-child(5){top:53%;height:790px; opacity:.76; animation-duration:40s; animation-delay:-31s}
-      .oedsbach-fog__veil:nth-child(6){top:67%;height:590px; opacity:.64; animation-duration:26s; animation-delay:-10s}
-      .oedsbach-fog__veil:nth-child(7){top:80%;height:690px; opacity:.70; animation-duration:34s; animation-delay:-21s}
-
-      @keyframes oedsbachFogDrift {
-        0%   { transform:translate3d(-12%,0,0) scaleX(1.00); }
-        50%  { transform:translate3d(28%,0,0) scaleX(1.08); }
-        100% { transform:translate3d(70%,0,0) scaleX(1.00); }
+      .oedsbach-shadow-layer {
+        position:absolute;
+        left:0;
+        top:0;
+        width:10000px;
+        height:6655px;
+        z-index:9;
+        pointer-events:none;
+        display:none;
+      }
+      .oedsbach-shadow {
+        position:absolute;
+        width:650px;
+        height:780px;
+        transform:translate(-50%,-100%);
+        opacity:0;
+        transition:opacity ${OEDSBACH_SHADOW_CONFIG.fadeMs}ms ease-in-out;
+        pointer-events:none;
+        filter:drop-shadow(0 12px 12px rgba(0,0,0,.55));
+      }
+      .oedsbach-shadow img {
+        width:100%;
+        height:100%;
+        object-fit:contain;
+        object-position:50% 100%;
+      }
+      .oedsbach-shadow--inner {
+        width:720px;
+        height:900px;
+      }
+      .oedsbach-dust {
+        position:absolute;
+        width:16px;
+        height:16px;
+        border-radius:50%;
+        pointer-events:none;
+        opacity:.9;
+        background:rgba(38,38,38,.88);
+        filter:blur(2px);
+        animation:oedsbachDustPuff 760ms ease-out forwards;
+      }
+      @keyframes oedsbachDustPuff {
+        0%   { transform:translate3d(0,0,0) scale(.25); opacity:.9; }
+        60%  { opacity:.62; }
+        100% { transform:translate3d(var(--dust-x),var(--dust-y),0) scale(2.6); opacity:0; }
       }
     `;
     document.head.appendChild(style);
@@ -1338,21 +1440,243 @@
 
   function createOedsbachFog() {
     if (oedsbachFogRoot) return;
-    installOedsbachFogStyles();
+    installOedsbachAtmosphereStyles();
+
     const root = document.createElement("div");
     root.className = "oedsbach-fog";
     root.style.display = MAP.id === "oedsbach" ? "" : "none";
-    for (let i=0;i<7;i+=1) {
-      const veil=document.createElement("div");
-      veil.className="oedsbach-fog__veil";
+    for (let i = 0; i < 8; i += 1) {
+      const veil = document.createElement("div");
+      veil.className = "oedsbach-fog__veil";
       root.appendChild(veil);
     }
     world.appendChild(root);
-    oedsbachFogRoot=root;
+    oedsbachFogRoot = root;
   }
 
   function setOedsbachFogVisibility(visible) {
-    if (oedsbachFogRoot) oedsbachFogRoot.style.display = visible ? "" : "none";
+    if (!oedsbachFogRoot) return;
+    oedsbachFogRoot.style.display = visible ? "" : "none";
+  }
+
+  function createOedsbachShadowSystem() {
+    if (oedsbachShadowRoot) return;
+    installOedsbachAtmosphereStyles();
+
+    const root = document.createElement("div");
+    root.className = "oedsbach-shadow-layer";
+    root.style.display = MAP.id === "oedsbach" ? "" : "none";
+    world.appendChild(root);
+    oedsbachShadowRoot = root;
+  }
+
+  function clearOedsbachShadowTimers() {
+    for (const id of oedsbachShadowTimeouts) window.clearTimeout(id);
+    oedsbachShadowTimeouts.clear();
+  }
+
+  function scheduleOedsbachShadow(fn, delay) {
+    const id = window.setTimeout(() => {
+      oedsbachShadowTimeouts.delete(id);
+      fn();
+    }, delay);
+    oedsbachShadowTimeouts.add(id);
+    return id;
+  }
+
+  function puffOedsbachDust(x, y, amount = 22) {
+    if (!oedsbachShadowRoot || MAP.id !== "oedsbach") return;
+    for (let i = 0; i < amount; i += 1) {
+      const p = document.createElement("span");
+      p.className = "oedsbach-dust";
+      p.style.left = `${x + (Math.random() - .5) * 180}px`;
+      p.style.top = `${y - 250 + (Math.random() - .5) * 260}px`;
+      const distance = 110 + Math.random() * 270;
+      const angle = Math.random() * Math.PI * 2;
+      p.style.setProperty("--dust-x", `${Math.cos(angle) * distance}px`);
+      p.style.setProperty("--dust-y", `${Math.sin(angle) * distance}px`);
+      const shade = Math.floor(18 + Math.random() * 90);
+      p.style.background = `rgba(${shade},${shade},${shade},${.48 + Math.random() * .42})`;
+      const size = 8 + Math.random() * 24;
+      p.style.width = `${size}px`;
+      p.style.height = `${size}px`;
+      oedsbachShadowRoot.appendChild(p);
+      scheduleOedsbachShadow(() => p.remove(), 850);
+    }
+  }
+
+  function chooseMirroredTransform(mirrored) {
+    return mirrored ? "scaleX(-1)" : "scaleX(1)";
+  }
+
+  function clampShadowPoint(x, y) {
+    return {
+      x: Math.max(420, Math.min(MAP.width - 420, x)),
+      y: Math.max(850, Math.min(MAP.height - 120, y))
+    };
+  }
+
+  function randomNearPlayer() {
+    const angle = Math.random() * Math.PI * 2;
+    const dist = 500 + Math.random() * 310;
+    return clampShadowPoint(
+      playerX + Math.cos(angle) * dist,
+      playerY + Math.sin(angle) * dist
+    );
+  }
+
+  function randomNearOedegard() {
+    const anchors = [
+      { x: -650, y: 70 }, { x: 650, y: 70 },
+      { x: -420, y: 330 }, { x: 420, y: 330 },
+      { x: -280, y: -170 }, { x: 300, y: -150 },
+      { x: (playerX - OEDSBACH_SHADOW_CONFIG.centerX) * .34, y: (playerY - OEDSBACH_SHADOW_CONFIG.centerY) * .34 + 120 }
+    ];
+    const a = anchors[Math.floor(Math.random() * anchors.length)];
+    return clampShadowPoint(
+      OEDSBACH_SHADOW_CONFIG.centerX + a.x + (Math.random() - .5) * 180,
+      OEDSBACH_SHADOW_CONFIG.centerY + a.y + (Math.random() - .5) * 140
+    );
+  }
+
+  function spawnOedsbachOneShot(sprite, point = randomNearPlayer()) {
+    if (!oedsbachShadowRoot || MAP.id !== "oedsbach") return;
+    const root = document.createElement("div");
+    root.className = "oedsbach-shadow";
+    root.style.left = `${point.x}px`;
+    root.style.top = `${point.y}px`;
+
+    const img = document.createElement("img");
+    img.src = encodeURI(sprite);
+    img.alt = "";
+    img.draggable = false;
+    img.style.transform = chooseMirroredTransform(Math.random() < .5);
+    root.appendChild(img);
+    oedsbachShadowRoot.appendChild(root);
+
+    puffOedsbachDust(point.x, point.y, 24);
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => { root.style.opacity = "1"; });
+    });
+
+    scheduleOedsbachShadow(() => {
+      puffOedsbachDust(point.x, point.y, 24);
+      root.style.opacity = "0";
+    }, OEDSBACH_SHADOW_CONFIG.fadeMs + OEDSBACH_SHADOW_CONFIG.oneShotHoldMs);
+
+    scheduleOedsbachShadow(
+      () => root.remove(),
+      OEDSBACH_SHADOW_CONFIG.fadeMs * 2 + OEDSBACH_SHADOW_CONFIG.oneShotHoldMs + 80
+    );
+  }
+
+  function removeOedsbachInnerShadow(withPuff = true) {
+    if (!oedsbachInnerSprite) return;
+    const root = oedsbachInnerSprite;
+    const x = parseFloat(root.style.left) || OEDSBACH_SHADOW_CONFIG.centerX;
+    const y = parseFloat(root.style.top) || OEDSBACH_SHADOW_CONFIG.centerY;
+    if (withPuff) puffOedsbachDust(x, y, 28);
+    root.style.opacity = "0";
+    scheduleOedsbachShadow(() => root.remove(), OEDSBACH_SHADOW_CONFIG.fadeMs + 40);
+    oedsbachInnerSprite = null;
+  }
+
+  function spawnOedsbachInnerShadow(now) {
+    removeOedsbachInnerShadow(true);
+    const pool = OEDSBACH_SHADOW_CONFIG.sprites.inner;
+    const sprite = pool[Math.floor(Math.random() * pool.length)];
+    const point = randomNearOedegard();
+
+    const root = document.createElement("div");
+    root.className = "oedsbach-shadow oedsbach-shadow--inner";
+    root.style.left = `${point.x}px`;
+    root.style.top = `${point.y}px`;
+
+    const img = document.createElement("img");
+    img.src = encodeURI(sprite);
+    img.alt = "";
+    img.draggable = false;
+    img.style.transform = chooseMirroredTransform(Math.random() < .5);
+    root.appendChild(img);
+    oedsbachShadowRoot.appendChild(root);
+    oedsbachInnerSprite = root;
+
+    puffOedsbachDust(point.x, point.y, 30);
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => { root.style.opacity = "1"; });
+    });
+    oedsbachInnerNextAt = now + OEDSBACH_SHADOW_CONFIG.innerIntervalMs;
+  }
+
+  function resetOedsbachShadowVisit(removeVisuals = true) {
+    oedsbachShadowVisit = { zone1: false, zone2: false, zone3: false };
+    oedsbachInnerNextAt = 0;
+    oedsbachInnerVisible = false;
+    if (removeVisuals) {
+      clearOedsbachShadowTimers();
+      if (oedsbachShadowRoot) {
+        for (const el of [...oedsbachShadowRoot.children]) el.remove();
+      }
+      oedsbachInnerSprite = null;
+    }
+  }
+
+  function setOedsbachShadowVisibility(visible) {
+    if (!oedsbachShadowRoot) return;
+    oedsbachShadowRoot.style.display = visible ? "" : "none";
+    if (!visible) resetOedsbachShadowVisit(true);
+  }
+
+  function updateOedsbachShadows(now) {
+    if (!oedsbachShadowRoot || MAP.id !== "oedsbach") return;
+
+    const distance = Math.hypot(
+      playerX - OEDSBACH_SHADOW_CONFIG.centerX,
+      playerY - OEDSBACH_SHADOW_CONFIG.centerY
+    );
+    const r = OEDSBACH_SHADOW_CONFIG.radii;
+
+    // Full retreat beyond the outer ring resets the complete approach sequence.
+    if (distance > r.outer + 160) {
+      if (
+        oedsbachShadowVisit.zone1 ||
+        oedsbachShadowVisit.zone2 ||
+        oedsbachShadowVisit.zone3 ||
+        oedsbachInnerVisible
+      ) {
+        resetOedsbachShadowVisit(true);
+      }
+      return;
+    }
+
+    if (distance <= r.outer && !oedsbachShadowVisit.zone1) {
+      oedsbachShadowVisit.zone1 = true;
+      const pool = OEDSBACH_SHADOW_CONFIG.sprites.zone1;
+      spawnOedsbachOneShot(pool[Math.floor(Math.random() * pool.length)]);
+    }
+
+    if (distance <= r.second && !oedsbachShadowVisit.zone2) {
+      oedsbachShadowVisit.zone2 = true;
+      spawnOedsbachOneShot(OEDSBACH_SHADOW_CONFIG.sprites.zone2);
+    }
+
+    if (distance <= r.third && !oedsbachShadowVisit.zone3) {
+      oedsbachShadowVisit.zone3 = true;
+      spawnOedsbachOneShot(OEDSBACH_SHADOW_CONFIG.sprites.zone3);
+    }
+
+    if (distance <= r.inner) {
+      if (!oedsbachInnerVisible) {
+        oedsbachInnerVisible = true;
+        spawnOedsbachInnerShadow(now);
+      } else if (now >= oedsbachInnerNextAt) {
+        spawnOedsbachInnerShadow(now);
+      }
+    } else if (oedsbachInnerVisible) {
+      oedsbachInnerVisible = false;
+      oedsbachInnerNextAt = 0;
+      removeOedsbachInnerShadow(true);
+    }
   }
 
   // ------------------------------------------------------------------
@@ -7063,6 +7387,9 @@
 
     // R40 MAP 4: RED river + both PURPLE regions + locked bridge gap.
     if (isHubackerBlockedFootPoint(x, y)) return false;
+
+    // R97 MAP 6: three RED reference regions are hard-blocked.
+    if (isOedsbachBlockedFootPoint(x, y)) return false;
 
     // New hard collision for church body + tavern.
     // Only the player's foot anchor participates.
@@ -13618,6 +13945,7 @@
     setLautenbachWorldVisibility(MAP.id === "lautenbach");
     setOedegardVisibility(MAP.id === "oedsbach");
     setOedsbachFogVisibility(MAP.id === "oedsbach");
+    setOedsbachShadowVisibility(MAP.id === "oedsbach");
 
     // Sync map-specific animals while the transition overlay is still covering the map.
     updateRabbits(0, performance.now());
@@ -14684,6 +15012,7 @@
       updateTierbannsteine(deltaSeconds, now);
       updateMole(now);
       updateOedegard(now);
+      updateOedsbachShadows(now);
     }
 
     renderPlayer();
@@ -14921,6 +15250,7 @@
     installOedegardStyles();
   createOedegard();
   createOedsbachFog();
+  createOedsbachShadowSystem();
   createAreaSigns();
     installIcePlayerStyles();
     createRabbits();
