@@ -14006,7 +14006,21 @@
     const topClearance = PLAYER.height;
     const bottomClearance = 10;
 
-    playerX = Math.max(halfW, Math.min(MAP.width - halfW, playerX));
+    // R92 FIX — WINTERBACH red east road -> ÖDSBACH:
+    // exactly like the established north/south exits, the player must be
+    // allowed to physically cross the map edge inside the marked lane.
+    const eastExitOpen =
+      playerInWinterbachOedsbachEastExitLane() &&
+      (keys.has("KeyD") || keys.has("ArrowRight"));
+
+    if (eastExitOpen) {
+      playerX = Math.max(
+        halfW,
+        Math.min(MAP_EXIT_CONFIG.winterbachOedsbachEast.leaveX + 80, playerX)
+      );
+    } else {
+      playerX = Math.max(halfW, Math.min(MAP.width - halfW, playerX));
+    }
 
     const northExitOpen =
       (
@@ -14026,7 +14040,8 @@
         playerInLautenbachSouthRightExitLane() ||
         playerInHubackerSouthLeftExitLane() ||
         playerInOberkirchStadiumSouthExitLane() ||
-        playerInStadiumOberkirchSouthExitLane()
+        playerInStadiumOberkirchSouthExitLane() ||
+        playerInOedsbachWinterbachSouthExitLane()
       ) &&
       (keys.has("KeyS") || keys.has("ArrowDown"));
 
@@ -14071,6 +14086,8 @@
         leavePadding = MAP_EXIT_CONFIG.oberkirchStadiumSouth.leavePadding;
       } else if (MAP.id === "renchtalstadion") {
         leavePadding = MAP_EXIT_CONFIG.stadiumOberkirchSouth.leavePadding;
+      } else if (MAP.id === "oedsbach") {
+        leavePadding = MAP_EXIT_CONFIG.oedsbachWinterbachSouth.leavePadding;
       }
 
       playerY = Math.max(
