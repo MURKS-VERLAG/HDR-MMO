@@ -16204,11 +16204,36 @@
   }
 
   function updateAttack(deltaSeconds) {
-    if (!attacking || !attackSequence) return;
+    if (!attacking) return;
 
-    attackTimer += deltaSeconds * 1000;
+    // R110 PLAYER STABILITY:
+    // Never let a corrupted/transient combat state throw inside the main frame.
+    // A single uncaught exception used to kill requestAnimationFrame permanently.
+    if (
+      !Array.isArray(attackSequence) ||
+      attackSequence.length === 0 ||
+      !Number.isInteger(attackStep) ||
+      attackStep < 0 ||
+      attackStep >= attackSequence.length ||
+      !Number.isFinite(attackTimer)
+    ) {
+      cancelAttackImmediately();
+      return;
+    }
 
-    while (attacking && attackTimer >= attackSequence[attackStep].duration) {
+    const safeDelta = Number.isFinite(deltaSeconds)
+      ? Math.max(0, Math.min(0.05, deltaSeconds))
+      : 0;
+
+    attackTimer += safeDelta * 1000;
+
+    while (
+      attacking &&
+      attackSequence &&
+      attackStep >= 0 &&
+      attackStep < attackSequence.length &&
+      attackTimer >= attackSequence[attackStep].duration
+    ) {
       attackTimer -= attackSequence[attackStep].duration;
       attackStep += 1;
 
@@ -16389,41 +16414,75 @@
     }
   }
 
+  let playerStabilityLastFrameErrorAt = 0;
+
   function frame(now) {
-    const deltaSeconds = Math.min(0.05, (now - lastFrame) / 1000);
-    lastFrame = now;
+    // R110 PLAYER STABILITY:
+    // The NEXT frame is guaranteed in finally. Before this fix, any one-off
+    // runtime exception anywhere below prevented requestAnimationFrame(frame)
+    // from being reached and permanently froze walking + combat together.
+    try {
+      const rawDelta = (now - lastFrame) / 1000;
+      const deltaSeconds = Number.isFinite(rawDelta)
+        ? Math.max(0, Math.min(0.05, rawDelta))
+        : 0;
+      lastFrame = now;
 
-    updateZoom(now);
+      updateZoom(now);
 
-    if (gameplayUnlocked() && !mapTransitioning) {
-      if (!inventoryState.open) {
-        if (stadiumActive()) {
-          updateStadiumPhase1(deltaSeconds, now);
-        } else {
-          updatePlayer(deltaSeconds);
-          checkMapExit();
+      if (gameplayUnlocked() && !mapTransitioning) {
+        if (!inventoryState.open) {
+          if (stadiumActive()) {
+            updateStadiumPhase1(deltaSeconds, now);
+          } else {
+            updatePlayer(deltaSeconds);
+            checkMapExit();
+          }
         }
+        updateAreaSigns();
+        updateTrunkenbold(deltaSeconds, now);
+        updateRabbits(deltaSeconds, now);
+        updateRabbitLootVisibility();
+        updateWolves(deltaSeconds, now);
+        updateGoat(deltaSeconds, now);
+        updateBoars(deltaSeconds, now);
+        updateTierbannsteine(deltaSeconds, now);
+        updateMole(now);
+        updateOedegard(now);
+        updateOedsbachShadows(now);
+        updatePlayerHudVisibility();
       }
-      updateAreaSigns();
-      updateTrunkenbold(deltaSeconds, now);
-      updateRabbits(deltaSeconds, now);
-      updateRabbitLootVisibility();
-      updateWolves(deltaSeconds, now);
-      updateGoat(deltaSeconds, now);
-      updateBoars(deltaSeconds, now);
-      updateTierbannsteine(deltaSeconds, now);
-      updateMole(now);
-      updateOedegard(now);
-      updateOedsbachShadows(now);
-      updatePlayerHudVisibility();
+
+      renderPlayer();
+      updateChurchPlayerDepth();
+      renderWorld();
+      renderOedsbachShadowPositions();
+    } catch (error) {
+      // Keep the game alive even if a later auxiliary system has one bad frame.
+      // Throttle logging so a persistent error cannot flood the console.
+      const errorNow = performance.now();
+      if (errorNow - playerStabilityLastFrameErrorAt >= 1000) {
+        playerStabilityLastFrameErrorAt = errorNow;
+        console.error("R110 FRAME RECOVERY:", error);
+      }
+
+      // Repair only transient player-control state if it became internally invalid.
+      if (
+        attacking &&
+        (
+          !Array.isArray(attackSequence) ||
+          !Number.isInteger(attackStep) ||
+          attackStep < 0 ||
+          attackStep >= (attackSequence ? attackSequence.length : 0) ||
+          !Number.isFinite(attackTimer)
+        )
+      ) {
+        cancelAttackImmediately();
+      }
+    } finally {
+      // CRITICAL: the main game loop can no longer die because of one exception.
+      requestAnimationFrame(frame);
     }
-
-    renderPlayer();
-    updateChurchPlayerDepth();
-    renderWorld();
-    renderOedsbachShadowPositions();
-
-    requestAnimationFrame(frame);
   }
 
   function isControlEvent(event) {
@@ -16590,19 +16649,41 @@
     keys.delete(event.code);
   }, { passive: false });
 
-  // Extra safety for lost modifier-key events (Alt-Tab, browser focus changes, etc.).
-  window.addEventListener("blur", () => {
+  // R110: one conservative reset for transient keyboard/combat state.
+  // Used only when browser focus/visibility changes, never during normal play.
+  function resetTransientPlayerControls() {
+    keys.clear();
+
     if (blocking) stopBlocking();
     cancelAttackImmediately();
-    keys.clear();
+
+    moving = false;
+    currentAnimation = "idle";
+    walkFrame = 0;
+    walkFrameTimer = 0;
+
+    playerEl.classList.remove("player--moving");
+    playerEl.classList.add("player--idle");
+
+    clearIceVelocity();
+    updateIceVisual();
+    lastFrame = performance.now();
+  }
+
+  // Extra safety for lost keyup events (Alt-Tab, clicking outside browser, etc.).
+  window.addEventListener("blur", () => {
+    resetTransientPlayerControls();
   });
 
-  // R55 PLAYER STABILITY:
-  // A browser can pause requestAnimationFrame while a tab is hidden.
-  // Reset only the frame clock on return so walking/combat never inherits
-  // stale elapsed time. No animation state, timing constants or sequence changes.
+  // R110 PLAYER STABILITY:
+  // Browsers may suspend RAF and may also lose keyup events while hidden.
+  // Clear only transient controls; gameplay data and all systems remain untouched.
   document.addEventListener("visibilitychange", () => {
-    lastFrame = performance.now();
+    if (document.hidden) {
+      resetTransientPlayerControls();
+    } else {
+      lastFrame = performance.now();
+    }
   });
 
   game.addEventListener("wheel", (event) => {
