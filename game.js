@@ -6287,6 +6287,20 @@
     levelMax: WEAPONS.pinkPigClub.levelMax
   });
 
+  // R105 TEST ITEM — LAMPE DES KALIFEN.
+  // 1x1 inventory item; it is NOT equipment. The quickbar only stores a binding,
+  // therefore the lamp always remains visible in its original inventory slot.
+  const CALIPH_LAMP_ITEM = Object.freeze({
+    id: "caliph-lamp",
+    name: "LAMPE DES KALIFEN",
+    description: "DIE LAMPE DES KALIFEN",
+    icon: "assets/items/skills/CALIPH LAMP.png",
+    stackable: false,
+    width: 1,
+    height: 1,
+    type: "quickslot"
+  });
+
   const WOLF_LOOT_CONFIG = Object.freeze({ peltChance: .05, clawChance: .02, bagChance: .01 });
   const BOAR_LOOT_CONFIG = Object.freeze({ radishChance: .20, cabbageChance: .10, lettuceChance: .05, tuskChance: .02 });
 
@@ -9715,7 +9729,7 @@
         visibility: hidden;
       }
 
-      .player-hud-piece img {
+      .player-hud-piece > img {
         display: block;
         width: 100%;
         height: auto;
@@ -9724,6 +9738,47 @@
         -webkit-user-drag: none;
         margin: 0;
         padding: 0;
+      }
+
+      /* R105: invisible hit zones exactly over the painted 1–9 quickbar cells. */
+      .player-quickslot-layer {
+        position: absolute;
+        inset: 0;
+        z-index: 6;
+        pointer-events: none;
+      }
+
+      .player-quickslot {
+        position: absolute;
+        box-sizing: border-box;
+        pointer-events: auto;
+        background: transparent;
+        border: 0;
+        margin: 0;
+        padding: 0;
+        overflow: visible;
+      }
+
+      .player-quickslot--dragover {
+        filter:
+          drop-shadow(0 0 4px rgba(255,244,190,.95))
+          drop-shadow(0 0 8px rgba(224,168,59,.72));
+      }
+
+      .player-quickslot__icon {
+        position: absolute;
+        z-index: 2;
+        left: 50%;
+        top: 54%;
+        width: 92%;
+        height: 92%;
+        transform: translate(-50%, -50%);
+        object-fit: contain;
+        object-position: 50% 50%;
+        pointer-events: none;
+        user-select: none;
+        -webkit-user-drag: none;
+        filter: drop-shadow(0 2px 2px rgba(0,0,0,.78));
       }
 
       @media (max-width: 1100px) {
@@ -9755,6 +9810,239 @@
     return { root, image };
   }
 
+
+  // ------------------------------------------------------------------
+  // R105 QUICKBAR 1–9
+  // The HUD art is 1254 x 231 px after the approved crop.
+  // These nine rectangles sit over the BLACK item cells only.
+  // ------------------------------------------------------------------
+  const QUICKBAR_SOURCE = Object.freeze({
+    width: 1254,
+    height: 231,
+    slots: Object.freeze([
+      Object.freeze({ x1: 480, y1: 99, x2: 552, y2: 200 }),
+      Object.freeze({ x1: 557, y1: 99, x2: 629, y2: 200 }),
+      Object.freeze({ x1: 634, y1: 99, x2: 706, y2: 200 }),
+      Object.freeze({ x1: 711, y1: 99, x2: 783, y2: 200 }),
+      Object.freeze({ x1: 788, y1: 99, x2: 860, y2: 200 }),
+      Object.freeze({ x1: 865, y1: 99, x2: 937, y2: 200 }),
+      Object.freeze({ x1: 942, y1: 99, x2: 1014, y2: 200 }),
+      Object.freeze({ x1: 1019, y1: 99, x2: 1091, y2: 200 }),
+      Object.freeze({ x1: 1096, y1: 99, x2: 1168, y2: 200 })
+    ])
+  });
+
+  const quickSlotState = {
+    assignments: new Array(9).fill(null),
+    layer: null,
+    slots: []
+  };
+
+  function quickbarPercentX(px) {
+    return (px / QUICKBAR_SOURCE.width) * 100;
+  }
+
+  function quickbarPercentY(px) {
+    return (px / QUICKBAR_SOURCE.height) * 100;
+  }
+
+  function findQuickSlotForItem(itemId) {
+    return quickSlotState.assignments.findIndex(
+      (entry) => entry && entry.itemId === itemId
+    );
+  }
+
+  function firstFreeQuickSlot() {
+    return quickSlotState.assignments.findIndex((entry) => !entry);
+  }
+
+  function quickSlotBindingFromInventory(itemId) {
+    const found = findInventoryStack(itemId);
+    if (!found || !found.stack || found.stack.type !== "quickslot") return null;
+    return {
+      itemId: found.stack.id,
+      icon: found.stack.icon || ""
+    };
+  }
+
+  function bindInventoryQuickItemToSlot(itemId, targetIndex) {
+    const index = Number(targetIndex);
+    if (!Number.isInteger(index) || index < 0 || index >= quickSlotState.assignments.length) {
+      return false;
+    }
+
+    const binding = quickSlotBindingFromInventory(itemId);
+    if (!binding) return false;
+
+    const existingIndex = findQuickSlotForItem(itemId);
+
+    // Dropping onto its existing slot changes nothing.
+    if (existingIndex === index) return true;
+
+    // Never overwrite another quickbar assignment.
+    if (quickSlotState.assignments[index]) return false;
+
+    // Same inventory item may exist in only ONE quickbar slot.
+    // Moving the binding never removes the real item from inventory.
+    if (existingIndex >= 0) quickSlotState.assignments[existingIndex] = null;
+    quickSlotState.assignments[index] = binding;
+
+    renderQuickSlots();
+    return true;
+  }
+
+  function unbindQuickSlot(index) {
+    const safe = Number(index);
+    if (!Number.isInteger(safe) || safe < 0 || safe >= quickSlotState.assignments.length) {
+      return false;
+    }
+    if (!quickSlotState.assignments[safe]) return false;
+
+    quickSlotState.assignments[safe] = null;
+    renderQuickSlots();
+    return true;
+  }
+
+  function toggleInventoryQuickItem(itemId) {
+    const existingIndex = findQuickSlotForItem(itemId);
+
+    // EXACT requested reverse operation: right click the inventory lamp again
+    // and its quickbar binding disappears; the inventory item itself never moved.
+    if (existingIndex >= 0) {
+      return unbindQuickSlot(existingIndex);
+    }
+
+    const free = firstFreeQuickSlot();
+    if (free < 0) return false;
+    return bindInventoryQuickItemToSlot(itemId, free);
+  }
+
+  function renderQuickSlots() {
+    for (let index = 0; index < quickSlotState.slots.length; index += 1) {
+      const slot = quickSlotState.slots[index];
+      if (!slot) continue;
+
+      slot.replaceChildren();
+      slot.classList.remove("player-quickslot--dragover");
+
+      const binding = quickSlotState.assignments[index];
+      slot.draggable = Boolean(binding);
+      if (!binding || !binding.icon) continue;
+
+      const icon = document.createElement("img");
+      icon.className = "player-quickslot__icon";
+      icon.src = encodeURI(binding.icon);
+      icon.alt = "";
+      icon.draggable = false;
+      slot.appendChild(icon);
+    }
+  }
+
+  function createPlayerQuickSlots(mainHudRoot) {
+    if (!mainHudRoot || quickSlotState.layer) return;
+
+    const layer = document.createElement("div");
+    layer.className = "player-quickslot-layer";
+    layer.setAttribute("aria-label", "Schnellzugriff 1 bis 9");
+
+    quickSlotState.slots = QUICKBAR_SOURCE.slots.map((rect, index) => {
+      const slot = document.createElement("div");
+      slot.className = "player-quickslot";
+      slot.dataset.quickSlotIndex = String(index);
+      slot.setAttribute("aria-label", `Schnellzugriff ${index + 1}`);
+
+      slot.style.left = `${quickbarPercentX(rect.x1)}%`;
+      slot.style.top = `${quickbarPercentY(rect.y1)}%`;
+      slot.style.width = `${quickbarPercentX(rect.x2 - rect.x1)}%`;
+      slot.style.height = `${quickbarPercentY(rect.y2 - rect.y1)}%`;
+
+      slot.addEventListener("dragover", (event) => {
+        if (!inventoryState.open && !quickSlotState.assignments[index]) return;
+        event.preventDefault();
+        if (event.dataTransfer) event.dataTransfer.dropEffect = "move";
+        slot.classList.add("player-quickslot--dragover");
+      });
+
+      slot.addEventListener("dragleave", () => {
+        slot.classList.remove("player-quickslot--dragover");
+      });
+
+      slot.addEventListener("drop", (event) => {
+        event.preventDefault();
+        slot.classList.remove("player-quickslot--dragover");
+        if (!event.dataTransfer) return;
+
+        try {
+          const payload = JSON.parse(event.dataTransfer.getData("text/plain") || "{}");
+
+          if (payload.kind === "inventory-quickslot-item") {
+            // Binding only: the source item REMAINS in the same inventory slot.
+            bindInventoryQuickItemToSlot(payload.itemId, index);
+          } else if (payload.kind === "quickslot-item") {
+            const from = Number(payload.quickSlotIndex);
+            const binding = quickSlotState.assignments[from];
+            if (!binding) return;
+            if (quickSlotState.assignments[index] && index !== from) return;
+            if (from !== index) {
+              quickSlotState.assignments[from] = null;
+              quickSlotState.assignments[index] = binding;
+              renderQuickSlots();
+            }
+          }
+        } catch (_) {}
+      });
+
+      slot.addEventListener("contextmenu", (event) => {
+        event.preventDefault();
+        // Reverse operation: remove ONLY the quickbar binding.
+        // The actual lamp remains untouched in inventory.
+        unbindQuickSlot(index);
+      });
+
+      slot.addEventListener("dragstart", (event) => {
+        const binding = quickSlotState.assignments[index];
+        if (!binding || !event.dataTransfer) {
+          event.preventDefault();
+          return;
+        }
+
+        event.dataTransfer.effectAllowed = "move";
+        event.dataTransfer.setData("text/plain", JSON.stringify({
+          kind: "quickslot-item",
+          itemId: binding.itemId,
+          quickSlotIndex: index
+        }));
+      });
+
+      layer.appendChild(slot);
+      return slot;
+    });
+
+    mainHudRoot.appendChild(layer);
+    quickSlotState.layer = layer;
+    renderQuickSlots();
+  }
+
+  function activateCaliphLamp() {
+    // R105 hook only. The actual genie/Caliph skill is wired in the next step.
+    return true;
+  }
+
+  function activateQuickSlot(index) {
+    const safe = Number(index);
+    if (!Number.isInteger(safe) || safe < 0 || safe >= quickSlotState.assignments.length) {
+      return false;
+    }
+
+    const binding = quickSlotState.assignments[safe];
+    if (!binding) return false;
+
+    if (binding.itemId === "caliph-lamp") {
+      return activateCaliphLamp();
+    }
+    return false;
+  }
+
   function createPlayerHud() {
     if (playerHud) return;
     installPlayerHudStyles();
@@ -9762,6 +10050,8 @@
     const main = createPlayerHudPiece("playerHudMain", PLAYER_HUD.mainImage, "player-hud-piece--left");
     const exp = createPlayerHudPiece("playerHudExp", PLAYER_HUD.expImage, "player-hud-piece--right");
     playerHud = { main, exp };
+
+    createPlayerQuickSlots(main.root);
     updatePlayerHudVisibility();
   }
 
@@ -13435,6 +13725,20 @@
         cursor: grabbing;
       }
 
+      /* R105 quickslot item: visually large in its 1x1 inventory cell. */
+      .inventory-item--quickslot {
+        cursor: grab;
+      }
+
+      .inventory-item--quickslot:active {
+        cursor: grabbing;
+      }
+
+      .inventory-item--quickslot .inventory-item__icon {
+        width: 92%;
+        height: 92%;
+      }
+
       /* R68 SAUKEULE hover tooltip. */
       .inventory-weapon-tooltip {
         position: absolute;
@@ -13856,7 +14160,10 @@
       const height = Math.max(1, Number(stack.height) || 1);
       const rect = inventoryItemRect(slotIndex, width, height);
       const item = document.createElement("div");
-      item.className = "inventory-item" + (stack.type === "weapon" ? " inventory-item--weapon" : "");
+      item.className =
+        "inventory-item" +
+        (stack.type === "weapon" ? " inventory-item--weapon" : "") +
+        (stack.type === "quickslot" ? " inventory-item--quickslot" : "");
       item.dataset.itemId = stack.id;
       item.dataset.slotIndex = String(slotIndex);
       item.dataset.pageIndex = String(inventoryState.currentPage);
@@ -13901,6 +14208,26 @@
           event.dataTransfer.effectAllowed = "move";
           event.dataTransfer.setData("text/plain", JSON.stringify({
             kind: "inventory-weapon",
+            pageIndex: inventoryState.currentPage,
+            slotIndex
+          }));
+        });
+      } else if (stack.type === "quickslot") {
+        item.draggable = true;
+
+        item.addEventListener("contextmenu", (event) => {
+          event.preventDefault();
+          // Toggle: first right click binds to the first free 1–9 position.
+          // A second right click removes that binding again.
+          toggleInventoryQuickItem(stack.id);
+        });
+
+        item.addEventListener("dragstart", (event) => {
+          if (!event.dataTransfer) return;
+          event.dataTransfer.effectAllowed = "move";
+          event.dataTransfer.setData("text/plain", JSON.stringify({
+            kind: "inventory-quickslot-item",
+            itemId: stack.id,
             pageIndex: inventoryState.currentPage,
             slotIndex
           }));
@@ -14012,7 +14339,7 @@
       CARROT_ITEM.icon, RABBIT_FOOT_ITEM.icon,
       WOLF_PELT_ITEM.icon, WOLF_CLAW_ITEM.icon, WANDERER_BAG_ITEM.icon,
       RADISH_ITEM.icon, CABBAGE_ITEM.icon, LETTUCE_ITEM.icon, BOAR_TUSK_ITEM.icon,
-      PINK_PIG_CLUB_ITEM.icon
+      PINK_PIG_CLUB_ITEM.icon, CALIPH_LAMP_ITEM.icon
     ]) {
       const preload = new Image();
       preload.src = encodeURI(src);
@@ -15567,6 +15894,18 @@
     // Inventory is screen UI: gameplay controls are ignored until it closes.
     if (inventoryState.open) return;
 
+    // R105 QUICKBAR: top-row 1–9 and numpad 1–9.
+    // The Caliph lamp currently triggers only a safe placeholder hook.
+    const quickSlotKeyMatch =
+      /^Digit([1-9])$/.exec(event.code) ||
+      /^Numpad([1-9])$/.exec(event.code);
+
+    if (quickSlotKeyMatch) {
+      event.preventDefault();
+      if (!event.repeat) activateQuickSlot(Number(quickSlotKeyMatch[1]) - 1);
+      return;
+    }
+
     if (isControlEvent(event)) {
       startBlocking();
       return;
@@ -15698,6 +16037,10 @@
     // R67 TEST: first weapon starts in page I at the first free vertical 1x2 area.
     // Later this single line can be removed when the weapon becomes a world reward.
     addItemToInventory(PINK_PIG_CLUB_ITEM);
+
+    // R105 TEST: lamp starts in the first free 1x1 inventory slot.
+    // Remove this line later when Ödegard's quest awards it.
+    addItemToInventory(CALIPH_LAMP_ITEM);
 
     // Install immediately as a black curtain so OBERKIRCH never flashes before
     // the new-game sequence. It is screen UI only; no map state is changed.
