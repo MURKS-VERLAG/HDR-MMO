@@ -36,6 +36,13 @@
       image: "assets/maps/MAP 5 RENCHTALSTADION.jpg",
       width: 10240,
       height: 5763
+    }),
+    oedsbach: Object.freeze({
+      id: "oedsbach",
+      name: "ÖDSBACH",
+      image: "assets/maps/MAP 6 ÖDSBACH.png",
+      width: 10000,
+      height: 6655
     })
   });
 
@@ -185,6 +192,28 @@
     oberkirchFromStadiumSpawn: Object.freeze({
       x: 7310,
       y: 6490
+    }),
+
+    // R91 MAP 2 -> ÖDSBACH: red arrow on the east road.
+    winterbachOedsbachEast: Object.freeze({
+      y1: 2250,
+      y2: 3250,
+      leaveX: 10018
+    }),
+    oedsbachFromWinterbachSpawn: Object.freeze({
+      x: 1820,
+      y: 6400
+    }),
+
+    // R91 ÖDSBACH -> MAP 2: ONLY the blue bottom road returns to WINTERBACH.
+    oedsbachWinterbachSouth: Object.freeze({
+      x1: 1250,
+      x2: 2450,
+      leavePadding: 18
+    }),
+    winterbachFromOedsbachSpawn: Object.freeze({
+      x: 9730,
+      y: 2715
     })
   });
 
@@ -580,7 +609,8 @@
     // R52 dedicated HUBACKER track supplied by the user.
     "hubacker": "assets/audio/maps/HUBACKER - THE LAST KNIGHT'S LAMENT.mp3",
     // R52 dedicated RENCHTALSTADION track supplied by the user.
-    "renchtalstadion": "assets/audio/maps/RENCHTALSTADION - MEDIEVAL BATTLE.mp3"
+    "renchtalstadion": "assets/audio/maps/RENCHTALSTADION - MEDIEVAL BATTLE.mp3",
+    "oedsbach": "assets/audio/maps/WINTERBACH - FROSTBOUND BALLAD.mp3"
   });
 
   const MAP_MUSIC_VOLUME = 1.0;
@@ -995,6 +1025,28 @@
       direction: "down",
       glow: "#ffffff",
       trigger: { x1: 6900, y1: 4450, x2: 8850, y2: 5763 }
+    },
+
+    // R91 MAP 6 ÖDSBACH — labels only except the blue WINTERBACH return.
+    {
+      id: "oedsbach-sendelbach", mapId: "oedsbach", text: "SENDELBACH",
+      x: 620, y: 430, direction: "up", glow: "#ffffff",
+      trigger: { x1: 0, y1: 0, x2: 1450, y2: 1300 }
+    },
+    {
+      id: "oedsbach-hengstberg", mapId: "oedsbach", text: "HENGSTBERG",
+      x: 9350, y: 430, direction: "up", glow: "#ffffff",
+      trigger: { x1: 8550, y1: 0, x2: 10000, y2: 1300 }
+    },
+    {
+      id: "oedsbach-hesselbach", mapId: "oedsbach", text: "HESSELBACH",
+      x: 9470, y: 4720, direction: "right", glow: "#ffffff",
+      trigger: { x1: 8500, y1: 3850, x2: 10000, y2: 5550 }
+    },
+    {
+      id: "oedsbach-winterbach", mapId: "oedsbach", text: "WINTERBACH",
+      x: 1820, y: 6170, direction: "down", glow: "#ffffff",
+      trigger: { x1: 1050, y1: 5350, x2: 2700, y2: 6655 }
     }
   ]);
 
@@ -1145,6 +1197,71 @@
   }
 
 
+
+  // ------------------------------------------------------------------
+  // R91 ÖDEGARD — MAP 6 fixed NPC, three supplied poses, smooth 2s cycle.
+  // ------------------------------------------------------------------
+  const OEDEGARD_CONFIG = Object.freeze({
+    x: 5570,
+    y: 2140,
+    width: 1250,
+    height: 1250,
+    interval: 2000,
+    fade: 650,
+    sprites: Object.freeze([
+      "assets/npcs/oedegard/ÖDEGARD 1.png",
+      "assets/npcs/oedegard/ÖDEGARD 2.png",
+      "assets/npcs/oedegard/ÖDEGARD 3.png"
+    ])
+  });
+
+  let oedegard = null;
+
+  function createOedegard() {
+    if (oedegard) return;
+    const root = document.createElement("div");
+    root.className = "oedegard";
+    root.style.left = `${OEDEGARD_CONFIG.x}px`;
+    root.style.top = `${OEDEGARD_CONFIG.y}px`;
+    root.style.width = `${OEDEGARD_CONFIG.width}px`;
+    root.style.height = `${OEDEGARD_CONFIG.height}px`;
+    root.style.display = MAP.id === "oedsbach" ? "" : "none";
+
+    const imgs = OEDEGARD_CONFIG.sprites.map((src, i) => {
+      const img = document.createElement("img");
+      img.src = encodeURI(src); img.alt = ""; img.draggable = false;
+      img.className = "oedegard__sprite";
+      img.style.opacity = i === 0 ? "1" : "0";
+      root.appendChild(img);
+      return img;
+    });
+    world.appendChild(root);
+    oedegard = { root, imgs, index: 0, nextAt: performance.now() + OEDEGARD_CONFIG.interval };
+  }
+
+  function installOedegardStyles() {
+    if (document.getElementById("oedegardStyles")) return;
+    const style = document.createElement("style");
+    style.id = "oedegardStyles";
+    style.textContent = `
+      .oedegard { position:absolute; transform:translate(-50%,-100%); z-index:7; pointer-events:none; user-select:none; }
+      .oedegard__sprite { position:absolute; inset:0; width:100%; height:100%; object-fit:contain; object-position:50% 100%; transition:opacity ${OEDEGARD_CONFIG.fade}ms ease-in-out; filter:drop-shadow(0 9px 5px rgba(0,0,0,.28)); }
+    `;
+    document.head.appendChild(style);
+  }
+
+  function setOedegardVisibility(visible) {
+    if (oedegard) oedegard.root.style.display = visible ? "" : "none";
+  }
+
+  function updateOedegard(now) {
+    if (!oedegard || MAP.id !== "oedsbach") return;
+    if (now < oedegard.nextAt) return;
+    oedegard.imgs[oedegard.index].style.opacity = "0";
+    oedegard.index = (oedegard.index + 1) % oedegard.imgs.length;
+    oedegard.imgs[oedegard.index].style.opacity = "1";
+    oedegard.nextAt = now + OEDEGARD_CONFIG.interval;
+  }
 
   // ------------------------------------------------------------------
   // TRUNKENBOLD — R14 NPC V1
@@ -6687,7 +6804,18 @@
     const minY = PLAYER.height;
     const maxY = MAP.height - 10;
 
-    if (x < halfW || x > MAP.width - halfW) return false;
+    const inWinterbachOedsbachEastExit =
+      MAP.id === "winterbach-ranglehen" &&
+      y >= MAP_EXIT_CONFIG.winterbachOedsbachEast.y1 &&
+      y <= MAP_EXIT_CONFIG.winterbachOedsbachEast.y2;
+
+    if (x < halfW) return false;
+    if (x > MAP.width - halfW) {
+      const eastExitAllowed =
+        inWinterbachOedsbachEastExit &&
+        x <= MAP_EXIT_CONFIG.winterbachOedsbachEast.leaveX + 80;
+      if (!eastExitAllowed) return false;
+    }
 
     const inOberkirchNorthExit =
       MAP.id === "oberkirch-zentrum" &&
@@ -6788,6 +6916,11 @@
       if (!allowedNorth) return false;
     }
 
+    const inOedsbachWinterbachSouthExit =
+      MAP.id === "oedsbach" &&
+      x >= MAP_EXIT_CONFIG.oedsbachWinterbachSouth.x1 &&
+      x <= MAP_EXIT_CONFIG.oedsbachWinterbachSouth.x2;
+
     if (y > maxY) {
       const winterbachSouthAllowed =
         inWinterbachSouthExit &&
@@ -6812,12 +6945,17 @@
         inStadiumOberkirchSouthExit &&
         y <= MAP.height + MAP_EXIT_CONFIG.stadiumOberkirchSouth.leavePadding + 80;
 
+      const oedsbachWinterbachSouthAllowed =
+        inOedsbachWinterbachSouthExit &&
+        y <= MAP.height + MAP_EXIT_CONFIG.oedsbachWinterbachSouth.leavePadding + 80;
+
       if (
         !winterbachSouthAllowed &&
         !lautenbachSouthAllowed &&
         !hubackerSouthAllowed &&
         !oberkirchStadiumSouthAllowed &&
-        !stadiumOberkirchSouthAllowed
+        !stadiumOberkirchSouthAllowed &&
+        !oedsbachWinterbachSouthAllowed
       ) {
         return false;
       }
@@ -13280,6 +13418,8 @@
       label = "HUBACKER";
     } else if (map.id === "renchtalstadion") {
       label = "RENCHTALSTADION";
+    } else if (map.id === "oedsbach") {
+      label = "ÖDSBACH";
     } else if (map.id === "oberkirch-zentrum") {
       label = "OBERKIRCH";
     } else {
@@ -13368,6 +13508,7 @@
     setOberkirchWorldVisibility(MAP.id === "oberkirch-zentrum");
     setWinterbachWorldVisibility(MAP.id === "winterbach-ranglehen");
     setLautenbachWorldVisibility(MAP.id === "lautenbach");
+    setOedegardVisibility(MAP.id === "oedsbach");
 
     // Sync map-specific animals while the transition overlay is still covering the map.
     updateRabbits(0, performance.now());
@@ -13518,11 +13659,48 @@
     );
   }
 
+  function playerInWinterbachOedsbachEastExitLane() {
+    return (
+      MAP.id === "winterbach-ranglehen" &&
+      playerY >= MAP_EXIT_CONFIG.winterbachOedsbachEast.y1 &&
+      playerY <= MAP_EXIT_CONFIG.winterbachOedsbachEast.y2
+    );
+  }
+
+  function playerInOedsbachWinterbachSouthExitLane() {
+    return (
+      MAP.id === "oedsbach" &&
+      playerX >= MAP_EXIT_CONFIG.oedsbachWinterbachSouth.x1 &&
+      playerX <= MAP_EXIT_CONFIG.oedsbachWinterbachSouth.x2
+    );
+  }
+
   function checkMapExit() {
     if (mapTransitioning) return false;
 
     const movingUp = keys.has("KeyW") || keys.has("ArrowUp");
     const movingDown = keys.has("KeyS") || keys.has("ArrowDown");
+    const movingRight = keys.has("KeyD") || keys.has("ArrowRight");
+
+    // R91 MAP 2 red east arrow -> ÖDSBACH blue bottom road.
+    if (
+      playerInWinterbachOedsbachEastExitLane() &&
+      movingRight &&
+      playerX >= MAP_EXIT_CONFIG.winterbachOedsbachEast.leaveX
+    ) {
+      switchMap(MAPS.oedsbach, MAP_EXIT_CONFIG.oedsbachFromWinterbachSpawn, true);
+      return true;
+    }
+
+    // R91 ÖDSBACH blue bottom road -> MAP 2 red east road.
+    if (
+      playerInOedsbachWinterbachSouthExitLane() &&
+      movingDown &&
+      playerY >= MAP.height + MAP_EXIT_CONFIG.oedsbachWinterbachSouth.leavePadding
+    ) {
+      switchMap(MAPS.winterbach, MAP_EXIT_CONFIG.winterbachFromOedsbachSpawn, true);
+      return true;
+    }
 
     // R18 GREEN ARROW: MAP 1 -> MAP 2 RED ARROW.
     // Same existing transition / iris system, only a second exit pair.
@@ -14379,6 +14557,7 @@
       updateBoars(deltaSeconds, now);
       updateTierbannsteine(deltaSeconds, now);
       updateMole(now);
+      updateOedegard(now);
     }
 
     renderPlayer();
@@ -14613,7 +14792,9 @@
     currentAnimation = "idle";
     setIdleSprite();
 
-    createAreaSigns();
+    installOedegardStyles();
+  createOedegard();
+  createAreaSigns();
     installIcePlayerStyles();
     createRabbits();
     createWolves();
