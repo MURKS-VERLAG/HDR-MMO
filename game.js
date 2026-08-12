@@ -450,6 +450,111 @@
     stadiumBattleHornAudio.play().catch(() => {});
   }
 
+  // ------------------------------------------------------------------
+  // R89 — RENCHTALSTADION FINAL COMBAT SFX
+  // Purely additive. Existing music, horn and announcer remain untouched.
+  // ------------------------------------------------------------------
+  const STADIUM_ARENA_SFX = Object.freeze({
+    neuensteinHits: Object.freeze([
+      "assets/audio/stadium/arena/NEUENSTEIN HIT 1.mp3",
+      "assets/audio/stadium/arena/NEUENSTEIN HIT 2.mp3",
+      "assets/audio/stadium/arena/NEUENSTEIN HIT 3.mp3"
+    ]),
+    schauenburgHits: Object.freeze([
+      "assets/audio/stadium/arena/SCHAUENBURG HIT 1.mp3",
+      "assets/audio/stadium/arena/SCHAUENBURG HIT 2.mp3"
+    ]),
+    killLead: "assets/audio/stadium/arena/ARENA KILL LEAD.mp3",
+    // This file is physically trimmed: original audio begins at source 00:05.
+    killCrowd: "assets/audio/stadium/arena/ARENA KILL CROWD FROM 5S.mp3",
+    neutralRest: Object.freeze([
+      "assets/audio/stadium/arena/ARENA REST 1.mp3",
+      "assets/audio/stadium/arena/ARENA REST 2.mp3",
+      "assets/audio/stadium/arena/ARENA REST 3.mp3"
+    ])
+  });
+
+  const stadiumArenaSfxPreloads = [];
+  const stadiumArenaActiveSfx = new Set();
+  let stadiumArenaKillSequencePlayed = false;
+
+  function preloadStadiumArenaSfx() {
+    if (stadiumArenaSfxPreloads.length) return;
+    const all = [
+      ...STADIUM_ARENA_SFX.neuensteinHits,
+      ...STADIUM_ARENA_SFX.schauenburgHits,
+      STADIUM_ARENA_SFX.killLead,
+      STADIUM_ARENA_SFX.killCrowd,
+      ...STADIUM_ARENA_SFX.neutralRest
+    ];
+    for (const src of all) {
+      const audio = new Audio(encodeURI(src));
+      audio.preload = "auto";
+      audio.load();
+      stadiumArenaSfxPreloads.push(audio);
+    }
+  }
+
+  function playStadiumArenaSfx(src, onEnded = null) {
+    const audio = new Audio(encodeURI(src));
+    audio.preload = "auto";
+    audio.volume = 1.0;
+    stadiumArenaActiveSfx.add(audio);
+
+    const cleanup = () => {
+      stadiumArenaActiveSfx.delete(audio);
+    };
+
+    audio.addEventListener("ended", () => {
+      cleanup();
+      if (typeof onEnded === "function") onEnded();
+    }, { once: true });
+    audio.addEventListener("error", cleanup, { once: true });
+    audio.play().catch(() => cleanup());
+    return audio;
+  }
+
+  function stopAllStadiumArenaSfx() {
+    for (const audio of stadiumArenaActiveSfx) {
+      try {
+        audio.pause();
+        audio.currentTime = 0;
+      } catch (_) {}
+    }
+    stadiumArenaActiveSfx.clear();
+  }
+
+  function playRandomStadiumArenaSfx(pool) {
+    if (!Array.isArray(pool) || !pool.length) return;
+    const src = pool[Math.floor(Math.random() * pool.length)];
+    playStadiumArenaSfx(src);
+  }
+
+  function playStadiumArenaNeutralRestPair() {
+    const pool = STADIUM_ARENA_SFX.neutralRest;
+    if (pool.length < 2) return;
+    const firstIndex = Math.floor(Math.random() * pool.length);
+    let secondIndex = Math.floor(Math.random() * (pool.length - 1));
+    if (secondIndex >= firstIndex) secondIndex += 1;
+
+    // EXACT requirement: two DIFFERENT rest sounds, directly one after another.
+    playStadiumArenaSfx(pool[firstIndex], () => {
+      playStadiumArenaSfx(pool[secondIndex]);
+    });
+  }
+
+  function playStadiumArenaKillSequenceOnce() {
+    if (stadiumArenaKillSequencePlayed) return;
+    stadiumArenaKillSequencePlayed = true;
+
+    // Kill sequence has strict priority: cancel stray combat SFX first.
+    // Sound 7 MUST play first; only when it ends may trimmed Sound 1 begin.
+    stopAllStadiumArenaSfx();
+    playStadiumArenaSfx(STADIUM_ARENA_SFX.killLead, () => {
+      playStadiumArenaSfx(STADIUM_ARENA_SFX.killCrowd);
+    });
+  }
+
   function playStadiumFightAnnouncerOnce() {
     if (stadiumFightAnnouncerPlayed) return Promise.resolve(false);
     stadiumFightAnnouncerPlayed = true;
@@ -9623,6 +9728,7 @@
 
   function createStadiumPhase1() {
     installStadiumStyles();
+    preloadStadiumArenaSfx();
 
     const root = document.createElement("div");
     root.id = "stadiumChoiceUI";
@@ -10687,8 +10793,13 @@
         true
       );
       if (landed) {
-        // Neuenstein hits Schauenburg: red -20 over the left-side Schauenburger.
+        // Neuenstein hits Schauenburg: red -20 + one random successful-hit sound (2-4).
         spawnStadiumBrawlDamageText("schauenburg");
+        playRandomStadiumArenaSfx(STADIUM_ARENA_SFX.neuensteinHits);
+      } else {
+        // No hit: two different neutral-rest sounds (available attachments 8-10),
+        // always played directly one after another.
+        playStadiumArenaNeutralRestPair();
       }
       stadiumBrawlRestTurn = "schauenburg";
       return;
@@ -10698,6 +10809,8 @@
     const landed = Math.random() < STADIUM.derby.schauenburgChance;
     if (!landed) {
       setStadiumBrawlLayerVisible(stadiumBrawlVisuals.shared, true);
+      // No hit: two different neutral-rest sounds, directly sequential.
+      playStadiumArenaNeutralRestPair();
     } else {
       stadiumBrawlSchauenburgSuccessfulHits += 1;
       const fourthSuccessfulHit = stadiumBrawlSchauenburgSuccessfulHits % 4 === 0;
@@ -10715,8 +10828,9 @@
         true
       );
 
-      // Schauenburg hits Neuenstein: light-blue -20 over the right-side Neuensteiner.
+      // Schauenburg hits Neuenstein: light-blue -20 + random successful-hit sound (5-6).
       spawnStadiumBrawlDamageText("neuenstein");
+      playRandomStadiumArenaSfx(STADIUM_ARENA_SFX.schauenburgHits);
 
       // R85: after this existing 4th-hit frame has held for the normal restMs,
       // the normal attack/rest loop stops and the finish branch begins.
@@ -10782,6 +10896,7 @@
     stadiumBrawlWinner = "schauenburg";
     setStadiumBrawlLayerVisible(stadiumBrawlVisuals.fatalitySchauenburg, true);
     showStadiumBrawlFatalityText("schauenburg");
+    playStadiumArenaKillSequenceOnce();
     stadiumBrawlPhaseEndAt = now + STADIUM.fightIntro.brawl.fatalityMs;
     stadiumState = "fight-fatality-schauenburg";
   }
@@ -10791,6 +10906,7 @@
     stadiumBrawlWinner = "neuenstein";
     setStadiumBrawlLayerVisible(stadiumBrawlVisuals.fatalityNeuenstein, true);
     showStadiumBrawlFatalityText("neuenstein");
+    playStadiumArenaKillSequenceOnce();
     stadiumBrawlPhaseEndAt = now + STADIUM.fightIntro.brawl.fatalityMs;
     stadiumState = "fight-fatality-neuenstein";
   }
@@ -11024,6 +11140,8 @@
     stadiumFightStarted = false;
     stadiumFightAnnouncerPlayed = false;
     stadiumBattleHornPlayed = false;
+    stadiumArenaKillSequencePlayed = false;
+    stopAllStadiumArenaSfx();
     stadiumFinalSequenceStartedAt = 0;
     stadiumFinalSequenceStep = -1;
     stadiumBrawlStarted = false;
