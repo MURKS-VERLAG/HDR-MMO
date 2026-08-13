@@ -43,6 +43,13 @@
       image: "assets/maps/MAP 6 OEDSBACH.png",
       width: 10000,
       height: 6655
+    }),
+    ramsbach: Object.freeze({
+      id: "ramsbach",
+      name: "RAMSBACH",
+      image: "assets/maps/MAP 7 RAMSBACH.webp",
+      width: 10240,
+      height: 6827
     })
   });
 
@@ -214,6 +221,28 @@
     winterbachFromOedsbachSpawn: Object.freeze({
       x: 9730,
       y: 2715
+    }),
+
+    // R111 MAP 4 HUBACKER -> MAP 7 RAMSBACH: existing yellow north road.
+    hubackerRamsbachNorth: Object.freeze({
+      x1: 3350,
+      x2: 4750,
+      leaveY: -18
+    }),
+    ramsbachFromHubackerSpawn: Object.freeze({
+      x: 3780,
+      y: 6650
+    }),
+
+    // MAP 7 RAMSBACH -> HUBACKER: blue bottom road.
+    ramsbachHubackerSouth: Object.freeze({
+      x1: 3000,
+      x2: 4550,
+      leavePadding: 18
+    }),
+    hubackerFromRamsbachSpawn: Object.freeze({
+      x: 4050,
+      y: 165
     })
   });
 
@@ -610,7 +639,9 @@
     "hubacker": "assets/audio/maps/HUBACKER - THE LAST KNIGHT'S LAMENT.mp3",
     // R52 dedicated RENCHTALSTADION track supplied by the user.
     "renchtalstadion": "assets/audio/maps/RENCHTALSTADION - MEDIEVAL BATTLE.mp3",
-    "oedsbach": "assets/audio/maps/OEDSBACH - THE HOLLOW KNIGHTS MARCH.mp3"
+    "oedsbach": "assets/audio/maps/OEDSBACH - THE HOLLOW KNIGHTS MARCH.mp3",
+    // R111: no dedicated Ramsbach music supplied; reuse Hubacker seamlessly.
+    "ramsbach": "assets/audio/maps/HUBACKER - THE LAST KNIGHT'S LAMENT.mp3"
   });
 
   const MAP_MUSIC_VOLUME = 1.0;
@@ -996,6 +1027,26 @@
       direction: "down",
       glow: "#ffffff",
       trigger: { x1: 2400, y1: 5550, x2: 3750, y2: 6827 }
+    },
+
+    // R111 MAP 7 — RAMSBACH route labels.
+    {
+      id: "ramsbach-oppenau",
+      mapId: "ramsbach",
+      text: "OPPENAU",
+      x: 3700, y: 430,
+      direction: "up",
+      glow: "#ffffff",
+      trigger: { x1: 3000, y1: 0, x2: 4500, y2: 1250 }
+    },
+    {
+      id: "ramsbach-hubacker",
+      mapId: "ramsbach",
+      text: "HUBACKER",
+      x: 3780, y: 6350,
+      direction: "down",
+      glow: "#ffffff",
+      trigger: { x1: 3000, y1: 5550, x2: 4550, y2: 6827 }
     },
 
     // R51 MAP 5 — RENCHTALSTADION route labels.
@@ -7059,6 +7110,152 @@
   // Coordinates are mapped directly from the supplied R31 overlay.
   // Only the player's FOOT anchor is tested.
   // ------------------------------------------------------------------
+  // ------------------------------------------------------------------
+  // R111 MAP 7 — RAMSBACH terrain, castle and marked A/D snap routes.
+  // Coordinates are mapped from the supplied 1320x880 reference to 10240x6827.
+  // White bridge line and red castle-ramp line are independent and non-clashing.
+  // ------------------------------------------------------------------
+  const RAMSBACH_TERRAIN = Object.freeze({
+    riverBlocked: Object.freeze([
+      Object.freeze([[4300,0],[5260,0],[5260,3700],[4300,3700]]),
+      Object.freeze([[4300,4450],[5260,4450],[5260,6827],[4300,6827]])
+    ]),
+    bridgeLockedZone: Object.freeze({ x1: 3900, y1: 3730, x2: 5480, y2: 4440 }),
+    bridgePath: Object.freeze([
+      Object.freeze([3915,4030]),
+      Object.freeze([5260,4030])
+    ]),
+    rampPath: Object.freeze([
+      Object.freeze([5260,4030]),
+      Object.freeze([5550,3810]),
+      Object.freeze([5850,3540]),
+      Object.freeze([6150,3260]),
+      Object.freeze([6460,2980]),
+      Object.freeze([6760,2700])
+    ]),
+    bridgeSnapDistance: 180,
+    rampSnapDistance: 180
+  });
+
+  const RAMSBACH_CASTLE = Object.freeze({
+    src: "assets/buildings/BÄRENBURG.png",
+    left: 5600,
+    top: 250,
+    width: 3950,
+    height: 3950,
+    zIndex: 6
+  });
+
+  let ramsbachCastleElement = null;
+  let activeRamsbachSnap = null;
+  let ramsbachSnapDistance = 0;
+  let ramsbachSnapping = false;
+  let ramsbachSnapReleaseUntil = 0;
+
+  function createRamsbachCastle() {
+    if (ramsbachCastleElement) return;
+    const image = document.createElement("img");
+    image.id = "ramsbach-baerenburg";
+    image.className = "hubacker-building";
+    image.src = encodeURI(RAMSBACH_CASTLE.src);
+    image.alt = "";
+    image.draggable = false;
+    image.style.position = "absolute";
+    image.style.objectFit = "contain";
+    image.style.maxWidth = "none";
+    image.style.maxHeight = "none";
+    image.style.pointerEvents = "none";
+    image.style.userSelect = "none";
+    image.style.left = `${RAMSBACH_CASTLE.left}px`;
+    image.style.top = `${RAMSBACH_CASTLE.top}px`;
+    image.style.width = `${RAMSBACH_CASTLE.width}px`;
+    image.style.height = `${RAMSBACH_CASTLE.height}px`;
+    image.style.zIndex = String(RAMSBACH_CASTLE.zIndex);
+    image.style.display = MAP.id === "ramsbach" ? "" : "none";
+    world.appendChild(image);
+    ramsbachCastleElement = image;
+  }
+
+  function setRamsbachWorldVisibility(visible) {
+    if (ramsbachCastleElement) ramsbachCastleElement.style.display = visible ? "" : "none";
+  }
+
+  function ramsbachPathFor(id) {
+    if (id === "bridge") return RAMSBACH_TERRAIN.bridgePath;
+    if (id === "ramp") return RAMSBACH_TERRAIN.rampPath;
+    return null;
+  }
+
+  function isRamsbachBlockedFootPoint(x, y) {
+    if (MAP.id !== "ramsbach") return false;
+    const onBridge = activeRamsbachSnap === "bridge";
+    const onRamp = activeRamsbachSnap === "ramp";
+    if (!onBridge) {
+      for (const polygon of RAMSBACH_TERRAIN.riverBlocked) {
+        if (worldPointInPolygon(x, y, polygon)) return true;
+      }
+      const b = RAMSBACH_TERRAIN.bridgeLockedZone;
+      if (x >= b.x1 && x <= b.x2 && y >= b.y1 && y <= b.y2) return true;
+    }
+    // The castle/plateau itself is intentionally not hard-blocked: the supplied
+    // red ramp snap is the controlled route into and out of it.
+    return false;
+  }
+
+  function tryEngageRamsbachSnap(dx, dy) {
+    if (MAP.id !== "ramsbach" || activeRamsbachSnap) return false;
+    if (performance.now() < ramsbachSnapReleaseUntil) return false;
+    const horizontalDirection = dx > 0 ? 1 : dx < 0 ? -1 : 0;
+    if (!horizontalDirection) return false;
+
+    let best = null;
+    for (const id of ["bridge", "ramp"]) {
+      const path = ramsbachPathFor(id);
+      const closest = closestPointOnBridgePath(playerX, playerY, path);
+      const limit = id === "bridge" ? RAMSBACH_TERRAIN.bridgeSnapDistance : RAMSBACH_TERRAIN.rampSnapDistance;
+      if (!closest || closest.distance > limit) continue;
+      if (closest.progress <= 0.035 && horizontalDirection < 0) continue;
+      if (closest.progress >= 0.965 && horizontalDirection > 0) continue;
+      if (!best || closest.distance < best.closest.distance) best = { id, path, closest };
+    }
+    if (!best) return false;
+    activeRamsbachSnap = best.id;
+    ramsbachSnapDistance = best.closest.pathDistance;
+    ramsbachSnapping = true;
+    return true;
+  }
+
+  function moveAlongRamsbachSnap(dx, dy, deltaSeconds) {
+    if (!activeRamsbachSnap) return false;
+    const horizontalDirection = dx > 0 ? 1 : dx < 0 ? -1 : 0;
+    const path = ramsbachPathFor(activeRamsbachSnap);
+    if (!path) { activeRamsbachSnap = null; ramsbachSnapping = false; return false; }
+    const anchor = pointAtBridgeDistance(path, ramsbachSnapDistance);
+    if (ramsbachSnapping) {
+      const ddx = anchor.x - playerX, ddy = anchor.y - playerY;
+      const distance = Math.hypot(ddx, ddy);
+      if (distance > 5) {
+        const pull = Math.min(1, 10 * deltaSeconds);
+        playerX += ddx * pull; playerY += ddy * pull;
+        return true;
+      }
+      playerX = anchor.x; playerY = anchor.y; ramsbachSnapping = false;
+    }
+    if (!horizontalDirection) return true;
+    const metrics = getPathMetrics(path);
+    const nextDistance = Math.max(0, Math.min(metrics.total, ramsbachSnapDistance + horizontalDirection * PLAYER.speed * deltaSeconds));
+    const point = pointAtBridgeDistance(path, nextDistance);
+    ramsbachSnapDistance = nextDistance; playerX = point.x; playerY = point.y;
+    const leftEnd = nextDistance <= 0.001 && horizontalDirection < 0;
+    const rightEnd = nextDistance >= metrics.total - 0.001 && horizontalDirection > 0;
+    if (leftEnd || rightEnd) {
+      activeRamsbachSnap = null; ramsbachSnapping = false;
+      ramsbachSnapReleaseUntil = performance.now() + 420;
+      playerX += horizontalDirection * 36;
+    }
+    return true;
+  }
+
   const HUBACKER_TERRAIN = Object.freeze({
     boundaryPadding: 18,
 
@@ -7651,6 +7848,16 @@
       x >= MAP_EXIT_CONFIG.hubackerSouthLeft.x1 &&
       x <= MAP_EXIT_CONFIG.hubackerSouthLeft.x2;
 
+    const inHubackerRamsbachNorthExit =
+      MAP.id === "hubacker" &&
+      x >= MAP_EXIT_CONFIG.hubackerRamsbachNorth.x1 &&
+      x <= MAP_EXIT_CONFIG.hubackerRamsbachNorth.x2;
+
+    const inRamsbachHubackerSouthExit =
+      MAP.id === "ramsbach" &&
+      x >= MAP_EXIT_CONFIG.ramsbachHubackerSouth.x1 &&
+      x <= MAP_EXIT_CONFIG.ramsbachHubackerSouth.x2;
+
     // R53 FINAL STADIUM EXIT FIX:
     // These two lanes were already known by clampPlayer() and checkMapExit(),
     // but canMoveFootTo() still rejected every step past MAP.height - 10.
@@ -7683,7 +7890,8 @@
       const allowedNorth =
         (inOberkirchNorthExit && y >= oberkirchNorthLeaveFloor) ||
         (inWinterbachNorthExit && y >= winterbachNorthLeaveFloor) ||
-        (inLautenbachNorthExit && y >= lautenbachNorthLeaveFloor);
+        (inLautenbachNorthExit && y >= lautenbachNorthLeaveFloor) ||
+        (inHubackerRamsbachNorthExit && y >= MAP_EXIT_CONFIG.hubackerRamsbachNorth.leaveY - 80);
 
       if (!allowedNorth) return false;
     }
@@ -7709,6 +7917,10 @@
         inHubackerSouthExit &&
         y <= MAP.height + MAP_EXIT_CONFIG.hubackerSouthLeft.leavePadding + 80;
 
+      const ramsbachHubackerSouthAllowed =
+        inRamsbachHubackerSouthExit &&
+        y <= MAP.height + MAP_EXIT_CONFIG.ramsbachHubackerSouth.leavePadding + 80;
+
       const oberkirchStadiumSouthAllowed =
         inOberkirchStadiumSouthExit &&
         y <= MAP.height + MAP_EXIT_CONFIG.oberkirchStadiumSouth.leavePadding + 80;
@@ -7725,6 +7937,7 @@
         !winterbachSouthAllowed &&
         !lautenbachSouthAllowed &&
         !hubackerSouthAllowed &&
+        !ramsbachHubackerSouthAllowed &&
         !oberkirchStadiumSouthAllowed &&
         !stadiumOberkirchSouthAllowed &&
         !oedsbachWinterbachSouthAllowed
@@ -7747,6 +7960,9 @@
 
     // R97 MAP 6: three RED reference regions are hard-blocked.
     if (isOedsbachBlockedFootPoint(x, y)) return false;
+
+    // R111 MAP 7: Rench river and bridge gap.
+    if (isRamsbachBlockedFootPoint(x, y)) return false;
 
     // New hard collision for church body + tavern.
     // Only the player's foot anchor participates.
@@ -8060,6 +8276,18 @@
 
   function movePlayerWithWorldCollision(dx, dy, deltaSeconds) {
     const horizontalDirection = dx > 0 ? 1 : dx < 0 ? -1 : 0;
+
+    if (MAP.id !== "ramsbach" && activeRamsbachSnap) {
+      activeRamsbachSnap = null;
+      ramsbachSnapping = false;
+    }
+
+    // R111 MAP 7: white bridge + red castle ramp. Both are A/D-only snap paths.
+    if (MAP.id === "ramsbach" && (activeRamsbachSnap || tryEngageRamsbachSnap(dx, dy))) {
+      moveAlongRamsbachSnap(dx, dy, deltaSeconds);
+      clampPlayer();
+      return;
+    }
 
     if (MAP.id !== "hubacker" && activeHubackerCliffPath) {
       activeHubackerCliffPath = false;
@@ -15340,6 +15568,8 @@
     cameraX = playerX;
     cameraY = playerY;
     activeBridge = null;
+    activeRamsbachSnap = null;
+    ramsbachSnapping = false;
 
     setOberkirchWorldVisibility(MAP.id === "oberkirch-zentrum");
     setWinterbachWorldVisibility(MAP.id === "winterbach-ranglehen");
@@ -15347,6 +15577,7 @@
     setOedegardVisibility(MAP.id === "oedsbach");
     setOedsbachFogVisibility(MAP.id === "oedsbach");
     setOedsbachShadowVisibility(MAP.id === "oedsbach");
+    setRamsbachWorldVisibility(MAP.id === "ramsbach");
     updatePlayerHudVisibility();
 
     // Sync map-specific animals while the transition overlay is still covering the map.
@@ -15482,6 +15713,22 @@
     );
   }
 
+  function playerInHubackerRamsbachNorthExitLane() {
+    return (
+      MAP.id === "hubacker" &&
+      playerX >= MAP_EXIT_CONFIG.hubackerRamsbachNorth.x1 &&
+      playerX <= MAP_EXIT_CONFIG.hubackerRamsbachNorth.x2
+    );
+  }
+
+  function playerInRamsbachHubackerSouthExitLane() {
+    return (
+      MAP.id === "ramsbach" &&
+      playerX >= MAP_EXIT_CONFIG.ramsbachHubackerSouth.x1 &&
+      playerX <= MAP_EXIT_CONFIG.ramsbachHubackerSouth.x2
+    );
+  }
+
   function playerInOberkirchStadiumSouthExitLane() {
     return (
       MAP.id === "oberkirch-zentrum" &&
@@ -15520,6 +15767,18 @@
     const movingUp = keys.has("KeyW") || keys.has("ArrowUp");
     const movingDown = keys.has("KeyS") || keys.has("ArrowDown");
     const movingRight = keys.has("KeyD") || keys.has("ArrowRight");
+
+    // R111 HUBACKER yellow north arrow -> RAMSBACH blue south road.
+    if (playerInHubackerRamsbachNorthExitLane() && movingUp && playerY <= MAP_EXIT_CONFIG.hubackerRamsbachNorth.leaveY) {
+      switchMap(MAPS.ramsbach, MAP_EXIT_CONFIG.ramsbachFromHubackerSpawn, true);
+      return true;
+    }
+
+    // R111 RAMSBACH blue south road -> HUBACKER yellow north road.
+    if (playerInRamsbachHubackerSouthExitLane() && movingDown && playerY >= MAP.height + MAP_EXIT_CONFIG.ramsbachHubackerSouth.leavePadding) {
+      switchMap(MAPS.hubacker, MAP_EXIT_CONFIG.hubackerFromRamsbachSpawn, true);
+      return true;
+    }
 
     // R91 MAP 2 red east arrow -> ÖDSBACH blue bottom road.
     if (
@@ -15868,7 +16127,8 @@
         playerInWinterbachNorthLeftExitLane() ||
         playerInWinterbachNorthRightExitLane() ||
         playerInLautenbachNorthLeftExitLane() ||
-        playerInLautenbachNorthRightExitLane()
+        playerInLautenbachNorthRightExitLane() ||
+        playerInHubackerRamsbachNorthExitLane()
       ) &&
       (keys.has("KeyW") || keys.has("ArrowUp"));
 
@@ -15880,7 +16140,8 @@
         playerInHubackerSouthLeftExitLane() ||
         playerInOberkirchStadiumSouthExitLane() ||
         playerInStadiumOberkirchSouthExitLane() ||
-        playerInOedsbachWinterbachSouthExitLane()
+        playerInOedsbachWinterbachSouthExitLane() ||
+        playerInRamsbachHubackerSouthExitLane()
       ) &&
       (keys.has("KeyS") || keys.has("ArrowDown"));
 
@@ -15902,6 +16163,8 @@
           MAP_EXIT_CONFIG.lautenbachNorthLeft.leaveY,
           MAP_EXIT_CONFIG.lautenbachNorthRight.leaveY
         ) - 80;
+      } else if (MAP.id === "hubacker") {
+        leaveFloor = MAP_EXIT_CONFIG.hubackerRamsbachNorth.leaveY - 80;
       }
 
       playerY = Math.max(
@@ -15927,6 +16190,8 @@
         leavePadding = MAP_EXIT_CONFIG.stadiumOberkirchSouth.leavePadding;
       } else if (MAP.id === "oedsbach") {
         leavePadding = MAP_EXIT_CONFIG.oedsbachWinterbachSouth.leavePadding;
+      } else if (MAP.id === "ramsbach") {
+        leavePadding = MAP_EXIT_CONFIG.ramsbachHubackerSouth.leavePadding;
       }
 
       playerY = Math.max(
@@ -16774,6 +17039,7 @@
     createWinterbachObsthof();
     createLautenbachBuildings();
     createHubackerBuildings();
+    createRamsbachCastle();
     createTrunkenbold();
     createStadiumPhase1();
 
