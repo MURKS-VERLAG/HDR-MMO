@@ -7138,7 +7138,7 @@
   });
 
   const RAMSBACH_CASTLE = Object.freeze({
-    src: "assets/buildings/BÄRENBURG.png",
+    src: "assets/buildings/BAERENBURG.png",
     left: 5600,
     top: 250,
     width: 3950,
@@ -7171,13 +7171,21 @@
     image.style.width = `${RAMSBACH_CASTLE.width}px`;
     image.style.height = `${RAMSBACH_CASTLE.height}px`;
     image.style.zIndex = String(RAMSBACH_CASTLE.zIndex);
-    image.style.display = MAP.id === "ramsbach" ? "" : "none";
+    image.style.opacity = "1";
+    image.style.visibility = "visible";
+    image.style.display = MAP.id === "ramsbach" ? "block" : "none";
+    image.addEventListener("error", () => {
+      console.error("BÄRENBURG asset failed to load:", image.src);
+    });
     world.appendChild(image);
     ramsbachCastleElement = image;
   }
 
   function setRamsbachWorldVisibility(visible) {
-    if (ramsbachCastleElement) ramsbachCastleElement.style.display = visible ? "" : "none";
+    if (!ramsbachCastleElement) return;
+    ramsbachCastleElement.style.display = visible ? "block" : "none";
+    ramsbachCastleElement.style.visibility = visible ? "visible" : "hidden";
+    ramsbachCastleElement.style.opacity = visible ? "1" : "0";
   }
 
   function ramsbachPathFor(id) {
