@@ -7139,10 +7139,12 @@
 
   const RAMSBACH_CASTLE = Object.freeze({
     src: "assets/buildings/BAERENBURG.png",
+    // R113 — exact placement from supplied in-game reference.
+    // Black side bars belong to the viewport and are not world coordinates.
     left: 5600,
-    top: 250,
-    width: 3950,
-    height: 3950,
+    top: 0,
+    width: 4200,
+    height: 4200,
     zIndex: 6
   });
 
@@ -7161,7 +7163,7 @@
     image.alt = "";
     image.draggable = false;
     image.style.position = "absolute";
-    image.style.objectFit = "contain";
+    image.style.objectFit = "fill";
     image.style.maxWidth = "none";
     image.style.maxHeight = "none";
     image.style.pointerEvents = "none";
