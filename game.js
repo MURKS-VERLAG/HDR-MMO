@@ -2610,6 +2610,28 @@
     ])
   });
 
+  // R116 RAMSBACH — the two BLACK marked wolf circles, one wolf each.
+  const RAMSBACH_WOLF_HABITATS = Object.freeze([
+    Object.freeze({
+      mapId: "ramsbach",
+      count: 1,
+      canExitTop: false,
+      cx: 2671,
+      cy: 1008,
+      rx: 760,
+      ry: 280
+    }),
+    Object.freeze({
+      mapId: "ramsbach",
+      count: 1,
+      canExitTop: false,
+      cx: 1813,
+      cy: 1659,
+      rx: 760,
+      ry: 350
+    })
+  ]);
+
   // R48 PINK rectangle: while a HUBACKER wolf stands here,
   // NEUENSTEIN is explicitly foreground for that wolf.
   const HUBACKER_WOLF_NEUENSTEIN_FOREGROUND = Object.freeze([
@@ -3062,6 +3084,19 @@
           HUBACKER_WOLF_HABITAT.canExitTop
         )
       );
+    }
+
+    for (const habitat of RAMSBACH_WOLF_HABITATS) {
+      for (let i = 0; i < habitat.count; i += 1) {
+        wolfActors.push(
+          createWolfActor(
+            i,
+            habitat.mapId,
+            habitat,
+            habitat.canExitTop
+          )
+        );
+      }
     }
 
     nextWolfHowlAt = performance.now() + WOLF_CONFIG.howlInterval;
@@ -3603,6 +3638,26 @@
           [434, 4978],
           [2335, 5858],
           [3493, 4213]
+        ]
+      },
+      {
+        id: "ramsbach-boar-circle",
+        mapId: "ramsbach",
+        count: 3,
+        exits: [],
+        polygon: [
+          [2531, 4345],
+          [2920, 4445],
+          [3225, 4725],
+          [3310, 5104],
+          [3225, 5485],
+          [2920, 5760],
+          [2531, 5860],
+          [2140, 5760],
+          [1840, 5485],
+          [1750, 5104],
+          [1840, 4725],
+          [2140, 4445]
         ]
       }
     ])
@@ -4314,6 +4369,30 @@
         [434, 4978],
         [2335, 5858],
         [3493, 4213]
+      ],
+      exits: [],
+      count: 3
+    },
+    {
+      id: "ramsbach-rabbits-left-field",
+      mapId: "ramsbach",
+      polygon: [
+        [720, 2870],
+        [1650, 3000],
+        [1715, 3660],
+        [815, 3745]
+      ],
+      exits: [],
+      count: 3
+    },
+    {
+      id: "ramsbach-rabbits-right-field",
+      mapId: "ramsbach",
+      polygon: [
+        [2335, 2550],
+        [3340, 2655],
+        [3385, 3340],
+        [2405, 3400]
       ],
       exits: [],
       count: 3
@@ -7142,29 +7221,100 @@
   // Only the player's FOOT anchor is tested.
   // ------------------------------------------------------------------
   // ------------------------------------------------------------------
-  // R111 MAP 7 — RAMSBACH terrain, castle and marked A/D snap routes.
-  // Coordinates are mapped from the supplied 1320x880 reference to 10240x6827.
-  // White bridge line and red castle-ramp line are independent and non-clashing.
+  // R116 MAP 7 — RAMSBACH FINAL REFERENCE PASS.
+  // Coordinates are measured from the supplied ACTUAL in-game screenshot.
+  // RED markup = hard foot-boundaries. Collision is segment-based so the
+  // existing X/Y separated movement slides smoothly along the line instead
+  // of snagging on large invisible rectangles.
   // ------------------------------------------------------------------
   const RAMSBACH_TERRAIN = Object.freeze({
-    riverBlocked: Object.freeze([
-      Object.freeze([[4300,0],[5260,0],[5260,3700],[4300,3700]]),
-      Object.freeze([[4300,4450],[5260,4450],[5260,6827],[4300,6827]])
+    redWallRadius: 44,
+
+    // RED lines from the supplied reference, stored as independent polylines.
+    // Bridge/ramp openings stay open exactly where the markup leaves a gap.
+    redWalls: Object.freeze([
+      Object.freeze([
+        Object.freeze([4312, 0]),
+        Object.freeze([4312, 3790])
+      ]),
+      Object.freeze([
+        Object.freeze([4261, 4224]),
+        Object.freeze([3943, 6827])
+      ]),
+      Object.freeze([
+        Object.freeze([5056, 0]),
+        Object.freeze([5056, 3669]),
+        Object.freeze([5597, 3541]),
+        Object.freeze([5883, 3350]),
+        Object.freeze([5915, 1595]),
+        Object.freeze([6042, 957]),
+        Object.freeze([6360, 574]),
+        Object.freeze([6742, 351]),
+        Object.freeze([7441, 223]),
+        Object.freeze([8268, 223]),
+        Object.freeze([8904, 351]),
+        Object.freeze([9381, 670]),
+        Object.freeze([9540, 1085]),
+        Object.freeze([9636, 1914]),
+        Object.freeze([9655, 3190]),
+        Object.freeze([9477, 4147]),
+        Object.freeze([9159, 4849]),
+        Object.freeze([8650, 5264]),
+        Object.freeze([8014, 5423]),
+        Object.freeze([7378, 5360]),
+        Object.freeze([6805, 5104]),
+        Object.freeze([6360, 4753]),
+        Object.freeze([5788, 4147]),
+        Object.freeze([5056, 4230])
+      ])
     ]),
-    bridgeLockedZone: Object.freeze({ x1: 3900, y1: 3730, x2: 5480, y2: 4440 }),
+
+    // White bridge line. Right end is deliberately outside its lock zone so D
+    // cleanly releases onto the Ramsbach plateau side.
+    bridgeLockedZone: Object.freeze({ x1: 3900, y1: 3730, x2: 5260, y2: 4440 }),
     bridgePath: Object.freeze([
-      Object.freeze([3915,4030]),
-      Object.freeze([5260,4030])
+      Object.freeze([3915, 4030]),
+      Object.freeze([5260, 4030])
     ]),
-    // R114: ONLY the bridge snap remains. All former castle/ramp snap lines are removed.
-    bridgeSnapDistance: 180
+    bridgeSnapDistance: 180,
+
+    // BLUE marked castle access area + the requested A/D castle snap.
+    // D travels toward the castle and remains locked at the upper end.
+    // A returns to the lower end and then releases back to free movement.
+    rampCapture: Object.freeze({ x1: 5629, y1: 3496, x2: 6297, y2: 3803 }),
+    rampPath: Object.freeze([
+      Object.freeze([5650, 3770]),
+      Object.freeze([5900, 3570]),
+      Object.freeze([6150, 3320]),
+      Object.freeze([6400, 3070]),
+      Object.freeze([6760, 2700])
+    ]),
+    rampSnapDistance: 165,
+
+    // Marked depth rectangles.
+    castleBehindZone: Object.freeze([
+      Object.freeze([6589, 45]),
+      Object.freeze([9439, 45]),
+      Object.freeze([9439, 1665]),
+      Object.freeze([6589, 1665])
+    ]),
+    castleFrontZone: Object.freeze([
+      Object.freeze([5629, 1678]),
+      Object.freeze([9445, 1678]),
+      Object.freeze([9445, 3898]),
+      Object.freeze([5629, 3898])
+    ]),
+    castleBluePassage: Object.freeze([
+      Object.freeze([5629, 3496]),
+      Object.freeze([6297, 3496]),
+      Object.freeze([6297, 3803]),
+      Object.freeze([5629, 3803])
+    ])
   });
 
   const RAMSBACH_CASTLE = Object.freeze({
     src: "assets/buildings/BAERENBURG.png",
-    // R115 — calibrated directly against the supplied SOLL in-game screenshot.
-    // Black side bars are viewport letterboxing and are NOT part of world coordinates.
-    // Same castle asset; only its world rectangle is corrected.
+    // R115 placement stays untouched in this pass.
     left: 5200,
     top: 0,
     width: 4800,
@@ -7173,10 +7323,41 @@
   });
 
   let ramsbachCastleElement = null;
+  let ramsbachCastleAlphaMask = null;
   let activeRamsbachSnap = null;
   let ramsbachSnapDistance = 0;
   let ramsbachSnapping = false;
   let ramsbachSnapReleaseUntil = 0;
+
+  function prepareRamsbachCastleAlphaMask(image) {
+    if (!image || !image.naturalWidth || !image.naturalHeight) return;
+
+    try {
+      const canvas = document.createElement("canvas");
+      canvas.width = image.naturalWidth;
+      canvas.height = image.naturalHeight;
+      const ctx = canvas.getContext("2d", { willReadFrequently: true });
+      if (!ctx) return;
+
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(image, 0, 0);
+      const pixels = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+      const alpha = new Uint8Array(canvas.width * canvas.height);
+
+      for (let src = 3, dst = 0; src < pixels.length; src += 4, dst += 1) {
+        alpha[dst] = pixels[src];
+      }
+
+      ramsbachCastleAlphaMask = {
+        width: canvas.width,
+        height: canvas.height,
+        alpha
+      };
+    } catch (error) {
+      ramsbachCastleAlphaMask = null;
+      console.warn("RAMSBACH BÄRENBURG alpha collision unavailable:", error);
+    }
+  }
 
   function createRamsbachCastle() {
     if (ramsbachCastleElement) return;
@@ -7200,11 +7381,21 @@
     image.style.opacity = "1";
     image.style.visibility = "visible";
     image.style.display = MAP.id === "ramsbach" ? "block" : "none";
+
+    image.addEventListener("load", () => {
+      prepareRamsbachCastleAlphaMask(image);
+    }, { once: true });
+
     image.addEventListener("error", () => {
       console.error("BÄRENBURG asset failed to load:", image.src);
     });
+
     world.appendChild(image);
     ramsbachCastleElement = image;
+
+    if (image.complete && image.naturalWidth > 0) {
+      prepareRamsbachCastleAlphaMask(image);
+    }
   }
 
   function setRamsbachWorldVisibility(visible) {
@@ -7214,75 +7405,237 @@
     ramsbachCastleElement.style.opacity = visible ? "1" : "0";
   }
 
+  function playerInRamsbachCastleBehindZone() {
+    return (
+      MAP.id === "ramsbach" &&
+      worldPointInPolygon(playerX, playerY, RAMSBACH_TERRAIN.castleBehindZone)
+    );
+  }
+
+  function playerInRamsbachCastleFrontZone() {
+    return (
+      MAP.id === "ramsbach" &&
+      worldPointInPolygon(playerX, playerY, RAMSBACH_TERRAIN.castleFrontZone)
+    );
+  }
+
   function ramsbachPathFor(id) {
     if (id === "bridge") return RAMSBACH_TERRAIN.bridgePath;
+    if (id === "ramp") return RAMSBACH_TERRAIN.rampPath;
     return null;
+  }
+
+  function ramsbachPointTouchesRedWall(x, y) {
+    const radius = RAMSBACH_TERRAIN.redWallRadius;
+    for (const polyline of RAMSBACH_TERRAIN.redWalls) {
+      for (let i = 0; i < polyline.length - 1; i += 1) {
+        const a = polyline[i];
+        const b = polyline[i + 1];
+        if (boarPointToSegmentDistance(x, y, a[0], a[1], b[0], b[1]) <= radius) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  function isRamsbachCastleBlockedFootPoint(x, y) {
+    if (MAP.id !== "ramsbach") return false;
+
+    // PINK: no hitbox at all — player can walk freely behind the motif.
+    if (worldPointInPolygon(x, y, RAMSBACH_TERRAIN.castleBehindZone)) return false;
+
+    // BLUE passage + active castle snap are explicit legal access.
+    if (worldPointInPolygon(x, y, RAMSBACH_TERRAIN.castleBluePassage)) return false;
+    if (activeRamsbachSnap === "ramp") return false;
+
+    // Only the requested YELLOW/front area owns the castle collision.
+    if (!worldPointInPolygon(x, y, RAMSBACH_TERRAIN.castleFrontZone)) return false;
+
+    const c = RAMSBACH_CASTLE;
+    if (
+      x < c.left || x > c.left + c.width ||
+      y < c.top || y > c.top + c.height
+    ) return false;
+
+    // No oversized fallback wall while the PNG alpha mask is loading.
+    if (!ramsbachCastleAlphaMask) return false;
+
+    const localX01 = (x - c.left) / c.width;
+    const localY01 = (y - c.top) / c.height;
+    const px = Math.max(
+      0,
+      Math.min(
+        ramsbachCastleAlphaMask.width - 1,
+        Math.round(localX01 * (ramsbachCastleAlphaMask.width - 1))
+      )
+    );
+    const py = Math.max(
+      0,
+      Math.min(
+        ramsbachCastleAlphaMask.height - 1,
+        Math.round(localY01 * (ramsbachCastleAlphaMask.height - 1))
+      )
+    );
+
+    return ramsbachCastleAlphaMask.alpha[
+      py * ramsbachCastleAlphaMask.width + px
+    ] >= 32;
   }
 
   function isRamsbachBlockedFootPoint(x, y) {
     if (MAP.id !== "ramsbach") return false;
+
+    // RED lines are absolute terrain limits. Snap movement itself does not call
+    // canMoveFootTo(), so bridge/ramp travel remains perfectly smooth.
+    if (ramsbachPointTouchesRedWall(x, y)) return true;
+
     const onBridge = activeRamsbachSnap === "bridge";
     if (!onBridge) {
-      for (const polygon of RAMSBACH_TERRAIN.riverBlocked) {
-        if (worldPointInPolygon(x, y, polygon)) return true;
-      }
       const b = RAMSBACH_TERRAIN.bridgeLockedZone;
       if (x >= b.x1 && x <= b.x2 && y >= b.y1 && y <= b.y2) return true;
     }
+
+    if (isRamsbachCastleBlockedFootPoint(x, y)) return true;
+
     return false;
   }
 
   function tryEngageRamsbachSnap(dx, dy) {
     if (MAP.id !== "ramsbach" || activeRamsbachSnap) return false;
     if (performance.now() < ramsbachSnapReleaseUntil) return false;
+
     const horizontalDirection = dx > 0 ? 1 : dx < 0 ? -1 : 0;
     if (!horizontalDirection) return false;
 
-    let best = null;
-    for (const id of ["bridge"]) {
-      const path = ramsbachPathFor(id);
-      const closest = closestPointOnBridgePath(playerX, playerY, path);
-      const limit = RAMSBACH_TERRAIN.bridgeSnapDistance;
-      if (!closest || closest.distance > limit) continue;
-      if (closest.progress <= 0.035 && horizontalDirection < 0) continue;
-      if (closest.progress >= 0.965 && horizontalDirection > 0) continue;
-      if (!best || closest.distance < best.closest.distance) best = { id, path, closest };
+    // WHITE bridge snap.
+    const bridge = RAMSBACH_TERRAIN.bridgePath;
+    const bridgeClosest = closestPointOnBridgePath(playerX, playerY, bridge);
+    if (
+      bridgeClosest &&
+      bridgeClosest.distance <= RAMSBACH_TERRAIN.bridgeSnapDistance
+    ) {
+      const leavingLeft =
+        bridgeClosest.progress <= 0.035 && horizontalDirection < 0;
+      const leavingRight =
+        bridgeClosest.progress >= 0.965 && horizontalDirection > 0;
+
+      if (!leavingLeft && !leavingRight) {
+        activeRamsbachSnap = "bridge";
+        ramsbachSnapDistance = bridgeClosest.pathDistance;
+        ramsbachSnapping = true;
+        return true;
+      }
     }
-    if (!best) return false;
-    activeRamsbachSnap = best.id;
-    ramsbachSnapDistance = best.closest.pathDistance;
-    ramsbachSnapping = true;
-    return true;
+
+    // BLUE castle-ramp capture is deliberately separate from the bridge,
+    // preventing the two A/D systems from fighting each other.
+    const cap = RAMSBACH_TERRAIN.rampCapture;
+    const inRampCapture =
+      playerX >= cap.x1 && playerX <= cap.x2 &&
+      playerY >= cap.y1 && playerY <= cap.y2;
+
+    if (inRampCapture && horizontalDirection > 0) {
+      const ramp = RAMSBACH_TERRAIN.rampPath;
+      const closest = closestPointOnBridgePath(playerX, playerY, ramp);
+      if (
+        closest &&
+        closest.distance <= RAMSBACH_TERRAIN.rampSnapDistance
+      ) {
+        activeRamsbachSnap = "ramp";
+        ramsbachSnapDistance = closest.pathDistance;
+        ramsbachSnapping = true;
+        return true;
+      }
+    }
+
+    return false;
   }
 
   function moveAlongRamsbachSnap(dx, dy, deltaSeconds) {
     if (!activeRamsbachSnap) return false;
+
     const horizontalDirection = dx > 0 ? 1 : dx < 0 ? -1 : 0;
     const path = ramsbachPathFor(activeRamsbachSnap);
-    if (!path) { activeRamsbachSnap = null; ramsbachSnapping = false; return false; }
+
+    if (!path) {
+      activeRamsbachSnap = null;
+      ramsbachSnapping = false;
+      return false;
+    }
+
     const anchor = pointAtBridgeDistance(path, ramsbachSnapDistance);
+
     if (ramsbachSnapping) {
-      const ddx = anchor.x - playerX, ddy = anchor.y - playerY;
+      const ddx = anchor.x - playerX;
+      const ddy = anchor.y - playerY;
       const distance = Math.hypot(ddx, ddy);
+
       if (distance > 5) {
         const pull = Math.min(1, 10 * deltaSeconds);
-        playerX += ddx * pull; playerY += ddy * pull;
+        playerX += ddx * pull;
+        playerY += ddy * pull;
         return true;
       }
-      playerX = anchor.x; playerY = anchor.y; ramsbachSnapping = false;
+
+      playerX = anchor.x;
+      playerY = anchor.y;
+      ramsbachSnapping = false;
     }
+
     if (!horizontalDirection) return true;
+
     const metrics = getPathMetrics(path);
-    const nextDistance = Math.max(0, Math.min(metrics.total, ramsbachSnapDistance + horizontalDirection * PLAYER.speed * deltaSeconds));
+    const nextDistance = Math.max(
+      0,
+      Math.min(
+        metrics.total,
+        ramsbachSnapDistance +
+          horizontalDirection * PLAYER.speed * deltaSeconds
+      )
+    );
+
     const point = pointAtBridgeDistance(path, nextDistance);
-    ramsbachSnapDistance = nextDistance; playerX = point.x; playerY = point.y;
-    const leftEnd = nextDistance <= 0.001 && horizontalDirection < 0;
-    const rightEnd = nextDistance >= metrics.total - 0.001 && horizontalDirection > 0;
-    if (leftEnd || rightEnd) {
-      activeRamsbachSnap = null; ramsbachSnapping = false;
-      ramsbachSnapReleaseUntil = performance.now() + 420;
-      playerX += horizontalDirection * 36;
+    ramsbachSnapDistance = nextDistance;
+    playerX = point.x;
+    playerY = point.y;
+
+    const atLeftEnd =
+      nextDistance <= 0.001 && horizontalDirection < 0;
+    const atRightEnd =
+      nextDistance >= metrics.total - 0.001 && horizontalDirection > 0;
+
+    if (activeRamsbachSnap === "bridge") {
+      if (atLeftEnd || atRightEnd) {
+        activeRamsbachSnap = null;
+        ramsbachSnapping = false;
+        ramsbachSnapReleaseUntil = performance.now() + 420;
+
+        if (atLeftEnd) {
+          playerX = RAMSBACH_TERRAIN.bridgeLockedZone.x1 - 55;
+        } else {
+          // D exits cleanly beyond the bridge lock instead of getting trapped.
+          playerX = RAMSBACH_TERRAIN.bridgeLockedZone.x2 + 55;
+        }
+      }
+      return true;
     }
+
+    if (activeRamsbachSnap === "ramp") {
+      if (atLeftEnd) {
+        // A = return from castle and release to free movement.
+        activeRamsbachSnap = null;
+        ramsbachSnapping = false;
+        ramsbachSnapReleaseUntil = performance.now() + 420;
+        playerX -= 48;
+        playerY += 34;
+      }
+
+      // IMPORTANT: atRightEnd + D intentionally stays captured.
+      // The castle-side end is closed; only A can take the player back.
+      return true;
+    }
+
     return true;
   }
 
@@ -9633,6 +9986,19 @@
 
     if (MAP.id === "hubacker") {
       updateHubackerBuildingDepth();
+      return;
+    }
+
+    if (MAP.id === "ramsbach") {
+      if (playerInRamsbachCastleBehindZone()) {
+        // PINK: castle is foreground; player can disappear behind it.
+        playerEl.style.zIndex = "5";
+      } else if (playerInRamsbachCastleFrontZone()) {
+        // YELLOW: player is ALWAYS in front of the castle motif.
+        playerEl.style.zIndex = "120";
+      } else {
+        playerEl.style.zIndex = "100";
+      }
       return;
     }
 
