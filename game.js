@@ -7162,13 +7162,13 @@
 
   const RAMSBACH_CASTLE = Object.freeze({
     src: "assets/buildings/BAERENBURG.png",
-    // R114 — exact placement/size from the supplied ACTUAL in-game screenshot.
-    // The black bars at left/right are viewport bars, NOT part of world coordinates.
-    // BAERENBURG.png is the supplied transparent castle asset; no second/old castle is created.
-    left: 5600,
+    // R115 — calibrated directly against the supplied SOLL in-game screenshot.
+    // Black side bars are viewport letterboxing and are NOT part of world coordinates.
+    // Same castle asset; only its world rectangle is corrected.
+    left: 5200,
     top: 0,
-    width: 4200,
-    height: 4200,
+    width: 4800,
+    height: 3850,
     zIndex: 6
   });
 
