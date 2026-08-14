@@ -640,8 +640,8 @@
     // R52 dedicated RENCHTALSTADION track supplied by the user.
     "renchtalstadion": "assets/audio/maps/RENCHTALSTADION - MEDIEVAL BATTLE.mp3",
     "oedsbach": "assets/audio/maps/OEDSBACH - THE HOLLOW KNIGHTS MARCH.mp3",
-    // R111: no dedicated Ramsbach music supplied; reuse Hubacker seamlessly.
-    "ramsbach": "assets/audio/maps/HUBACKER - THE LAST KNIGHT'S LAMENT.mp3"
+    // R114: dedicated RAMSBACH track supplied by the user.
+    "ramsbach": "assets/audio/maps/RAMSBACH - THE RING'S CALL.mp3"
   });
 
   const MAP_MUSIC_VOLUME = 1.0;
@@ -1739,6 +1739,37 @@
   function setOedsbachFogVisibility(visible) {
     if (!oedsbachFogRoot) return;
     oedsbachFogRoot.style.display = visible ? "block" : "none";
+  }
+
+  // ------------------------------------------------------------------
+  // R114 RAMSBACH — visible moving screen fog, deliberately softer than ÖDSBACH.
+  // Same proven screen-space principle, lower density/opacity.
+  // ------------------------------------------------------------------
+  let ramsbachFogRoot = null;
+
+  function createRamsbachFog() {
+    if (ramsbachFogRoot) return;
+    installOedsbachAtmosphereStyles();
+
+    const root = document.createElement("div");
+    root.className = "oedsbach-screen-fog ramsbach-screen-fog";
+    root.style.display = MAP.id === "ramsbach" ? "block" : "none";
+    root.style.opacity = "0.58";
+
+    // Fewer veils than ÖDSBACH: clearly visible, but not nearly as heavy.
+    for (let i = 0; i < 5; i += 1) {
+      const veil = document.createElement("div");
+      veil.className = "oedsbach-screen-fog__veil";
+      root.appendChild(veil);
+    }
+
+    game.appendChild(root);
+    ramsbachFogRoot = root;
+  }
+
+  function setRamsbachFogVisibility(visible) {
+    if (!ramsbachFogRoot) return;
+    ramsbachFogRoot.style.display = visible ? "block" : "none";
   }
 
   function createOedsbachShadowSystem() {
@@ -7125,22 +7156,15 @@
       Object.freeze([3915,4030]),
       Object.freeze([5260,4030])
     ]),
-    rampPath: Object.freeze([
-      Object.freeze([5260,4030]),
-      Object.freeze([5550,3810]),
-      Object.freeze([5850,3540]),
-      Object.freeze([6150,3260]),
-      Object.freeze([6460,2980]),
-      Object.freeze([6760,2700])
-    ]),
-    bridgeSnapDistance: 180,
-    rampSnapDistance: 180
+    // R114: ONLY the bridge snap remains. All former castle/ramp snap lines are removed.
+    bridgeSnapDistance: 180
   });
 
   const RAMSBACH_CASTLE = Object.freeze({
     src: "assets/buildings/BAERENBURG.png",
-    // R113 — exact placement from supplied in-game reference.
-    // Black side bars belong to the viewport and are not world coordinates.
+    // R114 — exact placement/size from the supplied ACTUAL in-game screenshot.
+    // The black bars at left/right are viewport bars, NOT part of world coordinates.
+    // BAERENBURG.png is the supplied transparent castle asset; no second/old castle is created.
     left: 5600,
     top: 0,
     width: 4200,
@@ -7192,14 +7216,12 @@
 
   function ramsbachPathFor(id) {
     if (id === "bridge") return RAMSBACH_TERRAIN.bridgePath;
-    if (id === "ramp") return RAMSBACH_TERRAIN.rampPath;
     return null;
   }
 
   function isRamsbachBlockedFootPoint(x, y) {
     if (MAP.id !== "ramsbach") return false;
     const onBridge = activeRamsbachSnap === "bridge";
-    const onRamp = activeRamsbachSnap === "ramp";
     if (!onBridge) {
       for (const polygon of RAMSBACH_TERRAIN.riverBlocked) {
         if (worldPointInPolygon(x, y, polygon)) return true;
@@ -7207,8 +7229,6 @@
       const b = RAMSBACH_TERRAIN.bridgeLockedZone;
       if (x >= b.x1 && x <= b.x2 && y >= b.y1 && y <= b.y2) return true;
     }
-    // The castle/plateau itself is intentionally not hard-blocked: the supplied
-    // red ramp snap is the controlled route into and out of it.
     return false;
   }
 
@@ -7219,10 +7239,10 @@
     if (!horizontalDirection) return false;
 
     let best = null;
-    for (const id of ["bridge", "ramp"]) {
+    for (const id of ["bridge"]) {
       const path = ramsbachPathFor(id);
       const closest = closestPointOnBridgePath(playerX, playerY, path);
-      const limit = id === "bridge" ? RAMSBACH_TERRAIN.bridgeSnapDistance : RAMSBACH_TERRAIN.rampSnapDistance;
+      const limit = RAMSBACH_TERRAIN.bridgeSnapDistance;
       if (!closest || closest.distance > limit) continue;
       if (closest.progress <= 0.035 && horizontalDirection < 0) continue;
       if (closest.progress >= 0.965 && horizontalDirection > 0) continue;
@@ -8292,7 +8312,7 @@
       ramsbachSnapping = false;
     }
 
-    // R111 MAP 7: white bridge + red castle ramp. Both are A/D-only snap paths.
+    // R114 MAP 7: ONLY the bridge remains an A/D snap path; all castle/ramp snaps are removed.
     if (MAP.id === "ramsbach" && (activeRamsbachSnap || tryEngageRamsbachSnap(dx, dy))) {
       moveAlongRamsbachSnap(dx, dy, deltaSeconds);
       clampPlayer();
@@ -15588,6 +15608,7 @@
     setOedsbachFogVisibility(MAP.id === "oedsbach");
     setOedsbachShadowVisibility(MAP.id === "oedsbach");
     setRamsbachWorldVisibility(MAP.id === "ramsbach");
+    setRamsbachFogVisibility(MAP.id === "ramsbach");
     updatePlayerHudVisibility();
 
     // Sync map-specific animals while the transition overlay is still covering the map.
@@ -17030,6 +17051,7 @@
     installOedegardStyles();
   createOedegard();
   createOedsbachFog();
+  createRamsbachFog();
   createOedsbachShadowSystem();
 
   // R99: cache/decode every Caliph visual and preload every circle voice at boot.
