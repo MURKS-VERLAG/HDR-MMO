@@ -7952,6 +7952,94 @@
 
     return true;
   }
+  const HUBACKER_TERRAIN = Object.freeze({
+    boundaryPadding: 18,
+
+    // RED painted river: completely non-walkable.
+    // The bridge itself is handled separately by the forced A/D snap.
+    riverBlocked: Object.freeze([
+      Object.freeze([
+        [4533,4],[4782,1030],[4642,1789],[4770,3177],
+        [4640,4012],[5428,4030],[5291,2529],[5367,4]
+      ]),
+      Object.freeze([
+        [5493,4475],[4472,4485],[4601,4819],
+        [4526,5496],[3967,6834],[4915,6834]
+      ])
+    ]),
+
+    // PURPLE marked regions: inaccessible plateaus/terrain.
+    blockedEllipses: Object.freeze([
+      Object.freeze({ cx: 2676, cy: 2007, rx: 1298, ry: 1041 }),
+      Object.freeze({ cx: 8139, cy: 2472, rx: 2646, ry: 2473 })
+    ]),
+
+    // The visible bridge gap may not be free-walked.
+    // Only HUBACKER_WOOD_BRIDGE snap movement may cross it.
+    bridgeLockedZone: Object.freeze({
+      x1: 4440, y1: 4050, x2: 5585, y2: 4465
+    }),
+
+    // WHITE curved line beside the river.
+    // Stored TOP -> BOTTOM: W moves toward index 0, S moves downward.
+    cliffPath: Object.freeze([
+      Object.freeze([5505,1020]),
+      Object.freeze([5468,1298]),
+      Object.freeze([5449,1622]),
+      Object.freeze([5430,1946]),
+      Object.freeze([5430,2270]),
+      Object.freeze([5458,2594]),
+      Object.freeze([5513,2918]),
+      Object.freeze([5568,3242]),
+      Object.freeze([5624,3566]),
+      Object.freeze([5661,3752])
+    ]),
+    cliffSnapDistance: 175,
+    cliffTravelSpeed: PLAYER.speed * 0.92,
+
+    // R47 NEUENSTEIN: two additional WHITE W/S-only snap routes from the supplied map overlay.
+    // Both are stored TOP -> BOTTOM. W moves toward index 0; S moves toward the last point.
+    neuensteinRuinPath: Object.freeze([
+      // R49 exact new WHITE line from the supplied markup.
+      // TOP -> BOTTOM; visibly shifted left from the previous path.
+      Object.freeze([2635, 1650]),
+      Object.freeze([2632, 1925]),
+      Object.freeze([2629, 2200]),
+      Object.freeze([2626, 2475]),
+      Object.freeze([2623, 2750]),
+      Object.freeze([2620, 3035])
+    ]),
+
+    neuensteinCastlePath: Object.freeze([
+      // R49 exact new WHITE line through both Neuenstein gates/courtyards.
+      // TOP -> BOTTOM; shifted left onto the marked central stair/door axis.
+      Object.freeze([8085, 2000]),
+      Object.freeze([8080, 2350]),
+      Object.freeze([8076, 2700]),
+      Object.freeze([8072, 3050]),
+      Object.freeze([8068, 3400]),
+      Object.freeze([8064, 3750]),
+      Object.freeze([8060, 4100]),
+      Object.freeze([8056, 4500]),
+      Object.freeze([8052, 4905])
+    ]),
+
+    neuensteinSnapDistance: 185,
+    neuensteinTravelSpeed: PLAYER.speed * 0.92
+  });
+
+  let activeHubackerCliffPath = false;
+  let hubackerCliffDistance = 0;
+  let hubackerCliffSnapping = false;
+  let hubackerCliffReleaseUntil = 0;
+
+  // R47: independent Neuenstein W/S snap state.
+  // Existing Hubacker river/cliff snap remains completely untouched.
+  let activeNeuensteinSnap = null; // "ruin" | "castle" | null
+  let neuensteinSnapDistance = 0;
+  let neuensteinSnapping = false;
+  let neuensteinReleaseUntil = 0;
+
   function pointInsideHubackerEllipse(x, y, ellipse) {
     const dx = (x - ellipse.cx) / ellipse.rx;
     const dy = (y - ellipse.cy) / ellipse.ry;
