@@ -3,7 +3,7 @@
 
   // R121 DEPLOYMENT VERIFICATION — harmless build marker.
   // If this line appears in DevTools, the browser is definitely running R121.
-  console.info("HDR BUILD R126 - ROBUST PRODUCT KEY GATE");
+  console.info("HDR BUILD R127 - PRODUCT KEY EXACT FIX");
 
   const MAPS = Object.freeze({
     oberkirch: Object.freeze({
@@ -11610,7 +11610,7 @@
 
   let startFlowState = "start-key";
   let chosenPlayerName = "";
-  const START_PRODUCT_KEYS = new Set(["1", "N", "H4P-PYB-1RT-HD4-Y2U"]);
+  const START_PRODUCT_KEYS = new Set(["1", "N", "H4P-PYB-1RT-HDA-Y2U"]);
   let startFlowUI = null;
 
   function gameplayUnlocked() {
