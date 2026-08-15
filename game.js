@@ -3,7 +3,7 @@
 
   // R121 DEPLOYMENT VERIFICATION — harmless build marker.
   // If this line appears in DevTools, the browser is definitely running R121.
-  console.info("HDR BUILD R123 - RAMSBACH BEAR COMBAT DEPTH FLICKER FIX");
+  console.info("HDR BUILD R124 - RAMSBACH HARD COLLISION FIX");
 
   const MAPS = Object.freeze({
     oberkirch: Object.freeze({
@@ -7605,19 +7605,6 @@
     ]),
     bridgeSnapDistance: 180,
 
-    // BLUE marked castle access area + the requested A/D castle snap.
-    // D travels toward the castle and remains locked at the upper end.
-    // A returns to the lower end and then releases back to free movement.
-    rampCapture: Object.freeze({ x1: 5629, y1: 3496, x2: 6297, y2: 3803 }),
-    rampPath: Object.freeze([
-      Object.freeze([5650, 3770]),
-      Object.freeze([5900, 3570]),
-      Object.freeze([6150, 3320]),
-      Object.freeze([6400, 3070]),
-      Object.freeze([6760, 2700])
-    ]),
-    rampSnapDistance: 165,
-
     // Marked depth rectangles.
     castleBehindZone: Object.freeze([
       Object.freeze([6589, 45]),
@@ -7632,49 +7619,13 @@
       Object.freeze([5629, 3898])
     ]),
     castleBluePassage: Object.freeze([
-      // R117: bottom-open blue approach. No castle hitbox and no red-wall block
-      // here, so the WHITE castle ramp can actually be reached from below.
+      // R124: BLUE zone is HARD COLLISION again. No free passage and no castle snap.
       Object.freeze([5480, 3420]),
       Object.freeze([6360, 3420]),
       Object.freeze([6360, 4260]),
       Object.freeze([5480, 4260])
     ]),
 
-    // R117: the RED plateau contour is now an additional W/S-only snap route.
-    // Stored BOTTOM -> TOP/AROUND. S advances, W reverses; BOTH ends release.
-    perimeterPath: Object.freeze([
-      Object.freeze([5056, 4230]),
-      Object.freeze([5788, 4147]),
-      Object.freeze([6360, 4753]),
-      Object.freeze([6805, 5104]),
-      Object.freeze([7378, 5360]),
-      Object.freeze([8014, 5423]),
-      Object.freeze([8650, 5264]),
-      Object.freeze([9159, 4849]),
-      Object.freeze([9477, 4147]),
-      Object.freeze([9655, 3190]),
-      Object.freeze([9636, 1914]),
-      Object.freeze([9540, 1085]),
-      Object.freeze([9381, 670]),
-      Object.freeze([8904, 351]),
-      Object.freeze([8268, 223]),
-      Object.freeze([7441, 223]),
-      Object.freeze([6742, 351]),
-      Object.freeze([6360, 574]),
-      Object.freeze([6042, 957]),
-      Object.freeze([5915, 1595])
-    ]),
-    perimeterSnapDistance: 150,
-
-    // Exact special overlap where the RED perimeter route passes underneath
-    // the visible castle bridge: ONLY while snapped to perimeter, player is
-    // rendered behind the BÄRENBURG motif here.
-    perimeterUnderBridgeZone: Object.freeze([
-      Object.freeze([5480, 3420]),
-      Object.freeze([6360, 3420]),
-      Object.freeze([6360, 3985]),
-      Object.freeze([5480, 3985])
-    ])
   });
 
   const RAMSBACH_CASTLE = Object.freeze({
@@ -7786,19 +7737,12 @@
 
   function ramsbachPathFor(id) {
     if (id === "bridge") return RAMSBACH_TERRAIN.bridgePath;
-    if (id === "ramp") return RAMSBACH_TERRAIN.rampPath;
-    if (id === "perimeter") return RAMSBACH_TERRAIN.perimeterPath;
     return null;
   }
 
   function ramsbachPointTouchesRedWall(x, y) {
-    // R117: the bottom-open BLUE approach is deliberately walkable so the
-    // player can reach the castle ramp snap from the plateau.
-    if (worldPointInPolygon(x, y, RAMSBACH_TERRAIN.castleBluePassage)) return false;
-
-    // While actually travelling on the red/perimeter snap, its own drawn red
-    // contour must not collide with the player's foot anchor.
-    if (activeRamsbachSnap === "perimeter") return false;
+    // R124: red terrain lines are always hard collision.
+    // No blue-passage exemption and no perimeter snap exemption exist anymore.
 
     const radius = RAMSBACH_TERRAIN.redWallRadius;
     for (const polyline of RAMSBACH_TERRAIN.redWalls) {
@@ -7816,14 +7760,11 @@
   function isRamsbachCastleBlockedFootPoint(x, y) {
     if (MAP.id !== "ramsbach") return false;
 
+    // R124: BLUE zone is hard collision again and takes priority over any overlap.
+    if (worldPointInPolygon(x, y, RAMSBACH_TERRAIN.castleBluePassage)) return true;
+
     // PINK: no hitbox at all — player can walk freely behind the motif.
     if (worldPointInPolygon(x, y, RAMSBACH_TERRAIN.castleBehindZone)) return false;
-
-    // BLUE/open approach + both castle-related snap routes are explicit legal access.
-    if (worldPointInPolygon(x, y, RAMSBACH_TERRAIN.castleBluePassage)) return false;
-    if (activeRamsbachSnap === "ramp") return false;
-    if (activeRamsbachSnap === "perimeter" &&
-        worldPointInPolygon(x, y, RAMSBACH_TERRAIN.perimeterUnderBridgeZone)) return false;
 
     // Only the requested YELLOW/front area owns the castle collision.
     if (!worldPointInPolygon(x, y, RAMSBACH_TERRAIN.castleFrontZone)) return false;
@@ -7900,41 +7841,6 @@
       }
     }
 
-    // WHITE castle ramp: uphill ONLY W+D, downhill ONLY A+S.
-    // Bottom approach is intentionally open so this can now be reached.
-    const ramp = RAMSBACH_TERRAIN.rampPath;
-    const rampClosest = closestPointOnBridgePath(playerX, playerY, ramp);
-    if (rampClosest && rampClosest.distance <= RAMSBACH_TERRAIN.rampSnapDistance) {
-      const uphill = dx > 0 && dy < 0;   // W + D
-      const downhill = dx < 0 && dy > 0; // A + S
-      if (uphill || downhill) {
-        const leavingBottom = rampClosest.progress <= 0.035 && downhill;
-        // Castle-side/top end stays closed in the uphill direction.
-        if (!leavingBottom) {
-          activeRamsbachSnap = "ramp";
-          ramsbachSnapDistance = rampClosest.pathDistance;
-          ramsbachSnapping = true;
-          return true;
-        }
-      }
-    }
-
-    // RED plateau contour: W/S only; both ends can be left again.
-    if (verticalDirection) {
-      const perimeter = RAMSBACH_TERRAIN.perimeterPath;
-      const closest = closestPointOnBridgePath(playerX, playerY, perimeter);
-      if (closest && closest.distance <= RAMSBACH_TERRAIN.perimeterSnapDistance) {
-        const leavingStart = closest.progress <= 0.025 && verticalDirection < 0;
-        const leavingEnd = closest.progress >= 0.975 && verticalDirection > 0;
-        if (!leavingStart && !leavingEnd) {
-          activeRamsbachSnap = "perimeter";
-          ramsbachSnapDistance = closest.pathDistance;
-          ramsbachSnapping = true;
-          return true;
-        }
-      }
-    }
-
     return false;
   }
 
@@ -7969,13 +7875,6 @@
 
     if (activeRamsbachSnap === "bridge") {
       direction = dx > 0 ? 1 : dx < 0 ? -1 : 0;
-    } else if (activeRamsbachSnap === "ramp") {
-      // WHITE castle ramp: W+D uphill / A+S downhill.
-      if (dx > 0 && dy < 0) direction = 1;
-      else if (dx < 0 && dy > 0) direction = -1;
-    } else if (activeRamsbachSnap === "perimeter") {
-      // RED contour: W reverses, S advances.
-      direction = dy > 0 ? 1 : dy < 0 ? -1 : 0;
     }
 
     if (!direction) return true;
@@ -8004,31 +7903,6 @@
         playerX = atStart
           ? RAMSBACH_TERRAIN.bridgeLockedZone.x1 - 55
           : RAMSBACH_TERRAIN.bridgeLockedZone.x2 + 55;
-      }
-      return true;
-    }
-
-    if (activeRamsbachSnap === "ramp") {
-      if (atStart) {
-        // A+S leaves the lower/open end.
-        activeRamsbachSnap = null;
-        ramsbachSnapping = false;
-        ramsbachSnapReleaseUntil = performance.now() + 420;
-        playerX -= 42;
-        playerY += 42;
-      }
-      // Upper castle end remains intentionally locked; only A+S returns.
-      return true;
-    }
-
-    if (activeRamsbachSnap === "perimeter") {
-      if (atStart || atEnd) {
-        // BOTH red-line ends are explicitly leaveable.
-        activeRamsbachSnap = null;
-        ramsbachSnapping = false;
-        ramsbachSnapReleaseUntil = performance.now() + 420;
-        if (atStart) playerY += 44;
-        if (atEnd) playerY -= 44;
       }
       return true;
     }
@@ -9071,7 +8945,7 @@
       ramsbachSnapping = false;
     }
 
-    // R117 MAP 7: river bridge A/D + castle ramp W+D/A+S + red contour W/S.
+    // R124 MAP 7: ONLY the river bridge uses A/D snap. All red/blue terrain boundaries are hard collision.
     if (MAP.id === "ramsbach" && (activeRamsbachSnap || tryEngageRamsbachSnap(dx, dy))) {
       moveAlongRamsbachSnap(dx, dy, deltaSeconds);
       clampPlayer();
@@ -10396,19 +10270,7 @@
     }
 
     if (MAP.id === "ramsbach") {
-      const redSnapUnderCastleBridge =
-        activeRamsbachSnap === "perimeter" &&
-        worldPointInPolygon(
-          playerX,
-          playerY,
-          RAMSBACH_TERRAIN.perimeterUnderBridgeZone
-        );
-
-      if (redSnapUnderCastleBridge) {
-        // R117 special rule: ONLY on the red snap, inside the blue overlap,
-        // the player passes UNDER the castle bridge / behind the motif.
-        playerEl.style.zIndex = "5";
-      } else if (playerInRamsbachCastleBehindZone()) {
+      if (playerInRamsbachCastleBehindZone()) {
         // PINK remains exactly as before.
         playerEl.style.zIndex = "5";
       } else if (playerInRamsbachCastleFrontZone()) {
