@@ -17214,8 +17214,30 @@
   }
 
   function updatePlayer(deltaSeconds) {
-    if (blocking) { clearIceVelocity(); updateIceVisual(); setSprite(getBlockSprite()); return; }
-    if (attacking) { clearIceVelocity(); updateIceVisual(); updateAttack(deltaSeconds); return; }
+    // R119 CONTROL SELF-HEAL:
+    // A lost CTRL-keyup must never leave the player permanently frozen.
+    // If neither Ctrl key is physically present in our key set, release block.
+    if (
+      blocking &&
+      !keys.has("ControlLeft") &&
+      !keys.has("ControlRight")
+    ) {
+      stopBlocking();
+    }
+
+    if (blocking) {
+      clearIceVelocity();
+      updateIceVisual();
+      setSprite(getBlockSprite());
+      return;
+    }
+
+    if (attacking) {
+      clearIceVelocity();
+      updateIceVisual();
+      updateAttack(deltaSeconds);
+      return;
+    }
 
     let dx = 0, dy = 0;
     if (keys.has("KeyW") || keys.has("ArrowUp")) dy -= 1;
@@ -17247,8 +17269,66 @@
       setAnimation("idle"); setIdleSprite(); return;
     }
     if (!moving) { moving = true; playerEl.classList.add("player--moving"); playerEl.classList.remove("player--idle"); }
-    const nextAnimation = getMovementAnimation(dx, dy); setAnimation(nextAnimation); renderMovementFrame(currentAnimation, deltaSeconds);
-    movePlayerWithWorldCollision(dx, dy, deltaSeconds);
+    const nextAnimation = getMovementAnimation(dx, dy);
+    setAnimation(nextAnimation);
+    renderMovementFrame(currentAnimation, deltaSeconds);
+
+    const beforeX = playerX;
+    const beforeY = playerY;
+
+    try {
+      movePlayerWithWorldCollision(dx, dy, deltaSeconds);
+    } catch (movementError) {
+      // R119: movement itself is core gameplay and must not be killed by an
+      // auxiliary collision/snap exception. Fall back to the established
+      // axis-separated movement using the same canMoveFootTo() collision.
+      console.error("R119 MOVEMENT RECOVERY:", movementError);
+
+      const length = Math.hypot(dx, dy) || 1;
+      const nx = dx / length;
+      const ny = dy / length;
+      const amount = PLAYER.speed * deltaSeconds;
+
+      try {
+        const candidateX = playerX + nx * amount;
+        if (canMoveFootTo(candidateX, playerY)) playerX = candidateX;
+
+        const candidateY = playerY + ny * amount;
+        if (canMoveFootTo(playerX, candidateY)) playerY = candidateY;
+
+        clampPlayer();
+      } catch (collisionError) {
+        console.error("R119 COLLISION RECOVERY:", collisionError);
+      }
+    }
+
+    // R119 MAP 1 SPAWN-UNSTICK:
+    // If the player somehow spawned INSIDE an old collision footprint, the
+    // normal collision system correctly rejects every attempted step and traps
+    // him forever. Only in that exact invalid-state case, allow movement out of
+    // the bad footprint. The moment the foot point is valid again, all normal
+    // Oberkirch collisions immediately resume.
+    if (
+      MAP.id === "oberkirch-zentrum" &&
+      playerX === beforeX &&
+      playerY === beforeY
+    ) {
+      let currentPointBlocked = false;
+
+      try {
+        currentPointBlocked = !canMoveFootTo(playerX, playerY);
+      } catch (_) {
+        currentPointBlocked = true;
+      }
+
+      if (currentPointBlocked) {
+        const length = Math.hypot(dx, dy) || 1;
+        const amount = PLAYER.speed * deltaSeconds;
+        playerX += (dx / length) * amount;
+        playerY += (dy / length) * amount;
+        clampPlayer();
+      }
+    }
   }
 
   function renderPlayer() {
@@ -17524,6 +17604,22 @@
 
     if (event.code === "Minus" || event.code === "NumpadSubtract") {
       setZoomLevel(zoomLevel - 1);
+      return;
+    }
+
+    // R119: movement keys are always recorded explicitly once campaign input
+    // reaches this point. This avoids stale/non-movement key state interfering.
+    if (
+      event.code === "KeyW" ||
+      event.code === "KeyA" ||
+      event.code === "KeyS" ||
+      event.code === "KeyD" ||
+      event.code === "ArrowUp" ||
+      event.code === "ArrowDown" ||
+      event.code === "ArrowLeft" ||
+      event.code === "ArrowRight"
+    ) {
+      keys.add(event.code);
       return;
     }
 
