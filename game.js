@@ -7223,7 +7223,7 @@
 
 
   // ------------------------------------------------------------------
-  // R117 RAMSBACH — TWO AMBIENT BLACK BEARS.
+  // R118 RAMSBACH — FIVE AMBIENT BEARS IN YELLOW MARKED HABITATS.
   // Exactly one bear in each of the two black reference circles. Their areas
   // intentionally overlap the existing wolf habitats. They are ambient only
   // in this patch; combat is added later with the player-damage system.
@@ -7247,8 +7247,14 @@
       "assets/mobs/bears/BEAR DOWN 2.png"
     ]),
     habitats: Object.freeze([
-      Object.freeze({ cx: 2671, cy: 1008, rx: 680, ry: 245 }),
-      Object.freeze({ cx: 1813, cy: 1659, rx: 680, ry: 315 })
+      // R118 — FIVE YELLOW circles from the supplied marked Ramsbach screenshot.
+      // These intentionally overlap each other. The old BLACK-circle bear
+      // habitats are completely removed; those areas remain wolf-only.
+      Object.freeze({ cx: 7800, cy: 780,  rx: 1320, ry: 330 }),
+      Object.freeze({ cx: 6370, cy: 1680, rx: 420,  ry: 560 }),
+      Object.freeze({ cx: 8760, cy: 3700, rx: 530,  ry: 970 }),
+      Object.freeze({ cx: 7240, cy: 4480, rx: 1130, ry: 660 }),
+      Object.freeze({ cx: 8130, cy: 4400, rx: 1030, ry: 940 })
     ])
   });
 
@@ -7388,6 +7394,8 @@
   }
 
   function updateRamsbachBears(deltaSeconds, now) {
+    if (MAP.id !== RAMSBACH_BEAR_CONFIG.mapId) return;
+
     for (const actor of ramsbachBearActors) {
       const active = MAP.id === RAMSBACH_BEAR_CONFIG.mapId;
       actor.root.style.display = active ? "" : "none";
@@ -17333,7 +17341,18 @@
         updateWolves(deltaSeconds, now);
         updateGoat(deltaSeconds, now);
         updateBoars(deltaSeconds, now);
-        updateRamsbachBears(deltaSeconds, now);
+
+        // R118 SAFETY: Ramsbach-only ambient system must never be executed on
+        // OBERKIRCH / MAP 1 or any other map. This prevents any bear-side
+        // runtime problem from interrupting renderPlayer()/renderWorld().
+        if (MAP.id === "ramsbach") {
+          try {
+            updateRamsbachBears(deltaSeconds, now);
+          } catch (bearError) {
+            console.error("R118 RAMSBACH BEAR RECOVERY:", bearError);
+          }
+        }
+
         updateTierbannsteine(deltaSeconds, now);
         updateMole(now);
         updateOedegard(now);
