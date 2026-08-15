@@ -3,7 +3,7 @@
 
   // R121 DEPLOYMENT VERIFICATION — harmless build marker.
   // If this line appears in DevTools, the browser is definitely running R121.
-  console.info("HDR BUILD R121 - MOVEMENT CACHE-BUST FIX");
+  console.info("HDR BUILD R122 - RAMSBACH COLLISION ISOLATION FIX");
 
   const MAPS = Object.freeze({
     oberkirch: Object.freeze({
@@ -8657,8 +8657,17 @@
     // R97 MAP 6: three RED reference regions are hard-blocked.
     if (isOedsbachBlockedFootPoint(x, y)) return false;
 
-    // R111 MAP 7: Rench river and bridge gap.
-    if (isRamsbachBlockedFootPoint(x, y)) return false;
+    // R122 SAFE RAMSBACH COLLISION ISOLATION:
+    // Ramsbach terrain/locked-footprint code must NEVER participate on another map.
+    // If the new Ramsbach collision itself throws, keep the player-control frame alive
+    // instead of aborting updatePlayer() after the walking animation was already set.
+    if (MAP.id === "ramsbach") {
+      try {
+        if (isRamsbachBlockedFootPoint(x, y)) return false;
+      } catch (ramsbachCollisionError) {
+        console.error("R122 RAMSBACH COLLISION RECOVERY:", ramsbachCollisionError);
+      }
+    }
 
 
     // New hard collision for church body + tavern.
