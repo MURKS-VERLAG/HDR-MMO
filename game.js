@@ -3,7 +3,7 @@
 
   // R121 DEPLOYMENT VERIFICATION — harmless build marker.
   // If this line appears in DevTools, the browser is definitely running R121.
-  console.info("HDR BUILD R124 - RAMSBACH HARD COLLISION FIX");
+  console.info("HDR BUILD R125 - PRODUCT KEY GATE");
 
   const MAPS = Object.freeze({
     oberkirch: Object.freeze({
@@ -11608,8 +11608,9 @@
     irisMs: 2700
   });
 
-  let startFlowState = "start-name";
+  let startFlowState = "start-key";
   let chosenPlayerName = "";
+  const START_PRODUCT_KEYS = new Set(["1", "N", "H4P-PYB-1RT-HD4-Y2U"]);
   let startFlowUI = null;
 
   function gameplayUnlocked() {
@@ -14556,6 +14557,19 @@
           0 0 12px rgba(255,255,255,.18);
       }
 
+      .start-flow__key-error {
+        min-height: 18px;
+        margin: 7px 0 0;
+        color: #d7b9a7;
+        font-family: Georgia, "Times New Roman", serif;
+        font-size: 14px;
+        letter-spacing: .04em;
+        opacity: 0;
+        transition: opacity 150ms ease;
+      }
+
+      .start-flow__key-error--visible { opacity: 1; }
+
       .start-flow__continue {
         display: inline-block;
         margin-top: 12px;
@@ -14769,25 +14783,30 @@
 
     const nameLabel = document.createElement("label");
     nameLabel.className = "start-flow__name-label";
-    nameLabel.htmlFor = "startPlayerName";
-    nameLabel.textContent = "DEIN NAME:";
+    nameLabel.htmlFor = "startProductKey";
+    nameLabel.textContent = "PRODUKTSCHLÜSSEL:";
 
     const nameInput = document.createElement("input");
-    nameInput.id = "startPlayerName";
+    nameInput.id = "startProductKey";
     nameInput.className = "start-flow__name-input";
     nameInput.type = "text";
-    nameInput.maxLength = 28;
+    nameInput.maxLength = 32;
     nameInput.spellcheck = false;
     nameInput.autocomplete = "off";
-    nameInput.setAttribute("aria-label", "Dein Name");
+    nameInput.setAttribute("aria-label", "Produktschlüssel");
+
+    const keyError = document.createElement("div");
+    keyError.className = "start-flow__key-error";
+    keyError.textContent = "UNGÜLTIGER PRODUKTSCHLÜSSEL";
+    keyError.setAttribute("aria-live", "polite");
 
     const continueButton = document.createElement("button");
     continueButton.className = "start-flow__continue";
     continueButton.type = "submit";
-    continueButton.textContent = "WEITER";
+    continueButton.textContent = "AKTIVIEREN";
     continueButton.disabled = true;
 
-    namePanel.append(nameLabel, nameInput, continueButton);
+    namePanel.append(nameLabel, nameInput, keyError, continueButton);
     startScene.append(startImage, namePanel);
 
     const heroStage = document.createElement("section");
@@ -14826,7 +14845,9 @@
       startScene,
       startImage,
       namePanel,
+      nameLabel,
       nameInput,
+      keyError,
       continueButton,
       heroStage,
       heroBackground,
@@ -14839,14 +14860,41 @@
 
     nameInput.addEventListener("input", () => {
       continueButton.disabled = nameInput.value.trim().length === 0;
+      keyError.classList.remove("start-flow__key-error--visible");
     });
 
     namePanel.addEventListener("submit", (event) => {
       event.preventDefault();
-      const name = nameInput.value.trim();
-      if (!name || startFlowUI.transitionBusy) return;
-      chosenPlayerName = name;
-      showHeroSelection();
+      if (startFlowUI.transitionBusy) return;
+
+      if (startFlowState === "start-key") {
+        const key = nameInput.value.trim().toUpperCase();
+        if (!START_PRODUCT_KEYS.has(key)) {
+          keyError.classList.add("start-flow__key-error--visible");
+          nameInput.select();
+          return;
+        }
+
+        startFlowState = "start-name";
+        nameLabel.htmlFor = "startPlayerName";
+        nameLabel.textContent = "DEIN NAME:";
+        nameInput.id = "startPlayerName";
+        nameInput.value = "";
+        nameInput.maxLength = 28;
+        nameInput.setAttribute("aria-label", "Dein Name");
+        keyError.classList.remove("start-flow__key-error--visible");
+        continueButton.textContent = "WEITER";
+        continueButton.disabled = true;
+        nameInput.focus();
+        return;
+      }
+
+      if (startFlowState === "start-name") {
+        const name = nameInput.value.trim();
+        if (!name) return;
+        chosenPlayerName = name;
+        showHeroSelection();
+      }
     });
 
     const selectHero = () => {
@@ -14866,7 +14914,7 @@
   async function beginStartFlow() {
     if (!startFlowUI) createStartFlowUI();
 
-    startFlowState = "start-name";
+    startFlowState = "start-key";
     startFlowUI.transitionBusy = true;
     keys.clear();
     attackHeld = false;
@@ -14894,12 +14942,12 @@
 
     await waitMs(START_FLOW.initialFadeMs + START_FLOW.titleHoldMs);
 
-    if (startFlowState !== "start-name") return;
+    if (startFlowState !== "start-key") return;
     startFlowUI.namePanel.classList.add("start-flow__name-panel--visible");
     startFlowUI.transitionBusy = false;
 
     window.setTimeout(() => {
-      if (startFlowState === "start-name") startFlowUI.nameInput.focus();
+      if (startFlowState === "start-key") startFlowUI.nameInput.focus();
     }, START_FLOW.panelFadeMs + 40);
   }
 
@@ -17461,11 +17509,11 @@
   window.addEventListener("keydown", (event) => {
     if (!gameplayUnlocked()) {
       const target = event.target;
-      const isNameField =
-        target && target.id === "startPlayerName";
+      const isStartTextField =
+        target && (target.id === "startPlayerName" || target.id === "startProductKey");
 
-      // Typing in the name field remains completely native.
-      if (isNameField) return;
+      // Typing in either start-flow text field remains completely native.
+      if (isStartTextField) return;
 
       // No gameplay key may leak into the campaign while either start screen is open.
       event.preventDefault();
