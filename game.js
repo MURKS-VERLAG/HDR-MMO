@@ -3,7 +3,7 @@
 
   // R121 DEPLOYMENT VERIFICATION — harmless build marker.
   // If this line appears in DevTools, the browser is definitely running R121.
-  console.info("HDR BUILD R122 - RAMSBACH COLLISION ISOLATION FIX");
+  console.info("HDR BUILD R123 - RAMSBACH BEAR COMBAT DEPTH FLICKER FIX");
 
   const MAPS = Object.freeze({
     oberkirch: Object.freeze({
@@ -7236,6 +7236,7 @@
     mapId: "ramsbach",
     width: 500,
     height: 390,
+    maxHp: 1000,
     speed: 72,
     frameDuration: 430,
     stepMin: 150,
@@ -7280,6 +7281,9 @@
         z-index: 8;
         will-change: left, top, transform;
       }
+      .ramsbach-bear--critical-hit {
+        transition: left 210ms ease-out, top 210ms cubic-bezier(.1,.75,.25,1) !important;
+      }
       .ramsbach-bear__sprite {
         position: absolute;
         inset: 0;
@@ -7288,10 +7292,16 @@
         object-fit: contain;
         object-position: 50% 100%;
         opacity: 0;
-        transition: opacity 160ms linear;
+        visibility: hidden;
+        transition: none !important;
         filter: drop-shadow(0 9px 5px rgba(0,0,0,.25));
+        backface-visibility: hidden;
+        -webkit-backface-visibility: hidden;
       }
-      .ramsbach-bear__sprite--visible { opacity: 1; }
+      .ramsbach-bear__sprite--visible {
+        opacity: 1;
+        visibility: visible;
+      }
     `;
     document.head.appendChild(style);
   }
@@ -7369,7 +7379,10 @@
       nextFrameAt: now + RAMSBACH_BEAR_CONFIG.frameDuration,
       pauseUntil: now + 700 + Math.random() * 1500,
       nextDecision: now + 900 + Math.random() * 1800,
-      wobblePhase: Math.random() * Math.PI * 2
+      wobblePhase: Math.random() * Math.PI * 2,
+      hp: RAMSBACH_BEAR_CONFIG.maxHp,
+      dead: false,
+      away: false
     };
 
     root.style.left = `${x}px`;
@@ -7397,13 +7410,82 @@
     );
   }
 
+  function updateRamsbachBearDepth(actor) {
+    if (!actor || MAP.id !== RAMSBACH_BEAR_CONFIG.mapId) return;
+
+    // EXACT same castle motif rule as the player:
+    // upper / behind zone = behind BÄRENBURG, lower / front zone = in front.
+    if (worldPointInPolygon(actor.x, actor.y, RAMSBACH_TERRAIN.castleBehindZone)) {
+      actor.root.style.zIndex = "5";
+    } else if (worldPointInPolygon(actor.x, actor.y, RAMSBACH_TERRAIN.castleFrontZone)) {
+      actor.root.style.zIndex = "120";
+    } else {
+      actor.root.style.zIndex = "8";
+    }
+  }
+
+  function killRamsbachBear(actor) {
+    if (!actor || actor.dead) return;
+    actor.dead = true;
+    actor.hp = 0;
+    actor.moving = false;
+    actor.pauseUntil = Infinity;
+    actor.nextDecision = Infinity;
+    actor.root.style.display = "none";
+  }
+
+  function damageRamsbachBear(actor, amount, critical, direction, now, saustark = false) {
+    if (!actor || actor.dead || actor.away) return;
+
+    actor.hp = Math.max(0, actor.hp - amount);
+
+    // EXACT existing animal damage readout. Intentionally NO bear hit sound.
+    createRabbitDamageText(actor, amount, critical, saustark);
+    actor.moving = false;
+
+    if (critical) {
+      createRabbitDust(actor);
+      largeAnimalCriticalKnockback(actor, direction, "ramsbach-bear--critical-hit");
+    }
+
+    if (actor.hp <= 0) {
+      killRamsbachBear(actor);
+      return;
+    }
+
+    actor.pauseUntil = now + 250;
+    actor.nextDecision = now + 250;
+  }
+
+  function resolveRamsbachBearAttackFrame(frame) {
+    if (!frame || !frame.hit || MAP.id !== RAMSBACH_BEAR_CONFIG.mapId) return;
+
+    const direction = rabbitAttackDirection();
+    const now = performance.now();
+
+    for (const actor of ramsbachBearActors) {
+      if (!actor || actor.dead || actor.away) continue;
+      if (!rabbitInsideAttackHitbox(actor, direction)) continue;
+      damageRamsbachBear(
+        actor,
+        frame.damage || 20,
+        Boolean(frame.critical),
+        direction,
+        now,
+        Boolean(frame.saustark)
+      );
+    }
+  }
+
   function updateRamsbachBears(deltaSeconds, now) {
     if (MAP.id !== RAMSBACH_BEAR_CONFIG.mapId) return;
 
     for (const actor of ramsbachBearActors) {
       const active = MAP.id === RAMSBACH_BEAR_CONFIG.mapId;
-      actor.root.style.display = active ? "" : "none";
-      if (!active) continue;
+      actor.root.style.display = active && !actor.dead ? "" : "none";
+      if (!active || actor.dead) continue;
+
+      updateRamsbachBearDepth(actor);
 
       if (!actor.moving && now >= actor.nextDecision && now >= actor.pauseUntil) {
         const target = randomRamsbachBearPoint(
@@ -7461,6 +7543,7 @@
 
       actor.root.style.left = `${actor.x}px`;
       actor.root.style.top = `${actor.y}px`;
+      updateRamsbachBearDepth(actor);
     }
   }
 
@@ -17152,6 +17235,7 @@
     resolveRabbitAttackFrame(resolvedFrame);
     resolveWolfAttackFrame(resolvedFrame);
     resolveBoarAttackFrame(resolvedFrame);
+    resolveRamsbachBearAttackFrame(resolvedFrame);
     resolveTierbannsteinAttackFrame(resolvedFrame);
     resolveMoleAttackFrame(resolvedFrame);
   }
