@@ -3,7 +3,7 @@
 
   // R121 DEPLOYMENT VERIFICATION — harmless build marker.
   // If this line appears in DevTools, the browser is definitely running R121.
-  console.info("HDR BUILD R125 - PRODUCT KEY GATE");
+  console.info("HDR BUILD R126 - ROBUST PRODUCT KEY GATE");
 
   const MAPS = Object.freeze({
     oberkirch: Object.freeze({
@@ -14777,36 +14777,69 @@
     startImage.alt = "";
     startImage.draggable = false;
 
-    const namePanel = document.createElement("form");
+    // R126: product key and player name are two physically separate form stages.
+    // This prevents the first form from ever being silently reused as the name form.
+    const namePanel = document.createElement("div");
     namePanel.className = "start-flow__name-panel";
-    namePanel.autocomplete = "off";
 
-    const nameLabel = document.createElement("label");
-    nameLabel.className = "start-flow__name-label";
-    nameLabel.htmlFor = "startProductKey";
-    nameLabel.textContent = "PRODUKTSCHLÜSSEL:";
+    const keyForm = document.createElement("form");
+    keyForm.className = "start-flow__gate-stage";
+    keyForm.autocomplete = "off";
 
-    const nameInput = document.createElement("input");
-    nameInput.id = "startProductKey";
-    nameInput.className = "start-flow__name-input";
-    nameInput.type = "text";
-    nameInput.maxLength = 32;
-    nameInput.spellcheck = false;
-    nameInput.autocomplete = "off";
-    nameInput.setAttribute("aria-label", "Produktschlüssel");
+    const keyLabel = document.createElement("label");
+    keyLabel.className = "start-flow__name-label";
+    keyLabel.htmlFor = "startProductKey";
+    keyLabel.textContent = "PRODUKTSCHLÜSSEL:";
+
+    const keyInput = document.createElement("input");
+    keyInput.id = "startProductKey";
+    keyInput.className = "start-flow__name-input";
+    keyInput.type = "text";
+    keyInput.maxLength = 32;
+    keyInput.spellcheck = false;
+    keyInput.autocomplete = "off";
+    keyInput.setAttribute("aria-label", "Produktschlüssel");
 
     const keyError = document.createElement("div");
     keyError.className = "start-flow__key-error";
     keyError.textContent = "UNGÜLTIGER PRODUKTSCHLÜSSEL";
     keyError.setAttribute("aria-live", "polite");
 
+    const keyButton = document.createElement("button");
+    keyButton.className = "start-flow__continue";
+    keyButton.type = "submit";
+    keyButton.textContent = "AKTIVIEREN";
+    keyButton.disabled = true;
+
+    keyForm.append(keyLabel, keyInput, keyError, keyButton);
+
+    const playerNameForm = document.createElement("form");
+    playerNameForm.className = "start-flow__gate-stage";
+    playerNameForm.autocomplete = "off";
+    playerNameForm.hidden = true;
+
+    const nameLabel = document.createElement("label");
+    nameLabel.className = "start-flow__name-label";
+    nameLabel.htmlFor = "startPlayerName";
+    nameLabel.textContent = "DEIN NAME:";
+
+    const nameInput = document.createElement("input");
+    nameInput.id = "startPlayerName";
+    nameInput.className = "start-flow__name-input";
+    nameInput.type = "text";
+    nameInput.maxLength = 28;
+    nameInput.spellcheck = false;
+    nameInput.autocomplete = "off";
+    nameInput.setAttribute("aria-label", "Dein Name");
+
     const continueButton = document.createElement("button");
     continueButton.className = "start-flow__continue";
     continueButton.type = "submit";
-    continueButton.textContent = "AKTIVIEREN";
+    continueButton.textContent = "WEITER";
     continueButton.disabled = true;
 
-    namePanel.append(nameLabel, nameInput, keyError, continueButton);
+    playerNameForm.append(nameLabel, nameInput, continueButton);
+    namePanel.append(keyForm, playerNameForm);
     startScene.append(startImage, namePanel);
 
     const heroStage = document.createElement("section");
@@ -14845,9 +14878,13 @@
       startScene,
       startImage,
       namePanel,
+      keyForm,
+      keyInput,
+      keyError,
+      keyButton,
+      playerNameForm,
       nameLabel,
       nameInput,
-      keyError,
       continueButton,
       heroStage,
       heroBackground,
@@ -14858,43 +14895,46 @@
       transitionBusy: false
     };
 
-    nameInput.addEventListener("input", () => {
-      continueButton.disabled = nameInput.value.trim().length === 0;
+    keyInput.addEventListener("input", () => {
+      keyButton.disabled = keyInput.value.trim().length === 0;
       keyError.classList.remove("start-flow__key-error--visible");
     });
 
-    namePanel.addEventListener("submit", (event) => {
+    keyForm.addEventListener("submit", (event) => {
       event.preventDefault();
-      if (startFlowUI.transitionBusy) return;
+      if (!startFlowUI || startFlowUI.transitionBusy) return;
+      if (startFlowState !== "start-key") return;
 
-      if (startFlowState === "start-key") {
-        const key = nameInput.value.trim().toUpperCase();
-        if (!START_PRODUCT_KEYS.has(key)) {
-          keyError.classList.add("start-flow__key-error--visible");
-          nameInput.select();
-          return;
-        }
-
-        startFlowState = "start-name";
-        nameLabel.htmlFor = "startPlayerName";
-        nameLabel.textContent = "DEIN NAME:";
-        nameInput.id = "startPlayerName";
-        nameInput.value = "";
-        nameInput.maxLength = 28;
-        nameInput.setAttribute("aria-label", "Dein Name");
-        keyError.classList.remove("start-flow__key-error--visible");
-        continueButton.textContent = "WEITER";
-        continueButton.disabled = true;
-        nameInput.focus();
+      const key = keyInput.value.trim().toUpperCase();
+      if (!START_PRODUCT_KEYS.has(key)) {
+        keyError.classList.add("start-flow__key-error--visible");
+        keyInput.focus();
+        keyInput.select();
         return;
       }
 
-      if (startFlowState === "start-name") {
-        const name = nameInput.value.trim();
-        if (!name) return;
-        chosenPlayerName = name;
-        showHeroSelection();
-      }
+      startFlowState = "start-name";
+      keyForm.hidden = true;
+      playerNameForm.hidden = false;
+      keyError.classList.remove("start-flow__key-error--visible");
+      nameInput.value = "";
+      continueButton.disabled = true;
+      nameInput.focus();
+    });
+
+    nameInput.addEventListener("input", () => {
+      continueButton.disabled = nameInput.value.trim().length === 0;
+    });
+
+    playerNameForm.addEventListener("submit", (event) => {
+      event.preventDefault();
+      if (!startFlowUI || startFlowUI.transitionBusy) return;
+      if (startFlowState !== "start-name") return;
+
+      const name = nameInput.value.trim();
+      if (!name) return;
+      chosenPlayerName = name;
+      showHeroSelection();
     });
 
     const selectHero = () => {
@@ -14915,6 +14955,14 @@
     if (!startFlowUI) createStartFlowUI();
 
     startFlowState = "start-key";
+    // R126 hard reset: every fresh start ALWAYS begins at the product-key gate.
+    startFlowUI.keyForm.hidden = false;
+    startFlowUI.playerNameForm.hidden = true;
+    startFlowUI.keyInput.value = "";
+    startFlowUI.keyButton.disabled = true;
+    startFlowUI.keyError.classList.remove("start-flow__key-error--visible");
+    startFlowUI.nameInput.value = "";
+    startFlowUI.continueButton.disabled = true;
     startFlowUI.transitionBusy = true;
     keys.clear();
     attackHeld = false;
@@ -14947,7 +14995,7 @@
     startFlowUI.transitionBusy = false;
 
     window.setTimeout(() => {
-      if (startFlowState === "start-key") startFlowUI.nameInput.focus();
+      if (startFlowState === "start-key") startFlowUI.keyInput.focus();
     }, START_FLOW.panelFadeMs + 40);
   }
 
