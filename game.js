@@ -1,6 +1,10 @@
 (() => {
   "use strict";
 
+  // R121 DEPLOYMENT VERIFICATION — harmless build marker.
+  // If this line appears in DevTools, the browser is definitely running R121.
+  console.info("HDR BUILD R121 - MOVEMENT CACHE-BUST FIX");
+
   const MAPS = Object.freeze({
     oberkirch: Object.freeze({
       id: "oberkirch-zentrum",
@@ -11566,7 +11570,10 @@
   let startFlowUI = null;
 
   function gameplayUnlocked() {
-    return startFlowState === "campaign";
+    // R121: once the start-flow DOM has been removed, gameplay is unlocked even
+    // if a stale async state assignment was missed. While either start screen
+    // still exists, gameplay remains locked exactly as before.
+    return startFlowState === "campaign" || startFlowUI === null;
   }
 
 
