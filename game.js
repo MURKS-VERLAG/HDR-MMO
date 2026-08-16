@@ -3,7 +3,7 @@
 
   // R121 DEPLOYMENT VERIFICATION — harmless build marker.
   // If this line appears in DevTools, the browser is definitely running R121.
-  console.info("HDR BUILD R131 - WOLF PACK AGGRO + DEATH UI LAYOUT");
+  console.info("HDR BUILD R132 - WOLF UNSTUCK + BOAR HIT RETREAT");
 
   const MAPS = Object.freeze({
     oberkirch: Object.freeze({
@@ -5489,11 +5489,14 @@
       createRabbitDust(actor);
       largeAnimalCriticalKnockback(actor, direction, "map-boar--critical-hit");
     }
-    if (actor.hp <= 0) killBoar(actor, now);
-    else {
-      actor.combatPhase = "prepare";
-      actor.combatUntil = now + 420;
-      boarShowLayer(actor, 0);
+    if (actor.hp <= 0) {
+      killBoar(actor, now);
+    } else {
+      // R132: being successfully hit gives the PLAYER tempo.
+      // Never cancel an existing retreat into "prepare"; instead every surviving
+      // hit interrupts charge/prepare/impact and forces the boar to back off first.
+      actor.chargeHitDone = true;
+      beginBoarRetreat(actor, now);
     }
   }
 
@@ -6454,6 +6457,43 @@
     wolfShowStaticLayer(actor, 3);
   }
 
+  function wolfCombatChaseStep(actor, dx, dy, amount) {
+    if (!actor) return false;
+
+    // Tierbann summons keep the established hard-world collision unchanged.
+    if (actor.tierbannAggressive) {
+      return tierbannStepWithCollision(actor, dx, dy, amount);
+    }
+
+    // First try the existing route. This preserves landscape collision anywhere
+    // it is valid for the wolf.
+    if (tierbannStepWithCollision(actor, dx, dy, amount)) return true;
+
+    // R132 fallback: canMoveFootTo() is PLAYER collision and can reject points
+    // where ambient wolves legitimately stand. If that happens, normal wolves
+    // may still advance, but ONLY inside their own configured habitat.
+    const len = Math.hypot(dx, dy) || 1;
+    const nx = dx / len;
+    const ny = dy / len;
+    let moved = false;
+
+    const nextX = actor.x + nx * amount;
+    if (wolfPointInsideHabitat(nextX, actor.y, actor.habitat)) {
+      actor.x = nextX;
+      moved = true;
+    }
+
+    const nextY = actor.y + ny * amount;
+    if (wolfPointInsideHabitat(actor.x, nextY, actor.habitat)) {
+      actor.y = nextY;
+      moved = true;
+    }
+
+    actor.element.style.left = `${actor.x}px`;
+    actor.element.style.top = `${actor.y}px`;
+    return moved;
+  }
+
   function updateWolfPlayerCombat(actor, deltaSeconds, now) {
     if (actor.dead || actor.away || playerDead) return;
     actor.aggro = true;
@@ -6486,7 +6526,7 @@
     actor.moving = true;
     if (now >= actor.nextFrameAt) wolfPickWalkFrame(actor);
     if (distance > WOLF_CONFIG.attackReach * 0.78) {
-      tierbannStepWithCollision(actor, dx, dy, Math.max(actor.speed, 285) * deltaSeconds);
+      wolfCombatChaseStep(actor, dx, dy, Math.max(actor.speed, 285) * deltaSeconds);
     }
   }
 
