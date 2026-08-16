@@ -3,7 +3,7 @@
 
   // R121 DEPLOYMENT VERIFICATION — harmless build marker.
   // If this line appears in DevTools, the browser is definitely running R121.
-  console.info("HDR BUILD R137 - RAMSBACH PLATEAU ACCESS RESTORED");
+  console.info("HDR BUILD R138 - BEAR MAP VISIBILITY + MOLE MAP FILTER + ANIMAL SIZES");
 
   const MAPS = Object.freeze({
     oberkirch: Object.freeze({
@@ -2579,8 +2579,9 @@
     count: 5,
     // R17: one tick larger.
     // R18: another very small size increase.
-    width: 735,
-    height: 592,
+    // R138: all wolf visuals exactly 15% larger.
+    width: 845.25,
+    height: 680.8,
     speedMin: 150,
     speedMax: 250,
     frameDuration: 430,
@@ -4507,8 +4508,9 @@
       .map-rabbit {
         position: absolute;
         z-index: 4;
-        width: 330px;
-        height: 260px;
+        /* R138: all rabbit visuals exactly 25% smaller. */
+        width: 247.5px;
+        height: 195px;
         pointer-events: none;
         user-select: none;
         transform: translate(-50%, -82%);
@@ -7302,8 +7304,15 @@
         (drop.mapId || "oberkirch-zentrum") === MAP.id ? "" : "none";
     }
 
-    // R95: neither LAUTENBACH nor ÖDSBACH may show or spawn a mole.
-    if (MAP.id === "lautenbach" || MAP.id === "oedsbach") {
+    // R138: mole is disabled on these maps. Existing event is hidden and no new
+    // event can spawn while any of these maps is active.
+    if (
+      MAP.id === "lautenbach" ||
+      MAP.id === "oedsbach" ||
+      MAP.id === "hubacker" ||
+      MAP.id === "ramsbach" ||
+      MAP.id === "renchtalstadion"
+    ) {
       if (moleEvent) {
         moleEvent.element.style.display = "none";
       }
@@ -7676,8 +7685,9 @@
   // ------------------------------------------------------------------
   const RAMSBACH_BEAR_CONFIG = Object.freeze({
     mapId: "ramsbach",
-    width: 500,
-    height: 390,
+    // R138: all black-bear visuals exactly 50% larger.
+    width: 750,
+    height: 585,
     maxHp: 1000,
     attackFrames: Object.freeze([
       "assets/mobs/bears/BLACK BEAR ATTACK 1.png",
@@ -7871,6 +7881,15 @@
     ramsbachBearActors = RAMSBACH_BEAR_CONFIG.habitats.map(
       (habitat, index) => createRamsbachBearActor(habitat, index)
     );
+  }
+
+  function setRamsbachBearVisibility(visible) {
+    // R138: visibility only. Do not reset HP, position, death state, aggro,
+    // animation, habitat or combat state.
+    for (const actor of ramsbachBearActors) {
+      if (!actor || !actor.root) continue;
+      actor.root.style.display = visible ? "" : "none";
+    }
   }
 
   function updateRamsbachBearDepth(actor) {
@@ -17089,6 +17108,7 @@
     setOedsbachShadowVisibility(MAP.id === "oedsbach");
     setRamsbachWorldVisibility(MAP.id === "ramsbach");
     setRamsbachFogVisibility(MAP.id === "ramsbach");
+    setRamsbachBearVisibility(MAP.id === RAMSBACH_BEAR_CONFIG.mapId);
     updatePlayerHudVisibility();
 
     // Sync map-specific animals while the transition overlay is still covering the map.
