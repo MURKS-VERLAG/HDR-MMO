@@ -3,7 +3,7 @@
 
   // R121 DEPLOYMENT VERIFICATION — harmless build marker.
   // If this line appears in DevTools, the browser is definitely running R121.
-  console.info("HDR BUILD R132 - WOLF UNSTUCK + BOAR HIT RETREAT");
+  console.info("HDR BUILD R133 - BOAR CHARGE PRIORITY + PLAYER DEATH SPRITE LOCK");
 
   const MAPS = Object.freeze({
     oberkirch: Object.freeze({
@@ -5480,24 +5480,54 @@
 
   function damageBoar(actor, amount, critical, direction, now, saustark = false) {
     if (!actor || actor.dead || actor.away) return;
+
+    // R133: remember the combat phase BEFORE damage. A running charge is a
+    // committed attack and may never be cancelled just because the player hits.
+    const phaseBeforeHit = actor.combatPhase;
+
     actor.hp = Math.max(0, actor.hp - amount);
     createRabbitDamageText(actor, amount, critical, saustark);
     playBoarHitSound();
     actor.aggro = true;
     actor.moving = false;
+
     if (critical) {
       createRabbitDust(actor);
       largeAnimalCriticalKnockback(actor, direction, "map-boar--critical-hit");
     }
+
     if (actor.hp <= 0) {
       killBoar(actor, now);
-    } else {
-      // R132: being successfully hit gives the PLAYER tempo.
-      // Never cancel an existing retreat into "prepare"; instead every surviving
-      // hit interrupts charge/prepare/impact and forces the boar to back off first.
-      actor.chargeHitDone = true;
-      beginBoarRetreat(actor, now);
+      return;
     }
+
+    if (phaseBeforeHit === "charge") {
+      // COMMITTED CHARGE:
+      // keep chargeVX / chargeVY / chargeHitDone / combatUntil exactly intact.
+      // The boar can still collide with and damage the player, then performs
+      // its normal impact -> retreat sequence.
+      actor.combatPhase = "charge";
+      boarShowLayer(actor, 3);
+      return;
+    }
+
+    if (phaseBeforeHit === "impact") {
+      // The charge already connected. Preserve the impact pause; the existing
+      // update then sends the boar into retreat.
+      actor.combatPhase = "impact";
+      return;
+    }
+
+    if (phaseBeforeHit === "retreat") {
+      // Never cancel the player's earned breathing room.
+      actor.combatPhase = "retreat";
+      boarShowLayer(actor, 1);
+      return;
+    }
+
+    // Idle / prepare hit: player earns tempo first. The boar backs away before
+    // it is allowed to prepare a new charge.
+    beginBoarRetreat(actor, now);
   }
 
   function resolveBoarAttackFrame(frame) {
@@ -17628,7 +17658,8 @@
     playerEl.classList.add("player--idle");
 
     // The supplied horizontal death pose remains visible until revive.
-    setSprite(PLAYER_DEATH.sprite);
+    // Force bypasses any cached activeSprite state from the fatal attack frame.
+    forceSprite(PLAYER_DEATH.sprite);
 
     playRandomPlayerDeathSound();
     resetEnemyAggroAfterPlayerDeath(performance.now());
@@ -18251,7 +18282,19 @@
   }
 
   function updatePlayer(deltaSeconds) {
-    if (playerDead) { clearIceVelocity(); updateIceVisual(); return; }
+    if (playerDead) {
+      clearIceVelocity();
+      updateIceVisual();
+
+      // R133 HARD DEATH-SPRITE LOCK:
+      // Death is the highest-priority player visual state. Re-assert the supplied
+      // death pose every frame until revive so no delayed idle/combat/block state
+      // can overwrite it.
+      playerEl.classList.remove("player--moving", "player--ice-sliding");
+      playerEl.classList.add("player--idle");
+      if (activeSprite !== PLAYER_DEATH.sprite) forceSprite(PLAYER_DEATH.sprite);
+      return;
+    }
     if (blocking) { clearIceVelocity(); updateIceVisual(); setSprite(getBlockSprite()); return; }
     if (attacking) { clearIceVelocity(); updateIceVisual(); updateAttack(deltaSeconds); return; }
 
