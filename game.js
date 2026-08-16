@@ -3,7 +3,7 @@
 
   // R121 DEPLOYMENT VERIFICATION — harmless build marker.
   // If this line appears in DevTools, the browser is definitely running R121.
-  console.info("HDR BUILD R150 - WHITE STAG DEFENSE SPEED DEATH HITBOX FIX");
+  console.info("HDR BUILD R151 - HEALTH CONSUMABLES + QUICKBAR STACKS + DAMAGE BUFF");
 
   const MAPS = Object.freeze({
     oberkirch: Object.freeze({
@@ -7245,6 +7245,61 @@
     type: "quickslot"
   });
 
+  // ------------------------------------------------------------------
+  // R151 HEILGEGENSTÄNDE — 1x1, stackbar, quickbarfähig.
+  // Starterbestand: jeweils 10 Stück direkt unter der Kalifenlampe.
+  // ------------------------------------------------------------------
+  const HEALTH_CONSUMABLES = Object.freeze({
+    bandage: Object.freeze({
+      id: "bandage",
+      name: "VERBAND",
+      icon: "assets/items/consumables/VERBAND.png",
+      stackable: true,
+      width: 1,
+      height: 1,
+      type: "quickslot",
+      heal: 30
+    }),
+    herbalWrap: Object.freeze({
+      id: "herbal-wrap",
+      name: "KRÄUTERWICKEL",
+      icon: "assets/items/consumables/KRAEUTERWICKEL.png",
+      stackable: true,
+      width: 1,
+      height: 1,
+      type: "quickslot",
+      heal: 50
+    }),
+    herbalPunchSpinach: Object.freeze({
+      id: "herbal-punch-spinach",
+      name: "KRÄUTERPUNSCH-SPINATMIX",
+      icon: "assets/items/consumables/KRAEUTERPUNSCH-SPINATMIX.png",
+      stackable: true,
+      width: 1,
+      height: 1,
+      type: "quickslot",
+      heal: 80,
+      damageBonus: 0.25,
+      damageBonusMs: 60000
+    })
+  });
+
+  const HEALTH_CONSUMABLE_BY_ID = Object.freeze(
+    Object.fromEntries(Object.values(HEALTH_CONSUMABLES).map((item) => [item.id, item]))
+  );
+
+  let playerDamageBuffUntil = 0;
+
+  function playerDamageBuffActive(now = performance.now()) {
+    return now < playerDamageBuffUntil;
+  }
+
+  function currentPlayerDamageMultiplier(now = performance.now()) {
+    return playerDamageBuffActive(now)
+      ? (1 + HEALTH_CONSUMABLES.herbalPunchSpinach.damageBonus)
+      : 1;
+  }
+
   const WOLF_LOOT_CONFIG = Object.freeze({ peltChance: .05, clawChance: .02, bagChance: .01 });
   const BOAR_LOOT_CONFIG = Object.freeze({ radishChance: .20, cabbageChance: .10, lettuceChance: .05, tuskChance: .02 });
 
@@ -12214,6 +12269,24 @@
         filter: drop-shadow(0 2px 2px rgba(0,0,0,.78));
       }
 
+      .player-quickslot__quantity {
+        position: absolute;
+        z-index: 8;
+        right: 3%;
+        bottom: 4%;
+        min-width: 24%;
+        color: #ffffff;
+        font: 900 clamp(10px, 1.35vh, 16px)/1 Georgia, "Times New Roman", serif;
+        text-align: right;
+        pointer-events: none;
+        text-shadow:
+          -1px -1px 0 #000,
+           1px -1px 0 #000,
+          -1px  1px 0 #000,
+           1px  1px 0 #000,
+           0 2px 3px #000;
+      }
+
       /* R106 CALIPH LAMP COOLDOWN:
          grayscale base stays visible while a second full-color copy is revealed
          clockwise from 12 o'clock until the 15-second cooldown is complete. */
@@ -12657,6 +12730,12 @@
     };
   }
 
+  function quickSlotInventoryQuantity(itemId) {
+    const found = findInventoryStack(itemId);
+    if (!found || !found.stack) return 0;
+    return Math.max(0, Number(found.stack.quantity) || 0);
+  }
+
   function bindInventoryQuickItemToSlot(itemId, targetIndex) {
     const index = Number(targetIndex);
     if (!Number.isInteger(index) || index < 0 || index >= quickSlotState.assignments.length) {
@@ -12727,6 +12806,13 @@
       icon.alt = "";
       icon.draggable = false;
       slot.appendChild(icon);
+
+      if (HEALTH_CONSUMABLE_BY_ID[binding.itemId]) {
+        const quantity = document.createElement("span");
+        quantity.className = "player-quickslot__quantity";
+        quantity.textContent = String(quickSlotInventoryQuantity(binding.itemId));
+        slot.appendChild(quantity);
+      }
 
       if (binding.itemId === "caliph-lamp") {
         const progress = caliphLampCooldownProgress();
@@ -13178,6 +13264,51 @@
     return success;
   }
 
+  function consumeInventoryQuickItem(itemId) {
+    const found = findInventoryStack(itemId);
+    if (!found || !found.stack) return false;
+
+    found.stack.quantity = Math.max(0, (Number(found.stack.quantity) || 0) - 1);
+
+    if (found.stack.quantity <= 0) {
+      clearInventoryItem(found.pageIndex, found.slotIndex);
+      const quickIndex = findQuickSlotForItem(itemId);
+      if (quickIndex >= 0) quickSlotState.assignments[quickIndex] = null;
+    }
+
+    if (inventoryState.open) renderInventory();
+    renderQuickSlots();
+    return true;
+  }
+
+  function activateHealthConsumable(itemId) {
+    if (playerDead) return false;
+
+    const item = HEALTH_CONSUMABLE_BY_ID[itemId];
+    if (!item) return false;
+
+    const found = findInventoryStack(itemId);
+    if (!found || !found.stack || (Number(found.stack.quantity) || 0) <= 0) return false;
+
+    const missingHp = Math.max(0, PLAYER_MAX_HP - playerHp);
+    const hasDamageBuff = Number(item.damageBonus) > 0 && Number(item.damageBonusMs) > 0;
+
+    // Pure healing items are not wasted at full life.
+    // The Kräuterpunsch may still be used at full life because its damage buff is meaningful.
+    if (missingHp <= 0 && !hasDamageBuff) return false;
+
+    if (item.heal > 0 && missingHp > 0) {
+      playerHp = Math.min(PLAYER_MAX_HP, playerHp + item.heal);
+      updatePlayerHpHud();
+    }
+
+    if (hasDamageBuff) {
+      playerDamageBuffUntil = performance.now() + item.damageBonusMs;
+    }
+
+    return consumeInventoryQuickItem(itemId);
+  }
+
   function activateQuickSlot(index) {
     const safe = Number(index);
     if (!Number.isInteger(safe) || safe < 0 || safe >= quickSlotState.assignments.length) {
@@ -13190,6 +13321,11 @@
     if (binding.itemId === "caliph-lamp") {
       return activateCaliphLamp();
     }
+
+    if (HEALTH_CONSUMABLE_BY_ID[binding.itemId]) {
+      return activateHealthConsumable(binding.itemId);
+    }
+
     return false;
   }
 
@@ -17017,6 +17153,63 @@
         height: 92%;
       }
 
+      /* R151 consumable hover cards: dark translucent, red heading + heart, white values. */
+      .inventory-consumable-tooltip {
+        position: absolute;
+        z-index: 44;
+        left: calc(100% + 14px);
+        top: 50%;
+        width: clamp(250px, 25vw, 390px);
+        transform: translateY(-50%);
+        box-sizing: border-box;
+        padding: 16px 19px;
+        border: 1px solid rgba(145,35,35,.72);
+        border-radius: 7px;
+        background: rgba(8,8,8,.92);
+        box-shadow: 0 10px 28px rgba(0,0,0,.72);
+        color: #ffffff;
+        font-family: Georgia, "Times New Roman", serif;
+        pointer-events: none;
+        opacity: 0;
+        visibility: hidden;
+        transition: opacity 100ms ease, visibility 100ms ease;
+        white-space: normal;
+      }
+
+      .inventory-item--quickslot:hover .inventory-consumable-tooltip {
+        opacity: 1;
+        visibility: visible;
+      }
+
+      .inventory-consumable-tooltip__title {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        margin-bottom: 10px;
+        color: #d83333;
+        font-family: "Old English Text MT", "Lucida Blackletter", "UnifrakturCook", Georgia, serif;
+        font-size: clamp(17px, 2vh, 25px);
+        font-weight: 900;
+        letter-spacing: .5px;
+        text-shadow: 0 1px 2px #000, 0 0 3px rgba(120,0,0,.7);
+      }
+
+      .inventory-consumable-tooltip__heart {
+        color: #d83333;
+        font-family: Georgia, serif;
+        font-size: 1.05em;
+        line-height: 1;
+      }
+
+      .inventory-consumable-tooltip__stat {
+        margin-top: 5px;
+        color: #ffffff;
+        font-size: clamp(13px, 1.55vh, 18px);
+        font-weight: 800;
+        line-height: 1.28;
+        text-shadow: 0 1px 2px #000;
+      }
+
       /* R68 SAUKEULE hover tooltip. */
       .inventory-weapon-tooltip {
         position: absolute;
@@ -17525,6 +17718,40 @@
   }
 
 
+  function createHealthConsumableTooltip(itemId) {
+    const item = HEALTH_CONSUMABLE_BY_ID[itemId];
+    if (!item) return document.createDocumentFragment();
+
+    const tooltip = document.createElement("div");
+    tooltip.className = "inventory-consumable-tooltip";
+
+    const title = document.createElement("div");
+    title.className = "inventory-consumable-tooltip__title";
+
+    const heart = document.createElement("span");
+    heart.className = "inventory-consumable-tooltip__heart";
+    heart.textContent = "♥";
+
+    const titleText = document.createElement("span");
+    titleText.textContent = item.name;
+    title.append(heart, titleText);
+
+    const heal = document.createElement("div");
+    heal.className = "inventory-consumable-tooltip__stat";
+    heal.textContent = `+${item.heal} Gesundheit`;
+    tooltip.append(title, heal);
+
+    if (item.damageBonus) {
+      const damage = document.createElement("div");
+      damage.className = "inventory-consumable-tooltip__stat";
+      damage.textContent =
+        `+${Math.round(item.damageBonus * 100)}% Schaden für ${Math.round(item.damageBonusMs / 60000)} Minute`;
+      tooltip.appendChild(damage);
+    }
+
+    return tooltip;
+  }
+
   function createWhiteStagKitInventoryVisual() {
     const root = document.createElement("div");
     root.className = "inventory-white-stag-kit-parts";
@@ -17762,6 +17989,10 @@
       } else if (stack.type === "quickslot") {
         item.draggable = true;
 
+        if (HEALTH_CONSUMABLE_BY_ID[stack.id]) {
+          item.appendChild(createHealthConsumableTooltip(stack.id));
+        }
+
         item.addEventListener("contextmenu", (event) => {
           event.preventDefault();
           // Toggle: first right click binds to the first free 1–9 position.
@@ -17870,6 +18101,46 @@
     return true;
   }
 
+  function addStarterHealthConsumables() {
+    const placements = [
+      [HEALTH_CONSUMABLES.bandage, 7],
+      [HEALTH_CONSUMABLES.herbalWrap, 13],
+      [HEALTH_CONSUMABLES.herbalPunchSpinach, 19]
+    ];
+
+    for (const [item, preferredSlot] of placements) {
+      const existing = findInventoryStack(item.id);
+      if (existing) {
+        existing.stack.quantity = Math.max(10, Number(existing.stack.quantity) || 0);
+        continue;
+      }
+
+      const stack = {
+        id: item.id,
+        name: item.name,
+        description: "",
+        icon: item.icon,
+        width: 1,
+        height: 1,
+        quantity: 10,
+        stackable: true,
+        type: "quickslot"
+      };
+
+      if (canPlaceInventoryItem(0, preferredSlot, 1, 1)) {
+        placeInventoryItem(0, preferredSlot, stack);
+      } else {
+        const free = findFirstFreeInventoryArea(1, 1);
+        if (!free || !placeInventoryItem(free.pageIndex, free.slotIndex, stack)) {
+          console.warn("Starter-Heilitem konnte nicht platziert werden:", item.id);
+        }
+      }
+    }
+
+    if (inventoryState.open) renderInventory();
+    return true;
+  }
+
   function addItemToInventory(item) {
     if (!item || !item.id) return false;
 
@@ -17920,6 +18191,9 @@
       WOLF_PELT_ITEM.icon, WOLF_CLAW_ITEM.icon, WANDERER_BAG_ITEM.icon,
       RADISH_ITEM.icon, CABBAGE_ITEM.icon, LETTUCE_ITEM.icon, BOAR_TUSK_ITEM.icon,
       PINK_PIG_CLUB_ITEM.icon, CALIPH_LAMP_ITEM.icon,
+      HEALTH_CONSUMABLES.bandage.icon,
+      HEALTH_CONSUMABLES.herbalWrap.icon,
+      HEALTH_CONSUMABLES.herbalPunchSpinach.icon,
       WHITE_STAG_KIT.inventoryIcon, WHITE_STAG_KIT.armorIcon,
       WHITE_STAG_KIT.helmetIcon, WHITE_STAG_KIT.weaponIcon
     ]) {
@@ -19558,6 +19832,15 @@
       };
     }
 
+    // R151 Kräuterpunsch-Spinatmix: +25% on every real player hit for 60 seconds.
+    // Applied after weapon/critical/Saustark resolution so the complete outgoing hit is boosted.
+    if (resolvedFrame.hit && playerDamageBuffActive()) {
+      resolvedFrame = {
+        ...resolvedFrame,
+        damage: Math.round((Number(resolvedFrame.damage) || 0) * currentPlayerDamageMultiplier())
+      };
+    }
+
     resolveRabbitAttackFrame(resolvedFrame);
     resolveWolfAttackFrame(resolvedFrame);
     resolveBoarAttackFrame(resolvedFrame);
@@ -20099,6 +20382,9 @@
     // R105 TEST: lamp starts in the first free 1x1 inventory slot.
     // Remove this line later when Ödegard's quest awards it.
     addItemToInventory(CALIPH_LAMP_ITEM);
+
+    // R151: 10x each, one vertical column directly below the Kalifenlampe.
+    addStarterHealthConsumables();
 
     // R144: first armor kit is seeded deterministically into the marked 2x3 area.
     addStarterWhiteStagKit();
