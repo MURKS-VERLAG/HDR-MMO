@@ -3,7 +3,7 @@
 
   // R121 DEPLOYMENT VERIFICATION — harmless build marker.
   // If this line appears in DevTools, the browser is definitely running R121.
-  console.info("HDR BUILD R152 - INVENTORY TOOLTIP LAYER FIX + CALIPH LAMP TOOLTIP");
+  console.info("HDR BUILD R153 - TAB RESUME ANIMATION STABILITY");
 
   const MAPS = Object.freeze({
     oberkirch: Object.freeze({
@@ -17153,57 +17153,6 @@
         height: 92%;
       }
 
-      /* R152 MINIFIX: every hovered inventory item rises above every non-hovered
-         inventory item, so ALL hover cards always cover neighboring item artwork. */
-      .inventory-item:hover {
-        z-index: 1000;
-      }
-
-      /* R152 GEISTFLASCHE DES KALIFEN hover card. */
-      .inventory-caliph-tooltip {
-        position: absolute;
-        z-index: 1100;
-        left: calc(100% + 14px);
-        top: 50%;
-        width: clamp(270px, 26vw, 410px);
-        transform: translateY(-50%);
-        box-sizing: border-box;
-        padding: 17px 20px;
-        border: 1px solid rgba(82,0,24,.82);
-        border-radius: 7px;
-        background: rgba(92,0,30,.78);
-        box-shadow: 0 10px 28px rgba(0,0,0,.68);
-        color: #000000;
-        font-family: "Old English Text MT", "Lucida Blackletter", "UnifrakturCook", Georgia, serif;
-        pointer-events: none;
-        opacity: 0;
-        visibility: hidden;
-        transition: opacity 100ms ease, visibility 100ms ease;
-        white-space: normal;
-      }
-
-      .inventory-item--quickslot:hover .inventory-caliph-tooltip {
-        opacity: 1;
-        visibility: visible;
-      }
-
-      .inventory-caliph-tooltip__title {
-        margin-bottom: 11px;
-        color: #000000;
-        font-size: clamp(17px, 2vh, 25px);
-        font-weight: 900;
-        line-height: 1.15;
-        letter-spacing: .4px;
-      }
-
-      .inventory-caliph-tooltip__line {
-        margin-top: 6px;
-        color: #000000;
-        font-size: clamp(13px, 1.55vh, 18px);
-        font-weight: 800;
-        line-height: 1.28;
-      }
-
       /* R151 consumable hover cards: dark translucent, red heading + heart, white values. */
       .inventory-consumable-tooltip {
         position: absolute;
@@ -17769,31 +17718,6 @@
   }
 
 
-  function createCaliphLampTooltip() {
-    const tooltip = document.createElement("div");
-    tooltip.className = "inventory-caliph-tooltip";
-
-    const title = document.createElement("div");
-    title.className = "inventory-caliph-tooltip__title";
-    title.textContent = "GEISTFLASCHE DES KALIFEN";
-
-    const chanceSummon = document.createElement("div");
-    chanceSummon.className = "inventory-caliph-tooltip__line";
-    chanceSummon.textContent = "50% Chance den Kalifen zu beschwören.";
-
-    const chanceMood = document.createElement("div");
-    chanceMood.className = "inventory-caliph-tooltip__line";
-    chanceMood.textContent = "50% Chance seine Laune zu spüren.";
-
-    const bears = document.createElement("div");
-    bears.className = "inventory-caliph-tooltip__line";
-    bears.textContent = "Unwirksam gegen Bären";
-
-    tooltip.append(title, chanceSummon, chanceMood, bears);
-    return tooltip;
-  }
-
-
   function createHealthConsumableTooltip(itemId) {
     const item = HEALTH_CONSUMABLE_BY_ID[itemId];
     if (!item) return document.createDocumentFragment();
@@ -18065,9 +17989,7 @@
       } else if (stack.type === "quickslot") {
         item.draggable = true;
 
-        if (stack.id === CALIPH_LAMP_ITEM.id) {
-          item.appendChild(createCaliphLampTooltip());
-        } else if (HEALTH_CONSUMABLE_BY_ID[stack.id]) {
+        if (HEALTH_CONSUMABLE_BY_ID[stack.id]) {
           item.appendChild(createHealthConsumableTooltip(stack.id));
         }
 
@@ -20162,6 +20084,15 @@
     // runtime exception anywhere below prevented requestAnimationFrame(frame)
     // from being reached and permanently froze walking + combat together.
     try {
+      // R153 TAB/FOCUS STABILITY:
+      // Never advance simulation while the page/window is suspended.
+      // We still keep lastFrame fresh so the first visible frame can never
+      // inherit a giant background delta.
+      if (gameTimingSuspended || document.hidden) {
+        lastFrame = now;
+        return;
+      }
+
       const rawDelta = (now - lastFrame) / 1000;
       const deltaSeconds = Number.isFinite(rawDelta)
         ? Math.max(0, Math.min(0.05, rawDelta))
@@ -20397,21 +20328,143 @@
     lastFrame = performance.now();
   }
 
-  // Extra safety for lost keyup events (Alt-Tab, clicking outside browser, etc.).
-  window.addEventListener("blur", () => {
+  // ------------------------------------------------------------------
+  // R153 TAB / WINDOW RESUME STABILITY
+  //
+  // Browsers throttle requestAnimationFrame/setTimeout in background tabs.
+  // Our movement delta was already clamped to 50 ms, but many animal and
+  // combat state machines also use absolute performance.now() deadlines.
+  // Without shifting those deadlines, returning from a tab switch can make
+  // several animation phases expire at once and leave a mob on the wrong frame.
+  //
+  // Rule:
+  //   - freeze simulation while hidden/unfocused;
+  //   - preserve HP, aggro, position, loot, EXP and every persistent state;
+  //   - shift ONLY timestamp/deadline fields by the time spent away;
+  //   - resume with a fresh lastFrame so no background delta is replayed.
+  // ------------------------------------------------------------------
+  let gameTimingSuspended = false;
+  let gameTimingPauseStartedAt = 0;
+
+  function shiftResumeTimerObject(target, pausedMs) {
+    if (!target || typeof target !== "object" || !(pausedMs > 0)) return;
+
+    for (const key of Object.keys(target)) {
+      const value = target[key];
+      if (!Number.isFinite(value) || value <= 0) continue;
+
+      // Actor deadline names used throughout rabbits/wolves/boars/bears/goat/
+      // Tierbannstein/mole and future actors following the same convention.
+      const isTimerField =
+        /At$/.test(key) ||
+        /Until$/.test(key) ||
+        /^next[A-Z]/.test(key) ||
+        key === "nextDecision";
+
+      if (isTimerField) target[key] = value + pausedMs;
+    }
+  }
+
+  function shiftResumeTimerList(list, pausedMs) {
+    if (!Array.isArray(list)) return;
+    for (const entry of list) shiftResumeTimerObject(entry, pausedMs);
+  }
+
+  function shiftAllSimulationDeadlines(pausedMs) {
+    if (!(pausedMs > 0) || !Number.isFinite(pausedMs)) return;
+
+    // Living/world actors.
+    shiftResumeTimerList(rabbitActors, pausedMs);
+    shiftResumeTimerList(wolfActors, pausedMs);
+    shiftResumeTimerList(boarActors, pausedMs);
+    shiftResumeTimerList(ramsbachBearActors, pausedMs);
+    shiftResumeTimerList(tierbannSteine, pausedMs);
+    shiftResumeTimerList(playerExpOrbs, pausedMs);
+
+    shiftResumeTimerObject(goatActor, pausedMs);
+    shiftResumeTimerObject(moleEvent, pausedMs);
+    shiftResumeTimerObject(oedegard, pausedMs);
+    shiftResumeTimerObject(trunkenbold, pausedMs);
+
+    // Tierbannstein uses one standalone deadline per map.
+    for (const [mapId, deadline] of tierbannMapTimers.entries()) {
+      if (Number.isFinite(deadline) && deadline > 0) {
+        tierbannMapTimers.set(mapId, deadline + pausedMs);
+      }
+    }
+
+    // Standalone gameplay deadlines that are not stored inside actor objects.
+    if (nextWolfHowlAt > 0) nextWolfHowlAt += pausedMs;
+    if (nextBoarNearbySoundAt > 0) nextBoarNearbySoundAt += pausedMs;
+    if (nextMoleCheckAt > 0) nextMoleCheckAt += pausedMs;
+    if (nextRamsbachBearNearbySoundAt > 0) nextRamsbachBearNearbySoundAt += pausedMs;
+
+    if (oedsbachInnerNextAt > 0) oedsbachInnerNextAt += pausedMs;
+
+    if (ramsbachSnapReleaseUntil > 0) ramsbachSnapReleaseUntil += pausedMs;
+    if (hubackerCliffReleaseUntil > 0) hubackerCliffReleaseUntil += pausedMs;
+    if (neuensteinReleaseUntil > 0) neuensteinReleaseUntil += pausedMs;
+
+    if (stadiumBookmakerNextAt > 0) stadiumBookmakerNextAt += pausedMs;
+    if (stadiumBookmakerActionEndAt > 0) stadiumBookmakerActionEndAt += pausedMs;
+    if (stadiumFightPhaseEndAt > 0) stadiumFightPhaseEndAt += pausedMs;
+    if (stadiumFightNextFrameAt > 0) stadiumFightNextFrameAt += pausedMs;
+    if (stadiumFightFighterBNextFrameAt > 0) stadiumFightFighterBNextFrameAt += pausedMs;
+    if (stadiumFinalSequenceStartedAt > 0) stadiumFinalSequenceStartedAt += pausedMs;
+    if (stadiumBrawlPhaseEndAt > 0) stadiumBrawlPhaseEndAt += pausedMs;
+    if (stadiumBrawlApproachStartedAt > 0) stadiumBrawlApproachStartedAt += pausedMs;
+
+    // Timed player effects pause with the game instead of expiring while hidden.
+    if (playerRespawnProtectedUntil > 0) playerRespawnProtectedUntil += pausedMs;
+    if (playerDamageBuffUntil > 0) playerDamageBuffUntil += pausedMs;
+  }
+
+  function suspendGameTiming() {
+    if (gameTimingSuspended) return;
+    gameTimingSuspended = true;
+    gameTimingPauseStartedAt = performance.now();
+
+    // Keep the proven R110 protection against lost keyup events.
+    // This affects only transient keyboard/combat input, never world state.
     resetTransientPlayerControls();
+  }
+
+  function resumeGameTiming() {
+    const now = performance.now();
+
+    if (!gameTimingSuspended) {
+      // focus/pageshow may fire in addition to visibilitychange.
+      // Re-baselining is harmless and prevents a stale first-frame delta.
+      lastFrame = now;
+      return;
+    }
+
+    const pausedMs = Math.max(0, now - gameTimingPauseStartedAt);
+    shiftAllSimulationDeadlines(pausedMs);
+
+    gameTimingSuspended = false;
+    gameTimingPauseStartedAt = 0;
+    lastFrame = now;
+
+    // Animation accumulators never inherit time spent in another tab.
+    walkFrameTimer = 0;
+
+    // Reassert a valid player visual immediately. World actors keep their
+    // exact pre-pause states and continue naturally on the next frame.
+    if (!playerDead && !attacking && !moving) setIdleSprite();
+  }
+
+  // Losing focus or hiding the tab freezes timing immediately.
+  window.addEventListener("blur", suspendGameTiming);
+
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden) suspendGameTiming();
+    else resumeGameTiming();
   });
 
-  // R110 PLAYER STABILITY:
-  // Browsers may suspend RAF and may also lose keyup events while hidden.
-  // Clear only transient controls; gameplay data and all systems remain untouched.
-  document.addEventListener("visibilitychange", () => {
-    if (document.hidden) {
-      resetTransientPlayerControls();
-    } else {
-      lastFrame = performance.now();
-    }
-  });
+  // Different browsers resume through different events; all are idempotent.
+  window.addEventListener("focus", resumeGameTiming);
+  window.addEventListener("pageshow", resumeGameTiming);
 
   game.addEventListener("wheel", (event) => {
     event.preventDefault();
