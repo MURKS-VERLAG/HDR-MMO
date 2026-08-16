@@ -3,7 +3,7 @@
 
   // R121 DEPLOYMENT VERIFICATION — harmless build marker.
   // If this line appears in DevTools, the browser is definitely running R121.
-  console.info("HDR BUILD R142 - WINTERBACH ORIGINAL RETURN + LEVEL TITLE HUD");
+  console.info("HDR BUILD R143 - WEISSER HIRSCH KIT INVENTORY");
 
   const MAPS = Object.freeze({
     oberkirch: Object.freeze({
@@ -493,6 +493,26 @@
 
     return Object.freeze(entries.map((entry) => Object.freeze(entry)));
   }
+
+  // ------------------------------------------------------------------
+  // R143 ERSTES RÜSTUNGSKIT — WAFFENROCK VOM WEISSEN HIRSCH
+  // Inventory starts as one 2x3 kit. Equipping splits it visually into
+  // armor / helmet / antler-club equipment slots without duplicating items.
+  // ------------------------------------------------------------------
+  const WHITE_STAG_KIT = Object.freeze({
+    id: "white-stag-kit",
+    name: "WAFFENROCK VOM WEISSEN HIRSCH",
+    inventoryIcon: "assets/items/kits/white-stag/WHITE STAG KIT.png",
+    armorIcon: "assets/items/kits/white-stag/WHITE STAG ARMOR.png",
+    helmetIcon: "assets/items/kits/white-stag/WHITE STAG HELMET.png",
+    weaponIcon: "assets/items/kits/white-stag/WHITE STAG WEAPON.png",
+    inventoryWidth: 2,
+    inventoryHeight: 3,
+    armor: 30,
+    damageReduction: 0.30,
+    damage: 120,
+    criticalDamage: 180
+  });
 
   const CLUB_ATTACK_RIGHT = makeClubSequence("right");
   const CLUB_ATTACK_LEFT = makeClubSequence("left");
@@ -7095,6 +7115,17 @@
     type: "weapon",
     levelMin: WEAPONS.pinkPigClub.levelMin,
     levelMax: WEAPONS.pinkPigClub.levelMax
+  });
+
+  const WHITE_STAG_KIT_ITEM = Object.freeze({
+    id: WHITE_STAG_KIT.id,
+    name: WHITE_STAG_KIT.name,
+    description: "ERSTES VOLLSTÄNDIGES RÜSTUNGSKIT",
+    icon: WHITE_STAG_KIT.inventoryIcon,
+    stackable: false,
+    width: WHITE_STAG_KIT.inventoryWidth,
+    height: WHITE_STAG_KIT.inventoryHeight,
+    type: "equipment-kit"
   });
 
   // R105 TEST ITEM — LAMPE DES KALIFEN.
@@ -16654,12 +16685,19 @@
     page2Rect: Object.freeze({ x1: 252, y1: 713, x2: 490, y2: 772 }),
 
     // Painted top-left weapon equipment slot on the supplied inventory artwork.
-    weaponEquipRect: Object.freeze({ x1: 45, y1: 196, x2: 125, y2: 300 })
+    // R143: blue marked weapon area is two painted boxes high.
+    weaponEquipRect: Object.freeze({ x1: 45, y1: 196, x2: 125, y2: 405 }),
+    // R143 white-stag kit equipment positions from supplied marked screenshot.
+    kitWeaponEquipRect: Object.freeze({ x1: 45, y1: 405, x2: 125, y2: 590 }),
+    kitArmorEquipRect: Object.freeze({ x1: 205, y1: 196, x2: 335, y2: 390 }),
+    kitHelmetEquipRect: Object.freeze({ x1: 370, y1: 205, x2: 465, y2: 330 })
   });
 
   let playerLevel = 1;
   let equippedWeapon = null;
   let equippedWeaponItem = null;
+  let equippedKitItem = null;
+  let playerArmorBonus = 0;
 
   const inventoryState = {
     open: false,
@@ -16674,7 +16712,10 @@
     slotsLayer: null,
     closeButton: null,
     pageButtons: [],
-    weaponEquipZone: null
+    weaponEquipZone: null,
+    kitWeaponEquipZone: null,
+    kitArmorEquipZone: null,
+    kitHelmetEquipZone: null
   };
 
   function installInventoryStyles() {
@@ -16931,6 +16972,73 @@
         color: #ff6fbd;
       }
 
+      .inventory-item--equipment-kit {
+        cursor: pointer;
+      }
+
+      .inventory-item--equipment-kit .inventory-item__icon {
+        width: 96%;
+        height: 96%;
+      }
+
+      .inventory-item--equipment-kit:hover .inventory-kit-tooltip {
+        opacity: 1;
+        visibility: visible;
+      }
+
+      .inventory-kit-tooltip {
+        position: absolute;
+        z-index: 45;
+        left: calc(100% + 14px);
+        top: 50%;
+        width: clamp(270px, 26vw, 410px);
+        transform: translateY(-50%);
+        box-sizing: border-box;
+        padding: 18px 20px;
+        border: 1px solid rgba(232,190,76,.78);
+        border-radius: 7px;
+        background: rgba(255,255,255,.22);
+        box-shadow: 0 10px 28px rgba(0,0,0,.55);
+        color: #e6bd55;
+        font-family: "Old English Text MT", "Lucida Blackletter", Georgia, serif;
+        pointer-events: none;
+        opacity: 0;
+        visibility: hidden;
+        transition: opacity 100ms ease, visibility 100ms ease;
+        text-shadow: 0 1px 2px #000, 0 0 3px #000;
+      }
+
+      .inventory-kit-tooltip__title {
+        margin-bottom: 10px;
+        font-size: clamp(18px, 2.1vh, 27px);
+        font-weight: 900;
+      }
+
+      .inventory-kit-tooltip__stat {
+        margin-top: 5px;
+        font-size: clamp(13px, 1.55vh, 18px);
+        font-weight: 900;
+        line-height: 1.25;
+      }
+
+      .inventory-kit-equip-zone {
+        position: absolute;
+        z-index: 7;
+        box-sizing: border-box;
+        pointer-events: auto;
+        background: transparent;
+      }
+
+      .inventory-kit-equip-icon {
+        position: absolute;
+        inset: 2%;
+        width: 96%;
+        height: 96%;
+        object-fit: contain;
+        pointer-events: none;
+        filter: drop-shadow(0 2px 2px rgba(0,0,0,.75));
+      }
+
       .inventory-item--equipped {
         filter:
           drop-shadow(0 0 4px rgba(255,245,195,.96))
@@ -17174,6 +17282,7 @@
   }
 
   function equipWeaponFromInventory(pageIndex, slotIndex) {
+    if (equippedKitItem && !unequipWhiteStagKitToInventory()) return false;
     const page = inventoryState.pages[pageIndex];
     if (!page) return false;
 
@@ -17251,6 +17360,96 @@
   }
 
 
+  function createWhiteStagKitTooltip() {
+    const tooltip = document.createElement("div");
+    tooltip.className = "inventory-kit-tooltip";
+
+    const title = document.createElement("div");
+    title.className = "inventory-kit-tooltip__title";
+    title.textContent = "Waffenrock vom weißen Hirsch";
+    tooltip.appendChild(title);
+
+    for (const text of [
+      `Rüstung +${WHITE_STAG_KIT.armor}`,
+      `${Math.round(WHITE_STAG_KIT.damageReduction * 100)}% weniger Schaden`,
+      `${WHITE_STAG_KIT.damage} Angriff`,
+      `${WHITE_STAG_KIT.criticalDamage} Krit`
+    ]) {
+      const stat = document.createElement("div");
+      stat.className = "inventory-kit-tooltip__stat";
+      stat.textContent = text;
+      tooltip.appendChild(stat);
+    }
+    return tooltip;
+  }
+
+  function applyWhiteStagKitStats(active) {
+    playerArmorBonus = active ? WHITE_STAG_KIT.armor : 0;
+  }
+
+  function equipWhiteStagKitFromInventory(pageIndex, slotIndex) {
+    if (equippedKitItem) return true;
+    const page = inventoryState.pages[pageIndex];
+    if (!page) return false;
+    let anchorIndex = slotIndex;
+    if (isInventoryOccupancyMarker(page[slotIndex])) anchorIndex = page[slotIndex].occupiedBy;
+    const stack = page[anchorIndex];
+    if (!stack || stack.id !== WHITE_STAG_KIT.id) return false;
+
+    // Existing weapon returns to inventory before the full kit occupies equipment.
+    if (equippedWeaponItem) {
+      const old = equippedWeaponItem;
+      equippedWeaponItem = null;
+      equippedWeapon = null;
+      const freeOld = findFirstFreeInventoryArea(old.width || 1, old.height || 1);
+      if (!freeOld || !placeInventoryItem(freeOld.pageIndex, freeOld.slotIndex, old)) {
+        equippedWeaponItem = old;
+        equippedWeapon = old.id;
+        return false;
+      }
+    }
+
+    const removed = clearInventoryItem(pageIndex, anchorIndex);
+    if (!removed) return false;
+    equippedKitItem = removed;
+    equippedWeapon = WHITE_STAG_KIT.id;
+    applyWhiteStagKitStats(true);
+    renderInventory();
+    return true;
+  }
+
+  function unequipWhiteStagKitToInventory() {
+    if (!equippedKitItem) return false;
+    const free = findFirstFreeInventoryArea(WHITE_STAG_KIT.inventoryWidth, WHITE_STAG_KIT.inventoryHeight);
+    if (!free) return false;
+    if (!placeInventoryItem(free.pageIndex, free.slotIndex, equippedKitItem)) return false;
+    equippedKitItem = null;
+    equippedWeapon = null;
+    applyWhiteStagKitStats(false);
+    inventoryState.currentPage = free.pageIndex;
+    renderInventory();
+    return true;
+  }
+
+  function renderWhiteStagKitEquipment() {
+    const zones = [
+      [inventoryState.kitArmorEquipZone, WHITE_STAG_KIT.armorIcon],
+      [inventoryState.kitHelmetEquipZone, WHITE_STAG_KIT.helmetIcon],
+      [inventoryState.kitWeaponEquipZone, WHITE_STAG_KIT.weaponIcon]
+    ];
+    for (const [zone, src] of zones) {
+      if (!zone) continue;
+      zone.replaceChildren();
+      if (!equippedKitItem) continue;
+      const icon = document.createElement("img");
+      icon.className = "inventory-kit-equip-icon";
+      icon.src = encodeURI(src);
+      icon.alt = "";
+      icon.draggable = false;
+      zone.appendChild(icon);
+    }
+  }
+
   function renderEquippedWeapon() {
     const zone = inventoryState.weaponEquipZone;
     if (!zone) return;
@@ -17258,7 +17457,10 @@
     zone.classList.remove("inventory-weapon-equip-zone--dragover");
 
     zone.draggable = Boolean(equippedWeaponItem);
-    if (!equippedWeaponItem) return;
+    if (!equippedWeaponItem) {
+      renderWhiteStagKitEquipment();
+      return;
+    }
     const icon = document.createElement("img");
     icon.className = "inventory-weapon-equip-icon";
     icon.src = encodeURI(equippedWeaponItem.icon || WEAPONS.pinkPigClub.icon);
@@ -17269,6 +17471,7 @@
     if (equippedWeaponItem.id === WEAPONS.pinkPigClub.id) {
       zone.appendChild(createSaukeuleTooltip());
     }
+    renderWhiteStagKitEquipment();
   }
 
   function renderInventory() {
@@ -17298,7 +17501,8 @@
       item.className =
         "inventory-item" +
         (stack.type === "weapon" ? " inventory-item--weapon" : "") +
-        (stack.type === "quickslot" ? " inventory-item--quickslot" : "");
+        (stack.type === "quickslot" ? " inventory-item--quickslot" : "") +
+        (stack.type === "equipment-kit" ? " inventory-item--equipment-kit" : "");
       item.dataset.itemId = stack.id;
       item.dataset.slotIndex = String(slotIndex);
       item.dataset.pageIndex = String(inventoryState.currentPage);
@@ -17328,7 +17532,13 @@
         item.appendChild(quantity);
       }
 
-      if (stack.type === "weapon") {
+      if (stack.type === "equipment-kit") {
+        item.appendChild(createWhiteStagKitTooltip());
+        item.addEventListener("contextmenu", (event) => {
+          event.preventDefault();
+          equipWhiteStagKitFromInventory(inventoryState.currentPage, slotIndex);
+        });
+      } else if (stack.type === "weapon") {
         if (stack.id === WEAPONS.pinkPigClub.id) {
           item.appendChild(createSaukeuleTooltip());
         }
@@ -17474,7 +17684,9 @@
       CARROT_ITEM.icon, RABBIT_FOOT_ITEM.icon,
       WOLF_PELT_ITEM.icon, WOLF_CLAW_ITEM.icon, WANDERER_BAG_ITEM.icon,
       RADISH_ITEM.icon, CABBAGE_ITEM.icon, LETTUCE_ITEM.icon, BOAR_TUSK_ITEM.icon,
-      PINK_PIG_CLUB_ITEM.icon, CALIPH_LAMP_ITEM.icon
+      PINK_PIG_CLUB_ITEM.icon, CALIPH_LAMP_ITEM.icon,
+      WHITE_STAG_KIT.inventoryIcon, WHITE_STAG_KIT.armorIcon,
+      WHITE_STAG_KIT.helmetIcon, WHITE_STAG_KIT.weaponIcon
     ]) {
       const preload = new Image();
       preload.src = encodeURI(src);
@@ -17532,6 +17744,28 @@
       } catch (_) {}
     });
 
+    const kitWeaponEquipZone = document.createElement("div");
+    kitWeaponEquipZone.className = "inventory-kit-equip-zone";
+    setInventoryRect(kitWeaponEquipZone, INVENTORY_CONFIG.kitWeaponEquipRect);
+    kitWeaponEquipZone.setAttribute("aria-label", "Weißhirsch-Kitwaffe");
+
+    const kitArmorEquipZone = document.createElement("div");
+    kitArmorEquipZone.className = "inventory-kit-equip-zone";
+    setInventoryRect(kitArmorEquipZone, INVENTORY_CONFIG.kitArmorEquipRect);
+    kitArmorEquipZone.setAttribute("aria-label", "Weißhirsch-Waffenrock");
+
+    const kitHelmetEquipZone = document.createElement("div");
+    kitHelmetEquipZone.className = "inventory-kit-equip-zone";
+    setInventoryRect(kitHelmetEquipZone, INVENTORY_CONFIG.kitHelmetEquipRect);
+    kitHelmetEquipZone.setAttribute("aria-label", "Weißhirsch-Helm");
+
+    for (const zone of [kitWeaponEquipZone, kitArmorEquipZone, kitHelmetEquipZone]) {
+      zone.addEventListener("contextmenu", (event) => {
+        event.preventDefault();
+        if (equippedKitItem) unequipWhiteStagKitToInventory();
+      });
+    }
+
     const closeButton = document.createElement("button");
     closeButton.type = "button";
     closeButton.className = "inventory-hotspot inventory-hotspot--close";
@@ -17580,7 +17814,7 @@
       } catch (_) {}
     });
 
-    panel.append(image, slotsLayer, weaponEquipZone, closeButton, page1Button, page2Button);
+    panel.append(image, slotsLayer, weaponEquipZone, kitWeaponEquipZone, kitArmorEquipZone, kitHelmetEquipZone, closeButton, page1Button, page2Button);
     root.appendChild(panel);
     document.body.appendChild(root);
 
@@ -17591,6 +17825,9 @@
     inventoryState.closeButton = closeButton;
     inventoryState.pageButtons = [page1Button, page2Button];
     inventoryState.weaponEquipZone = weaponEquipZone;
+    inventoryState.kitWeaponEquipZone = kitWeaponEquipZone;
+    inventoryState.kitArmorEquipZone = kitArmorEquipZone;
+    inventoryState.kitHelmetEquipZone = kitHelmetEquipZone;
 
     renderInventory();
   }
@@ -18609,7 +18846,10 @@
       amount <= 0
     ) return false;
 
-    const applied = Math.min(playerHp, Math.max(0, Math.round(amount)));
+    const incoming = equippedKitItem
+      ? amount * (1 - WHITE_STAG_KIT.damageReduction)
+      : amount;
+    const applied = Math.min(playerHp, Math.max(0, Math.round(incoming)));
     if (applied <= 0) return false;
 
     playerHp = Math.max(0, playerHp - applied);
@@ -18969,6 +19209,13 @@
     if (!frame) return;
 
     let resolvedFrame = frame;
+
+    if (frame.hit && equippedWeapon === WHITE_STAG_KIT.id) {
+      resolvedFrame = {
+        ...frame,
+        damage: frame.critical ? WHITE_STAG_KIT.criticalDamage : WHITE_STAG_KIT.damage
+      };
+    }
 
     if (
       frame.hit &&
@@ -19607,6 +19854,9 @@
     // R105 TEST: lamp starts in the first free 1x1 inventory slot.
     // Remove this line later when Ödegard's quest awards it.
     addItemToInventory(CALIPH_LAMP_ITEM);
+
+    // R143 TEST: first armor kit starts beside Saukeule and Caliph lamp.
+    addItemToInventory(WHITE_STAG_KIT_ITEM);
 
     // Install immediately as a black curtain so OBERKIRCH never flashes before
     // the new-game sequence. It is screen UI only; no map state is changed.
