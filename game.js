@@ -3,7 +3,7 @@
 
   // R121 DEPLOYMENT VERIFICATION — harmless build marker.
   // If this line appears in DevTools, the browser is definitely running R121.
-  console.info("HDR BUILD R147 - WHITE STAG CLEAN WALK + IDLE POSES + 10PCT SIZE");
+  console.info("HDR BUILD R148 - WHITE STAG COMBAT");
 
   const MAPS = Object.freeze({
     oberkirch: Object.freeze({
@@ -549,8 +549,58 @@
       right: "assets/player/kits/white-stag/idle/WHITE STAG IDLE RIGHT.webp",
       left: "assets/player/kits/white-stag/idle/WHITE STAG IDLE LEFT.webp",
       down: "assets/player/kits/white-stag/idle/WHITE STAG IDLE DOWN.webp"
+    }),
+
+    // R148 — dedicated White Stag combat artwork. RIGHT is source sheet 1, LEFT exact mirror.
+    attack: Object.freeze({
+      right: Object.freeze([
+        "assets/player/kits/white-stag/attack/WHITE STAG ATTACK RIGHT 1.webp",
+        "assets/player/kits/white-stag/attack/WHITE STAG ATTACK RIGHT 2.webp",
+        "assets/player/kits/white-stag/attack/WHITE STAG ATTACK RIGHT 3.webp"
+      ]),
+      left: Object.freeze([
+        "assets/player/kits/white-stag/attack/WHITE STAG ATTACK LEFT 1.webp",
+        "assets/player/kits/white-stag/attack/WHITE STAG ATTACK LEFT 2.webp",
+        "assets/player/kits/white-stag/attack/WHITE STAG ATTACK LEFT 3.webp"
+      ]),
+      up: Object.freeze([
+        "assets/player/kits/white-stag/attack/WHITE STAG ATTACK UP 1.webp",
+        "assets/player/kits/white-stag/attack/WHITE STAG ATTACK UP 2.webp",
+        "assets/player/kits/white-stag/attack/WHITE STAG ATTACK UP 3.webp"
+      ]),
+      down: Object.freeze([
+        "assets/player/kits/white-stag/attack/WHITE STAG ATTACK DOWN 1.webp",
+        "assets/player/kits/white-stag/attack/WHITE STAG ATTACK DOWN 2.webp",
+        "assets/player/kits/white-stag/attack/WHITE STAG ATTACK DOWN 3.webp"
+      ])
     })
   });
+
+  // R148 — same proven 400/100/500/100/400/100/500/400 rhythm as existing combat.
+  // Each strike begins with the requested AUSHOL frame; hit frames alternate exactly as specified.
+  function makeWhiteStagSequence(direction) {
+    const f = WHITE_STAG_KIT.attack[direction];
+    const pull = f[0];
+    const hitA = direction === "down" ? f[2] : f[1];
+    const hitB = direction === "down" ? f[1] : f[2];
+    const entries = [
+      { sprite: pull, duration: 100 },
+      { sprite: hitA, duration: 400, hit: true, damage: WHITE_STAG_KIT.damage, strike: 1 },
+      { sprite: pull, duration: 100 },
+      { sprite: hitB, duration: 500, hit: true, damage: WHITE_STAG_KIT.damage, strike: 2 },
+      { sprite: pull, duration: 100 },
+      { sprite: hitA, duration: 400, hit: true, damage: WHITE_STAG_KIT.damage, strike: 4 },
+      { sprite: pull, duration: 100 },
+      { sprite: hitB, duration: 500, hit: true, damage: WHITE_STAG_KIT.criticalDamage, strike: 3, critical: true },
+      { sprite: pull, duration: 400 }
+    ];
+    return Object.freeze(entries.map((entry) => Object.freeze(entry)));
+  }
+
+  const WHITE_STAG_ATTACK_RIGHT = makeWhiteStagSequence("right");
+  const WHITE_STAG_ATTACK_LEFT = makeWhiteStagSequence("left");
+  const WHITE_STAG_ATTACK_DOWN = makeWhiteStagSequence("down");
+  const WHITE_STAG_ATTACK_UP = makeWhiteStagSequence("up");
 
   const CLUB_ATTACK_RIGHT = makeClubSequence("right");
   const CLUB_ATTACK_LEFT = makeClubSequence("left");
@@ -19265,6 +19315,12 @@
       src === WHITE_STAG_KIT.idle.left ||
       src === WHITE_STAG_KIT.idle.down;
 
+    const isWhiteStagAttack =
+      WHITE_STAG_KIT.attack.right.includes(src) ||
+      WHITE_STAG_KIT.attack.left.includes(src) ||
+      WHITE_STAG_KIT.attack.down.includes(src) ||
+      WHITE_STAG_KIT.attack.up.includes(src);
+
     if (src === PLAYER_DEATH.sprite) {
       // R135: horizontal corpse artwork is intentionally larger than the living
       // idle body while staying anchored to the exact death foot position.
@@ -19277,7 +19333,7 @@
       spriteScale = 1.25;
     } else if (isClubUp) {
       spriteScale = 1.75;
-    } else if (isWhiteStagWalk || isWhiteStagIdle) {
+    } else if (isWhiteStagWalk || isWhiteStagIdle || isWhiteStagAttack) {
       // R147: all currently implemented White Stag kit player artwork +10%.
       spriteScale = 1.10;
     } else if (src === PLAYER.standUp || isUpAttack) {
@@ -19392,6 +19448,14 @@
   }
 
   function chooseAttackSequence() {
+    if (equippedWeapon === WHITE_STAG_KIT.id) {
+      if (facing === "down") return WHITE_STAG_ATTACK_DOWN;
+      if (facing === "up") return WHITE_STAG_ATTACK_UP;
+      if (facing === "left") return WHITE_STAG_ATTACK_LEFT;
+      if (facing === "right") return WHITE_STAG_ATTACK_RIGHT;
+      return lastHorizontalFacing === "left" ? WHITE_STAG_ATTACK_LEFT : WHITE_STAG_ATTACK_RIGHT;
+    }
+
     if (equippedWeapon === WEAPONS.pinkPigClub.id) {
       if (facing === "down") return CLUB_ATTACK_DOWN;
       if (facing === "up") return CLUB_ATTACK_UP;
