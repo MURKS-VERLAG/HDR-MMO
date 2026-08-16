@@ -3,7 +3,7 @@
 
   // R121 DEPLOYMENT VERIFICATION — harmless build marker.
   // If this line appears in DevTools, the browser is definitely running R121.
-  console.info("HDR BUILD R145 - WHITE STAG KIT SLOT-ALIGNED THREE-PART VISUAL");
+  console.info("HDR BUILD R146 - WHITE STAG KIT WALK ANIMATIONS + BLOCK REMOVED");
 
   const MAPS = Object.freeze({
     oberkirch: Object.freeze({
@@ -511,7 +511,37 @@
     armor: 30,
     damageReduction: 0.30,
     damage: 120,
-    criticalDamage: 180
+    criticalDamage: 180,
+
+    // R146 — complete movement-only sprite set while the kit is equipped.
+    // RIGHT source = supplied sheet 1. LEFT = exact mirrored RIGHT frames.
+    // DOWN source = supplied sheet 2, normalized to one common 420x630 canvas.
+    // UP source = supplied sheet 3, deliberately skipping its malformed frame 2.
+    walk: Object.freeze({
+      right: Object.freeze([
+        "assets/player/kits/white-stag/walk/WHITE STAG WALK RIGHT 1.webp",
+        "assets/player/kits/white-stag/walk/WHITE STAG WALK RIGHT 2.webp",
+        "assets/player/kits/white-stag/walk/WHITE STAG WALK RIGHT 3.webp",
+        "assets/player/kits/white-stag/walk/WHITE STAG WALK RIGHT 4.webp"
+      ]),
+      left: Object.freeze([
+        "assets/player/kits/white-stag/walk/WHITE STAG WALK LEFT 1.webp",
+        "assets/player/kits/white-stag/walk/WHITE STAG WALK LEFT 2.webp",
+        "assets/player/kits/white-stag/walk/WHITE STAG WALK LEFT 3.webp",
+        "assets/player/kits/white-stag/walk/WHITE STAG WALK LEFT 4.webp"
+      ]),
+      down: Object.freeze([
+        "assets/player/kits/white-stag/walk/WHITE STAG WALK DOWN 1.webp",
+        "assets/player/kits/white-stag/walk/WHITE STAG WALK DOWN 2.webp",
+        "assets/player/kits/white-stag/walk/WHITE STAG WALK DOWN 3.webp",
+        "assets/player/kits/white-stag/walk/WHITE STAG WALK DOWN 4.webp"
+      ]),
+      up: Object.freeze([
+        "assets/player/kits/white-stag/walk/WHITE STAG WALK UP 1.webp",
+        "assets/player/kits/white-stag/walk/WHITE STAG WALK UP 2.webp",
+        "assets/player/kits/white-stag/walk/WHITE STAG WALK UP 3.webp"
+      ])
+    })
   });
 
   const CLUB_ATTACK_RIGHT = makeClubSequence("right");
@@ -15864,7 +15894,6 @@
     stadiumState = "arrival-walk";
     keys.clear();
     cancelAttackImmediately();
-    if (blocking) stopBlocking();
     playerX = STADIUM.arrivalStart.x;
     playerY = STADIUM.arrivalStart.y;
     cameraX = playerX;
@@ -16510,7 +16539,6 @@
     keys.clear();
     attackHeld = false;
     cancelAttackImmediately();
-    if (blocking) stopBlocking();
     if (inventoryState.open) closeInventory();
 
     // Both later screens are ready before the first fade starts.
@@ -16587,7 +16615,6 @@
     keys.clear();
     attackHeld = false;
     cancelAttackImmediately();
-    if (blocking) stopBlocking();
 
     // Smooth fade to black first.
     startFlowUI.black.style.transition = `opacity ${START_FLOW.blackFadeMs}ms ease`;
@@ -16617,7 +16644,6 @@
     attackSequence = null;
     attackStep = 0;
     attackTimer = 0;
-    blocking = false;
     moving = false;
 
     // R102: HUD is created ONLY after login/name + hero selection are finished.
@@ -17699,7 +17725,6 @@
     keys.clear();
     attackHeld = false;
     cancelAttackImmediately();
-    if (blocking) stopBlocking();
     renderInventory();
     inventoryState.root.classList.add("inventory-ui--open");
     inventoryState.root.setAttribute("aria-hidden", "false");
@@ -18164,7 +18189,6 @@
     mapTransitioning = true;
     keys.clear();
     cancelAttackImmediately();
-    if (blocking) stopBlocking();
     activeBridge = null;
 
     const overlay = transitionOverlay();
@@ -18701,10 +18725,13 @@
     ...WEAPONS.pinkPigClub.attacks.down,
     ...WEAPONS.pinkPigClub.attacks.up,
 
+    ...WHITE_STAG_KIT.walk.right,
+    ...WHITE_STAG_KIT.walk.left,
+    ...WHITE_STAG_KIT.walk.down,
+    ...WHITE_STAG_KIT.walk.up,
+
     PLAYER.attackFinish,
-    PLAYER.attackFinishLeft,
-    PLAYER.blockRight,
-    PLAYER.blockLeft
+    PLAYER.attackFinishLeft
   ];
 
   // Remove duplicate paths while preserving their original order.
@@ -18893,7 +18920,6 @@
     keys.clear();
     attackHeld = false;
     if (attacking) cancelAttackImmediately();
-    if (blocking) stopBlocking();
     moving = false;
 
     playerEl.classList.remove("player--moving", "player--respawn-glow");
@@ -18926,7 +18952,6 @@
     keys.clear();
     attackHeld = false;
     attacking = false;
-    blocking = false;
     moving = false;
     currentAnimation = "idle";
     walkFrame = 0;
@@ -19028,7 +19053,6 @@
   let attackSequence = null;
   let attackStep = 0;
   let attackTimer = 0;
-  let blocking = false;
   let blockFacing = "right";
 
   const keys = new Set();
@@ -19247,6 +19271,14 @@
   }
 
   function setIdleSprite() {
+    // R146: until dedicated White-Stag idle/combat sheets arrive, keep the equipped
+    // character visually in-kit by resting on frame 1 of the matching walk direction.
+    if (equippedKitItem) {
+      const kitFrames = WHITE_STAG_KIT.walk[facing] || WHITE_STAG_KIT.walk.down;
+      setSprite(kitFrames[0]);
+      return;
+    }
+
     if (facing === "down") {
       setSprite(PLAYER.standDown);
     } else if (facing === "up") {
@@ -19294,11 +19326,16 @@
   }
 
   function renderMovementFrame(animationName, deltaSeconds) {
-    const frames =
-      animationName === "down" ? PLAYER.walkDown :
-      animationName === "right" ? PLAYER.walkRight :
-      animationName === "left" ? PLAYER.walkLeft :
-      animationName === "up" ? PLAYER.walkUp : null;
+    const walkSet = equippedKitItem ? WHITE_STAG_KIT.walk : PLAYER;
+    const frames = equippedKitItem
+      ? (animationName === "down" ? walkSet.down :
+         animationName === "right" ? walkSet.right :
+         animationName === "left" ? walkSet.left :
+         animationName === "up" ? walkSet.up : null)
+      : (animationName === "down" ? PLAYER.walkDown :
+         animationName === "right" ? PLAYER.walkRight :
+         animationName === "left" ? PLAYER.walkLeft :
+         animationName === "up" ? PLAYER.walkUp : null);
 
     if (!frames) {
       setIdleSprite();
@@ -19487,63 +19524,6 @@
   }
 
 
-  function getBlockSprite() {
-    return blockFacing === "left" ? PLAYER.blockLeft : PLAYER.blockRight;
-  }
-
-  function forceSprite(src) {
-    activeSprite = "";
-    setSprite(src);
-  }
-
-  function startBlocking() {
-    if (playerDead || blocking) return;
-
-    // Remember the orientation that existed BEFORE CTRL was pressed.
-    blockFacing = facing === "left" ? "left" : facing === "down" ? "down" : "right";
-    blocking = true;
-
-    // Block is NOT part of any combo. Cancel a running combo completely.
-    attackHeld = false;
-    attacking = false;
-    attackSequence = null;
-    attackStep = 0;
-    attackTimer = 0;
-    stopAttackSound();
-
-    moving = false;
-    currentAnimation = "idle";
-    walkFrame = 0;
-    walkFrameTimer = 0;
-
-    keys.clear();
-
-    playerEl.classList.remove("player--moving");
-    playerEl.classList.add("player--idle");
-
-    forceSprite(getBlockSprite());
-  }
-
-  function stopBlocking() {
-    if (!blocking) return;
-
-    blocking = false;
-
-    // Restore the actual resting pose immediately and FORCE the image swap.
-    if (blockFacing === "down") {
-      facing = "down";
-      forceSprite(PLAYER.standDown);
-    } else if (blockFacing === "left") {
-      facing = "left";
-      lastHorizontalFacing = "left";
-      forceSprite(PLAYER.standLeft);
-    } else {
-      facing = "right";
-      lastHorizontalFacing = "right";
-      forceSprite(PLAYER.standRight);
-    }
-  }
-
   function updatePlayer(deltaSeconds) {
     if (playerDead) {
       clearIceVelocity();
@@ -19561,7 +19541,6 @@
       if (activeSprite !== PLAYER_DEATH.sprite) forceSprite(PLAYER_DEATH.sprite);
       return;
     }
-    if (blocking) { clearIceVelocity(); updateIceVisual(); setSprite(getBlockSprite()); return; }
     if (attacking) { clearIceVelocity(); updateIceVisual(); updateAttack(deltaSeconds); return; }
 
     let dx = 0, dy = 0;
@@ -19739,12 +19718,6 @@
     }
   }
 
-  function isControlEvent(event) {
-    return event.code === "ControlLeft" ||
-           event.code === "ControlRight" ||
-           event.key === "Control";
-  }
-
   window.addEventListener("keydown", (event) => {
     if (!gameplayUnlocked()) {
       const target = event.target;
@@ -19802,10 +19775,10 @@
       "KeyW", "KeyA", "KeyS", "KeyD", "KeyI",
       "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight",
       "Equal", "NumpadAdd", "Minus", "NumpadSubtract",
-      "Space", "ControlLeft", "ControlRight", "Backquote"
+      "Space", "Backquote"
     ];
 
-    if (controlled.includes(event.code) || event.key === "Control") {
+    if (controlled.includes(event.code)) {
       event.preventDefault();
     }
 
@@ -19828,19 +19801,6 @@
       if (!event.repeat) activateQuickSlot(Number(quickSlotKeyMatch[1]) - 1);
       return;
     }
-
-    if (isControlEvent(event)) {
-      startBlocking();
-      return;
-    }
-
-    // Failsafe: if the browser missed CTRL-keyup but Ctrl is no longer held,
-    // the next keyboard event immediately releases the block.
-    if (blocking && !event.ctrlKey) {
-      stopBlocking();
-    }
-
-    if (blocking) return;
 
     if (
       event.code === "Backquote" ||
@@ -19889,12 +19849,6 @@
       return;
     }
 
-    if (isControlEvent(event)) {
-      event.preventDefault();
-      stopBlocking();
-      return;
-    }
-
     if (event.code === "Space") {
       event.preventDefault();
       cancelAttackImmediately();
@@ -19909,7 +19863,6 @@
   function resetTransientPlayerControls() {
     keys.clear();
 
-    if (blocking) stopBlocking();
     cancelAttackImmediately();
 
     moving = false;
