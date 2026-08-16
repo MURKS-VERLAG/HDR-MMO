@@ -3,7 +3,7 @@
 
   // R121 DEPLOYMENT VERIFICATION — harmless build marker.
   // If this line appears in DevTools, the browser is definitely running R121.
-  console.info("HDR BUILD R128 - ENEMY ATTACKS PLAYER HP");
+  console.info("HDR BUILD R129 - BOAR DAMAGE LEASH HUD SIZE FIX");
 
   const MAPS = Object.freeze({
     oberkirch: Object.freeze({
@@ -3586,7 +3586,14 @@
     impactDuration: 300,
     retreatDuration: 760,
     retreatSpeed: 300,
-    chargeReach: 235,
+    // R129: charge uses the visible boar BODY, not one tiny foot-anchor circle.
+    chargeHitHalfWidth: 360,
+    chargeHitHalfHeight: 255,
+
+    // Normal boars stop combat once the player has clearly left their habitat.
+    // Tierbann boars deliberately ignore this and stay aggressive.
+    disengageDistance: 1850,
+
     maxHp: 500,
     deadDuration: 6500,
     fadeDuration: 420,
@@ -6471,6 +6478,67 @@
     return moved;
   }
 
+  function boarChargeHitsPlayer(actor) {
+    if (!actor) return false;
+    const dx = playerX - actor.x;
+    const dy = playerY - actor.y;
+
+    // R129: the impact art is a broad charging body. Use the visible body area
+    // instead of the old tiny centre-to-foot radius, which could visually hit
+    // the player without ever registering damage.
+    return (
+      Math.abs(dx) <= BOAR_CONFIG.chargeHitHalfWidth &&
+      Math.abs(dy) <= BOAR_CONFIG.chargeHitHalfHeight
+    );
+  }
+
+  function normalBoarShouldDisengage(actor) {
+    if (!actor || actor.tierbannAggressive) return false;
+
+    const distance = Math.hypot(playerX - actor.x, playerY - actor.y);
+    const playerStillInHabitat =
+      actor.zone &&
+      actor.zone.polygon &&
+      boarPointInPolygon(playerX, playerY, actor.zone.polygon);
+
+    return !playerStillInHabitat || distance > BOAR_CONFIG.disengageDistance;
+  }
+
+  function disengageNormalBoar(actor, now) {
+    if (!actor || actor.tierbannAggressive) return;
+
+    actor.aggro = false;
+    actor.combatPhase = "idle";
+    actor.combatUntil = 0;
+    actor.chargeVX = 0;
+    actor.chargeVY = 0;
+    actor.chargeHitDone = false;
+    actor.retreatVX = 0;
+    actor.retreatVY = 0;
+    actor.moving = false;
+
+    // Critical knockback can theoretically have nudged a boar just outside its
+    // normal polygon. In that case, visibly walk it back into its own habitat.
+    if (!boarPointInPolygon(actor.x, actor.y, actor.zone.polygon)) {
+      const target = boarRandomPoint(actor.zone, 140);
+      actor.targetX = target.x;
+      actor.targetY = target.y;
+      actor.speed = 185;
+      actor.moving = true;
+      actor.entering = true;
+      actor.exiting = false;
+      actor.moveEndAt = now + 7000;
+      const dx = actor.targetX - actor.x;
+      if (Math.abs(dx) > 10) boarSetFacing(actor, dx < 0 ? -1 : 1);
+      boarShowLayer(actor, 1);
+      return;
+    }
+
+    actor.entering = false;
+    actor.exiting = false;
+    boarStartPause(actor, now);
+  }
+
   function startBoarCharge(actor, now) {
     const dx = playerX - actor.x;
     const dy = playerY - actor.y;
@@ -6498,6 +6566,15 @@
 
   function updateBoarPlayerCombat(actor, deltaSeconds, now) {
     if (actor.dead || actor.away || playerDead) return;
+
+    // R129: normal boars are retaliation enemies, not map-wide pursuers.
+    // Once the player leaves their habitat / gets clearly away, they immediately
+    // drop combat and return to their original idle/run behavior.
+    if (normalBoarShouldDisengage(actor)) {
+      disengageNormalBoar(actor, now);
+      return;
+    }
+
     actor.aggro = true;
 
     if (actor.combatPhase === "impact") {
@@ -6530,7 +6607,7 @@
     }
 
     boarCombatMove(actor, actor.chargeVX, actor.chargeVY, BOAR_CONFIG.chargeSpeed * deltaSeconds);
-    if (!actor.chargeHitDone && playerInsideEnemyReach(actor, BOAR_CONFIG.chargeReach)) {
+    if (!actor.chargeHitDone && boarChargeHitsPlayer(actor)) {
       actor.chargeHitDone = true;
       damagePlayer(BOAR_CONFIG.chargeDamage);
       actor.combatPhase = "impact";
@@ -10950,28 +11027,39 @@
       .player-hp-fill {
         position: absolute;
         z-index: 4;
-        left: 13.0%;
-        top: 23.5%;
-        width: 24.2%;
-        height: 8.5%;
-        border-radius: 999px;
+
+        /* R129: exact INNER black HP slot from the supplied HUD screenshot.
+           Nothing overlaps the bronze/gold frame anymore. */
+        left: 17.9%;
+        top: 27.0%;
+        width: 17.8%;
+        height: 10.4%;
+
+        box-sizing: border-box;
+        border-radius: 5px;
+        overflow: hidden;
         transform-origin: 0 50%;
         background: linear-gradient(180deg, #ff4b42 0%, #b40000 55%, #640000 100%);
-        box-shadow: inset 0 1px 1px rgba(255,255,255,.35), 0 0 4px rgba(160,0,0,.65);
+        box-shadow: inset 0 1px 1px rgba(255,255,255,.28);
         pointer-events: none;
       }
 
       .player-hp-text {
         position: absolute;
         z-index: 5;
-        left: 13.0%;
-        top: 20.5%;
-        width: 24.2%;
+        left: 17.9%;
+        top: 27.0%;
+        width: 17.8%;
+        height: 10.4%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-sizing: border-box;
         text-align: center;
         color: #fff;
-        font: 700 12px Georgia, serif;
+        font: 700 11px Georgia, serif;
         line-height: 1;
-        text-shadow: 0 1px 2px #000, 0 0 3px #000;
+        text-shadow: 0 1px 2px #000, 0 0 2px #000;
         pointer-events: none;
       }
 
