@@ -3,7 +3,7 @@
 
   // R121 DEPLOYMENT VERIFICATION — harmless build marker.
   // If this line appears in DevTools, the browser is definitely running R121.
-  console.info("HDR BUILD R127 - PRODUCT KEY EXACT FIX");
+  console.info("HDR BUILD R128 - ENEMY ATTACKS PLAYER HP");
 
   const MAPS = Object.freeze({
     oberkirch: Object.freeze({
@@ -2564,6 +2564,12 @@
     howlFrame: "assets/animals/wolves/WOLF HOWL.png",
     deadFrame: "assets/animals/wolves/WOLF DEAD.png",
     howlSound: "assets/audio/wolves/WOLF HOWL.mp3",
+    attackFrame: "assets/animals/wolves/WOLF ATTACK.png",
+    attackDamage: 25,
+    attackCooldown: 1500,
+    attackWindup: 360,
+    attackReach: 255,
+    aggroRadius: 900,
     maxHp: 750,
     deadDuration: 6500,
     fadeDuration: 420,
@@ -2893,7 +2899,7 @@
         !actor.ready ||
         actor.away ||
         actor.dead ||
-        actor.tierbannAggressive ||
+        (actor.tierbannAggressive || actor.aggro) ||
         MAP.id !== actor.mapId
       ) return;
 
@@ -2960,6 +2966,13 @@
     imageHowl.draggable = false;
     imageHowl.decoding = "async";
 
+    const imageAttack = document.createElement("img");
+    imageAttack.className = "map-wolf__sprite";
+    imageAttack.src = encodeURI(WOLF_CONFIG.attackFrame);
+    imageAttack.alt = "";
+    imageAttack.draggable = false;
+    imageAttack.decoding = "async";
+
     const imageDead = document.createElement("img");
     imageDead.className = "map-wolf__sprite map-wolf__sprite--dead";
     imageDead.src = encodeURI(WOLF_CONFIG.deadFrame);
@@ -2967,8 +2980,8 @@
     imageDead.draggable = false;
     imageDead.decoding = "async";
 
-    // Walk 1 / Walk 2 / Howl / KO are all permanently loaded.
-    element.append(imageA, imageB, imageHowl, imageDead);
+    // Walk 1 / Walk 2 / Howl / Attack / KO are all permanently loaded.
+    element.append(imageA, imageB, imageHowl, imageAttack, imageDead);
     world.appendChild(element);
 
     const actor = {
@@ -2976,7 +2989,7 @@
       mapId,
       habitat,
       canExitTop,
-      images: [imageA, imageB, imageHowl, imageDead],
+      images: [imageA, imageB, imageHowl, imageAttack, imageDead],
       visibleLayer: 0,
       hp: WOLF_CONFIG.maxHp,
       dead: false,
@@ -3003,6 +3016,12 @@
       howling: false,
       howlEndAt: 0,
       ready: false,
+      aggro: Boolean(options.tierbannAggressive),
+      attackingPlayer: false,
+      attackImpactDone: false,
+      attackImpactAt: 0,
+      attackEndAt: 0,
+      nextPlayerAttackAt: 0,
 
       // R67 optional Tierbann event metadata.
       tierbannSummon: Boolean(options.tierbannSummon),
@@ -3055,7 +3074,7 @@
   function createWolves() {
     installWolfStyles();
 
-    for (const src of [...WOLF_CONFIG.frames, WOLF_CONFIG.howlFrame, WOLF_CONFIG.deadFrame]) {
+    for (const src of [...WOLF_CONFIG.frames, WOLF_CONFIG.howlFrame, WOLF_CONFIG.attackFrame, WOLF_CONFIG.deadFrame]) {
       const image = new Image();
       image.decoding = "async";
       image.src = encodeURI(src);
@@ -3150,8 +3169,10 @@
         continue;
       }
 
-      if (actor.tierbannAggressive) {
-        updateTierbannAggressiveWolf(actor, deltaSeconds, now);
+      const wolfDistanceToPlayer = Math.hypot(playerX - actor.x, playerY - actor.y);
+      if (actor.tierbannAggressive || actor.aggro || wolfPlayerInActorHabitat(actor) || wolfDistanceToPlayer <= WOLF_CONFIG.aggroRadius) {
+        actor.aggro = true;
+        updateWolfPlayerCombat(actor, deltaSeconds, now);
         continue;
       }
 
@@ -3557,6 +3578,15 @@
     idleFrame: "assets/animals/boars/WILDSCHWEIN STAND.png",
     runFrame: "assets/animals/boars/WILDSCHWEIN LAUF.png",
     deadFrame: "assets/animals/boars/WILDSCHWEIN DEAD.png",
+    chargeFrame: "assets/animals/boars/WILDSCHWEIN CHARGE.png",
+    impactFrame: "assets/animals/boars/WILDSCHWEIN IMPACT.png",
+    chargeDamage: 20,
+    chargeSpeed: 690,
+    chargeDuration: 1450,
+    impactDuration: 300,
+    retreatDuration: 760,
+    retreatSpeed: 300,
+    chargeReach: 235,
     maxHp: 500,
     deadDuration: 6500,
     fadeDuration: 420,
@@ -3988,6 +4018,20 @@
     runImage.draggable = false;
     runImage.decoding = "async";
 
+    const chargeImage = document.createElement("img");
+    chargeImage.className = "map-boar__sprite";
+    chargeImage.src = encodeURI(BOAR_CONFIG.chargeFrame);
+    chargeImage.alt = "";
+    chargeImage.draggable = false;
+    chargeImage.decoding = "async";
+
+    const impactImage = document.createElement("img");
+    impactImage.className = "map-boar__sprite";
+    impactImage.src = encodeURI(BOAR_CONFIG.impactFrame);
+    impactImage.alt = "";
+    impactImage.draggable = false;
+    impactImage.decoding = "async";
+
     const deadImage = document.createElement("img");
     deadImage.className = "map-boar__sprite map-boar__sprite--dead";
     deadImage.src = encodeURI(BOAR_CONFIG.deadFrame);
@@ -3995,12 +4039,12 @@
     deadImage.draggable = false;
     deadImage.decoding = "async";
 
-    element.append(idleImage, runImage, deadImage);
+    element.append(idleImage, runImage, deadImage, chargeImage, impactImage);
     world.appendChild(element);
 
     const actor = {
       element,
-      images: [idleImage, runImage, deadImage],
+      images: [idleImage, runImage, deadImage, chargeImage, impactImage],
       visibleLayer: 0,
       hp: BOAR_CONFIG.maxHp,
       dead: false,
@@ -4024,6 +4068,14 @@
       pauseUntil: performance.now() + 500 + Math.random() * 2500,
       moveEndAt: 0,
       ready: false,
+      aggro: Boolean(options.tierbannAggressive),
+      combatPhase: "idle",
+      combatUntil: 0,
+      chargeVX: 0,
+      chargeVY: 0,
+      chargeHitDone: false,
+      retreatVX: 0,
+      retreatVY: 0,
 
       // R67 optional Tierbann event metadata.
       tierbannSummon: Boolean(options.tierbannSummon),
@@ -4058,8 +4110,7 @@
 
     Promise.all(actor.images.map(waitForImage)).then(() => {
       actor.ready = true;
-      actor.images[0].classList.add("map-boar__sprite--visible");
-      actor.images[1].classList.remove("map-boar__sprite--visible");
+      actor.images.forEach((img, index) => img.classList.toggle("map-boar__sprite--visible", index === 0));
       actor.visibleLayer = 0;
     });
 
@@ -4069,7 +4120,7 @@
   function createBoars() {
     installBoarStyles();
 
-    for (const src of [BOAR_CONFIG.idleFrame, BOAR_CONFIG.runFrame, BOAR_CONFIG.deadFrame]) {
+    for (const src of [BOAR_CONFIG.idleFrame, BOAR_CONFIG.runFrame, BOAR_CONFIG.deadFrame, BOAR_CONFIG.chargeFrame, BOAR_CONFIG.impactFrame]) {
       const image = new Image();
       image.decoding = "async";
       image.src = encodeURI(src);
@@ -4162,8 +4213,8 @@
         continue;
       }
 
-      if (actor.tierbannAggressive) {
-        updateTierbannAggressiveBoar(actor, deltaSeconds, now);
+      if (actor.tierbannAggressive || actor.aggro) {
+        updateBoarPlayerCombat(actor, deltaSeconds, now);
         continue;
       }
 
@@ -4482,6 +4533,22 @@
           0 0 10px #ff0000,
           0 0 22px rgba(255,0,0,.95),
           0 5px 3px rgba(0,0,0,.8);
+        animation: rabbitDamageFloat 760ms ease-out forwards;
+      }
+
+      .player-damage {
+        position: absolute;
+        z-index: 180;
+        transform: translate(-50%, -50%);
+        pointer-events: none;
+        user-select: none;
+        color: #ffffff;
+        font-family: Georgia, "Times New Roman", serif;
+        font-size: 190px;
+        font-weight: 900;
+        line-height: .9;
+        white-space: nowrap;
+        text-shadow: 0 0 4px #000, 0 0 10px #000, 0 5px 3px rgba(0,0,0,.9);
         animation: rabbitDamageFloat 760ms ease-out forwards;
       }
 
@@ -5210,6 +5277,8 @@
     actor.dead = true;
     actor.hp = 0;
     actor.moving = false;
+    actor.aggro = false;
+    actor.attackingPlayer = false;
     actor.exiting = false;
     actor.entering = false;
     actor.away = false;
@@ -5219,7 +5288,7 @@
     actor.nextFrameAt = Infinity;
     actor.element.classList.remove("map-wolf--away");
     actor.element.classList.remove("map-wolf--death-fading");
-    wolfShowStaticLayer(actor, 3);
+    wolfShowStaticLayer(actor, 4);
     actor.pendingLoot = rollWolfLoot();
     actor.lootSpawned = false;
     actor.fadeStarted = false;
@@ -5248,6 +5317,12 @@
     actor.entering = false;
     actor.moving = false;
     actor.howling = false;
+    actor.aggro = false;
+    actor.attackingPlayer = false;
+    actor.attackImpactDone = false;
+    actor.attackImpactAt = 0;
+    actor.attackEndAt = 0;
+    actor.nextPlayerAttackAt = 0;
     actor.x = start.x;
     actor.y = start.y;
     actor.targetX = start.x;
@@ -5270,6 +5345,7 @@
     actor.hp = Math.max(0, actor.hp - amount);
     createRabbitDamageText(actor, amount, critical, saustark);
     playWolfHitSound();
+    actor.aggro = true;
     actor.moving = false;
     actor.howling = false;
     if (critical) {
@@ -5299,6 +5375,8 @@
     actor.dead = true;
     actor.hp = 0;
     actor.moving = false;
+    actor.aggro = false;
+    actor.combatPhase = "idle";
     actor.exiting = false;
     actor.entering = false;
     actor.away = false;
@@ -5335,6 +5413,14 @@
     actor.exiting = false;
     actor.entering = false;
     actor.moving = false;
+    actor.aggro = false;
+    actor.combatPhase = "idle";
+    actor.combatUntil = 0;
+    actor.chargeVX = 0;
+    actor.chargeVY = 0;
+    actor.chargeHitDone = false;
+    actor.retreatVX = 0;
+    actor.retreatVY = 0;
     actor.x = start.x;
     actor.y = start.y;
     actor.targetX = start.x;
@@ -5355,13 +5441,18 @@
     actor.hp = Math.max(0, actor.hp - amount);
     createRabbitDamageText(actor, amount, critical, saustark);
     playBoarHitSound();
+    actor.aggro = true;
     actor.moving = false;
     if (critical) {
       createRabbitDust(actor);
       largeAnimalCriticalKnockback(actor, direction, "map-boar--critical-hit");
     }
     if (actor.hp <= 0) killBoar(actor, now);
-    else boarStartPause(actor, now);
+    else {
+      actor.combatPhase = "prepare";
+      actor.combatUntil = now + 420;
+      boarShowLayer(actor, 0);
+    }
   }
 
   function resolveBoarAttackFrame(frame) {
@@ -6301,43 +6392,166 @@
     }
   }
 
-  function updateTierbannAggressiveBoar(actor, deltaSeconds, now) {
-    if (actor.dead || actor.away) return;
-
-    const dx = playerX - actor.x;
-    const dy = playerY - actor.y;
-    const distance = Math.hypot(dx, dy);
-
-    if (Math.abs(dx) > 12) boarSetFacing(actor, dx < 0 ? -1 : 1);
-    boarShowLayer(actor, 1);
-    actor.moving = true;
-
-    // Stop just short of the player's foot anchor; still actively tracks him.
-    if (distance > 225) {
-      tierbannStepWithCollision(actor, dx, dy, actor.speed * deltaSeconds);
-    }
+  function wolfPlayerInActorHabitat(actor) {
+    return actor.mapId === MAP.id && wolfPointInsideHabitat(playerX, playerY, actor.habitat);
   }
 
-  function updateTierbannAggressiveWolf(actor, deltaSeconds, now) {
-    if (actor.dead || actor.away) return;
-
+  function startWolfPlayerAttack(actor, now) {
+    actor.attackingPlayer = true;
+    actor.attackImpactDone = false;
+    actor.attackImpactAt = now + WOLF_CONFIG.attackWindup;
+    actor.attackEndAt = now + 620;
+    actor.nextPlayerAttackAt = now + WOLF_CONFIG.attackCooldown;
+    actor.moving = false;
     actor.howling = false;
+    const dx = playerX - actor.x;
+    if (Math.abs(dx) > 8) {
+      actor.facing = dx < 0 ? -1 : 1;
+      actor.element.style.setProperty("--wolf-facing", actor.facing);
+    }
+    wolfShowStaticLayer(actor, 3);
+  }
+
+  function updateWolfPlayerCombat(actor, deltaSeconds, now) {
+    if (actor.dead || actor.away || playerDead) return;
+    actor.aggro = true;
+    actor.howling = false;
+
+    if (actor.attackingPlayer) {
+      if (!actor.attackImpactDone && now >= actor.attackImpactAt) {
+        actor.attackImpactDone = true;
+        if (playerInsideEnemyReach(actor, WOLF_CONFIG.attackReach)) damagePlayer(WOLF_CONFIG.attackDamage);
+      }
+      if (now >= actor.attackEndAt) {
+        actor.attackingPlayer = false;
+        actor.frameIndex = 0;
+        wolfShowStaticLayer(actor, 0);
+      }
+      return;
+    }
 
     const dx = playerX - actor.x;
     const dy = playerY - actor.y;
     const distance = Math.hypot(dx, dy);
-
     if (Math.abs(dx) > 12) {
       actor.facing = dx < 0 ? -1 : 1;
       actor.element.style.setProperty("--wolf-facing", actor.facing);
     }
-
+    if (distance <= WOLF_CONFIG.attackReach && now >= actor.nextPlayerAttackAt) {
+      startWolfPlayerAttack(actor, now);
+      return;
+    }
     actor.moving = true;
     if (now >= actor.nextFrameAt) wolfPickWalkFrame(actor);
-
-    if (distance > 225) {
-      tierbannStepWithCollision(actor, dx, dy, actor.speed * deltaSeconds);
+    if (distance > WOLF_CONFIG.attackReach * 0.78) {
+      tierbannStepWithCollision(actor, dx, dy, Math.max(actor.speed, 285) * deltaSeconds);
     }
+  }
+
+  function createBoarImpactDust(actor) {
+    createRabbitDust({ x: actor.x, y: actor.y });
+  }
+
+  function boarCombatStepAllowed(actor, nextX, nextY) {
+    if (!tierbannPointAllowed(nextX, nextY)) return false;
+    if (actor.tierbannAggressive) return true;
+    return boarPointInPolygon(nextX, nextY, actor.zone.polygon);
+  }
+
+  function boarCombatMove(actor, vx, vy, amount) {
+    const len = Math.hypot(vx, vy) || 1;
+    const nx = vx / len, ny = vy / len;
+    let moved = false;
+    const x = actor.x + nx * amount;
+    if (boarCombatStepAllowed(actor, x, actor.y)) { actor.x = x; moved = true; }
+    const y = actor.y + ny * amount;
+    if (boarCombatStepAllowed(actor, actor.x, y)) { actor.y = y; moved = true; }
+    actor.element.style.left = `${actor.x}px`;
+    actor.element.style.top = `${actor.y}px`;
+    return moved;
+  }
+
+  function startBoarCharge(actor, now) {
+    const dx = playerX - actor.x;
+    const dy = playerY - actor.y;
+    const len = Math.hypot(dx, dy) || 1;
+    actor.chargeVX = dx / len;
+    actor.chargeVY = dy / len;
+    actor.chargeHitDone = false;
+    actor.combatPhase = "charge";
+    actor.combatUntil = now + BOAR_CONFIG.chargeDuration;
+    boarSetFacing(actor, actor.chargeVX < 0 ? -1 : 1);
+    boarShowLayer(actor, 3);
+  }
+
+  function beginBoarRetreat(actor, now) {
+    const dx = actor.x - playerX;
+    const dy = actor.y - playerY;
+    const len = Math.hypot(dx, dy) || 1;
+    actor.retreatVX = dx / len;
+    actor.retreatVY = dy / len;
+    actor.combatPhase = "retreat";
+    actor.combatUntil = now + BOAR_CONFIG.retreatDuration;
+    boarSetFacing(actor, actor.retreatVX < 0 ? -1 : 1);
+    boarShowLayer(actor, 1);
+  }
+
+  function updateBoarPlayerCombat(actor, deltaSeconds, now) {
+    if (actor.dead || actor.away || playerDead) return;
+    actor.aggro = true;
+
+    if (actor.combatPhase === "impact") {
+      if (now >= actor.combatUntil) beginBoarRetreat(actor, now);
+      return;
+    }
+
+    if (actor.combatPhase === "retreat") {
+      boarCombatMove(actor, actor.retreatVX, actor.retreatVY, BOAR_CONFIG.retreatSpeed * deltaSeconds);
+      if (now >= actor.combatUntil) {
+        actor.combatPhase = "prepare";
+        actor.combatUntil = now + 520;
+        boarShowLayer(actor, 0);
+      }
+      return;
+    }
+
+    if (actor.combatPhase === "prepare") {
+      const dx = playerX - actor.x;
+      if (Math.abs(dx) > 10) boarSetFacing(actor, dx < 0 ? -1 : 1);
+      if (now >= actor.combatUntil) startBoarCharge(actor, now);
+      return;
+    }
+
+    if (actor.combatPhase !== "charge") {
+      actor.combatPhase = "prepare";
+      actor.combatUntil = now + 420;
+      boarShowLayer(actor, 0);
+      return;
+    }
+
+    boarCombatMove(actor, actor.chargeVX, actor.chargeVY, BOAR_CONFIG.chargeSpeed * deltaSeconds);
+    if (!actor.chargeHitDone && playerInsideEnemyReach(actor, BOAR_CONFIG.chargeReach)) {
+      actor.chargeHitDone = true;
+      damagePlayer(BOAR_CONFIG.chargeDamage);
+      actor.combatPhase = "impact";
+      actor.combatUntil = now + BOAR_CONFIG.impactDuration;
+      boarShowLayer(actor, 4);
+      createBoarImpactDust(actor);
+      actor.element.animate(
+        [{ transform: "translate(-50%, -84%) translateX(-18px)" }, { transform: "translate(-50%, -84%) translateX(18px)" }, { transform: "translate(-50%, -84%)" }],
+        { duration: 210, iterations: 1 }
+      );
+      return;
+    }
+    if (now >= actor.combatUntil) beginBoarRetreat(actor, now);
+  }
+
+  function updateTierbannAggressiveBoar(actor, deltaSeconds, now) {
+    updateBoarPlayerCombat(actor, deltaSeconds, now);
+  }
+
+  function updateTierbannAggressiveWolf(actor, deltaSeconds, now) {
+    updateWolfPlayerCombat(actor, deltaSeconds, now);
   }
 
   function createTierbannsteinSystem() {
@@ -7237,6 +7451,15 @@
     width: 500,
     height: 390,
     maxHp: 1000,
+    attackFrames: Object.freeze([
+      "assets/mobs/bears/BLACK BEAR ATTACK 1.png",
+      "assets/mobs/bears/BLACK BEAR ATTACK 2.png"
+    ]),
+    attackDamage: 100,
+    attackCooldown: 1800,
+    attackWindup: 430,
+    attackReach: 315,
+    chaseSpeed: 245,
     speed: 72,
     frameDuration: 430,
     stepMin: 150,
@@ -7337,7 +7560,7 @@
       // Supplied side frames face RIGHT. LEFT is the exact mirrored asset.
       actor.images[visible].style.transform = facing < 0 ? "scaleX(-1)" : "scaleX(1)";
     } else {
-      actor.images[visible].style.transform = "scaleX(1)";
+      actor.images[visible].style.transform = facing < 0 ? "scaleX(-1)" : "scaleX(1)";
     }
   }
 
@@ -7348,7 +7571,8 @@
 
     const sources = [
       ...RAMSBACH_BEAR_CONFIG.sideFrames,
-      ...RAMSBACH_BEAR_CONFIG.downFrames
+      ...RAMSBACH_BEAR_CONFIG.downFrames,
+      ...RAMSBACH_BEAR_CONFIG.attackFrames
     ];
     const images = sources.map((src) => {
       const img = document.createElement("img");
@@ -7382,7 +7606,14 @@
       wobblePhase: Math.random() * Math.PI * 2,
       hp: RAMSBACH_BEAR_CONFIG.maxHp,
       dead: false,
-      away: false
+      away: false,
+      aggro: false,
+      attackingPlayer: false,
+      attackImpactDone: false,
+      attackImpactAt: 0,
+      attackEndAt: 0,
+      nextPlayerAttackAt: 0,
+      attackVariant: 0
     };
 
     root.style.left = `${x}px`;
@@ -7398,7 +7629,8 @@
 
     for (const src of [
       ...RAMSBACH_BEAR_CONFIG.sideFrames,
-      ...RAMSBACH_BEAR_CONFIG.downFrames
+      ...RAMSBACH_BEAR_CONFIG.downFrames,
+      ...RAMSBACH_BEAR_CONFIG.attackFrames
     ]) {
       const preload = new Image();
       preload.decoding = "async";
@@ -7429,6 +7661,8 @@
     actor.dead = true;
     actor.hp = 0;
     actor.moving = false;
+    actor.aggro = false;
+    actor.attackingPlayer = false;
     actor.pauseUntil = Infinity;
     actor.nextDecision = Infinity;
     actor.root.style.display = "none";
@@ -7441,6 +7675,7 @@
 
     // EXACT existing animal damage readout. Intentionally NO bear hit sound.
     createRabbitDamageText(actor, amount, critical, saustark);
+    actor.aggro = true;
     actor.moving = false;
 
     if (critical) {
@@ -7477,6 +7712,77 @@
     }
   }
 
+  function showRamsbachBearAttackFrame(actor, variant) {
+    const visible = 4 + (variant ? 1 : 0);
+    actor.images.forEach((img, index) => img.classList.toggle("ramsbach-bear__sprite--visible", index === visible));
+    const dx = playerX - actor.x;
+    let flip = dx < 0 ? -1 : 1;
+    if (Math.abs(dx) < 60 && Math.random() < 0.5) flip *= -1;
+    actor.images[visible].style.transform = flip < 0 ? "scaleX(-1)" : "scaleX(1)";
+    actor.facing = flip;
+  }
+
+  function setRamsbachBearRestTowardPlayer(actor) {
+    const dx = playerX - actor.x;
+    const dy = playerY - actor.y;
+    actor.family = Math.abs(dx) >= Math.abs(dy) * 0.85 ? "side" : "down";
+    actor.facing = dx < 0 ? -1 : 1;
+    if (Math.abs(dx) < 60 && Math.random() < 0.32) actor.facing *= -1;
+    setRamsbachBearFrame(actor, actor.family, 0, actor.facing);
+  }
+
+  function startRamsbachBearPlayerAttack(actor, now) {
+    actor.attackingPlayer = true;
+    actor.attackImpactDone = false;
+    actor.attackImpactAt = now + RAMSBACH_BEAR_CONFIG.attackWindup;
+    actor.attackEndAt = now + 760;
+    actor.nextPlayerAttackAt = now + RAMSBACH_BEAR_CONFIG.attackCooldown;
+    actor.attackVariant = Math.random() < 0.5 ? 0 : 1;
+    actor.moving = false;
+    showRamsbachBearAttackFrame(actor, actor.attackVariant);
+  }
+
+  function updateRamsbachBearPlayerCombat(actor, deltaSeconds, now) {
+    if (actor.dead || actor.away || playerDead) return;
+    actor.aggro = true;
+    updateRamsbachBearDepth(actor);
+
+    if (actor.attackingPlayer) {
+      if (!actor.attackImpactDone && now >= actor.attackImpactAt) {
+        actor.attackImpactDone = true;
+        if (playerInsideEnemyReach(actor, RAMSBACH_BEAR_CONFIG.attackReach)) damagePlayer(RAMSBACH_BEAR_CONFIG.attackDamage);
+      }
+      if (now >= actor.attackEndAt) {
+        actor.attackingPlayer = false;
+        setRamsbachBearRestTowardPlayer(actor);
+      }
+      return;
+    }
+
+    const dx = playerX - actor.x;
+    const dy = playerY - actor.y;
+    const distance = Math.hypot(dx, dy);
+    if (distance <= RAMSBACH_BEAR_CONFIG.attackReach && now >= actor.nextPlayerAttackAt) {
+      startRamsbachBearPlayerAttack(actor, now);
+      return;
+    }
+
+    if (distance > RAMSBACH_BEAR_CONFIG.attackReach * 0.78) {
+      actor.family = Math.abs(dx) >= Math.abs(dy) * 0.85 ? "side" : "down";
+      actor.facing = dx < 0 ? -1 : 1;
+      actor.moving = true;
+      tierbannStepWithCollision(actor, dx, dy, RAMSBACH_BEAR_CONFIG.chaseSpeed * deltaSeconds);
+      if (now >= actor.nextFrameAt) {
+        actor.frame = actor.frame ? 0 : 1;
+        actor.nextFrameAt = now + RAMSBACH_BEAR_CONFIG.frameDuration;
+        setRamsbachBearFrame(actor, actor.family, actor.frame, actor.facing);
+      }
+    } else {
+      actor.moving = false;
+      setRamsbachBearRestTowardPlayer(actor);
+    }
+  }
+
   function updateRamsbachBears(deltaSeconds, now) {
     if (MAP.id !== RAMSBACH_BEAR_CONFIG.mapId) return;
 
@@ -7486,6 +7792,14 @@
       if (!active || actor.dead) continue;
 
       updateRamsbachBearDepth(actor);
+
+      if (actor.aggro) {
+        updateRamsbachBearPlayerCombat(actor, deltaSeconds, now);
+        actor.root.style.left = `${actor.x}px`;
+        actor.root.style.top = `${actor.y}px`;
+        updateRamsbachBearDepth(actor);
+        continue;
+      }
 
       if (!actor.moving && now >= actor.nextDecision && now >= actor.pauseUntil) {
         const target = randomRamsbachBearPoint(
@@ -10633,6 +10947,34 @@
         visibility: hidden;
       }
 
+      .player-hp-fill {
+        position: absolute;
+        z-index: 4;
+        left: 13.0%;
+        top: 23.5%;
+        width: 24.2%;
+        height: 8.5%;
+        border-radius: 999px;
+        transform-origin: 0 50%;
+        background: linear-gradient(180deg, #ff4b42 0%, #b40000 55%, #640000 100%);
+        box-shadow: inset 0 1px 1px rgba(255,255,255,.35), 0 0 4px rgba(160,0,0,.65);
+        pointer-events: none;
+      }
+
+      .player-hp-text {
+        position: absolute;
+        z-index: 5;
+        left: 13.0%;
+        top: 20.5%;
+        width: 24.2%;
+        text-align: center;
+        color: #fff;
+        font: 700 12px Georgia, serif;
+        line-height: 1;
+        text-shadow: 0 1px 2px #000, 0 0 3px #000;
+        pointer-events: none;
+      }
+
       .player-hud-piece > img {
         display: block;
         width: 100%;
@@ -11563,9 +11905,15 @@
 
     const main = createPlayerHudPiece("playerHudMain", PLAYER_HUD.mainImage, "player-hud-piece--left");
     const exp = createPlayerHudPiece("playerHudExp", PLAYER_HUD.expImage, "player-hud-piece--right");
-    playerHud = { main, exp };
+    const hpFill = document.createElement("div");
+    hpFill.className = "player-hp-fill";
+    const hpText = document.createElement("div");
+    hpText.className = "player-hp-text";
+    main.root.append(hpFill, hpText);
+    playerHud = { main, exp, hpFill, hpText };
 
     createPlayerQuickSlots(main.root);
+    updatePlayerHpHud();
     updatePlayerHudVisibility();
   }
 
@@ -16836,6 +17184,55 @@
     return Promise.all(jobs);
   }
 
+  // ------------------------------------------------------------------
+  // R128 PLAYER HP + ENEMY -> PLAYER DAMAGE
+  // ------------------------------------------------------------------
+  const PLAYER_MAX_HP = 100;
+  let playerHp = PLAYER_MAX_HP;
+  let playerDead = false;
+
+  function updatePlayerHpHud() {
+    if (!playerHud || !playerHud.hpFill) return;
+    const ratio = Math.max(0, Math.min(1, playerHp / PLAYER_MAX_HP));
+    playerHud.hpFill.style.transform = `scaleX(${ratio})`;
+    if (playerHud.hpText) playerHud.hpText.textContent = `${playerHp}/${PLAYER_MAX_HP}`;
+  }
+
+  function createPlayerDamageText(amount) {
+    const popup = document.createElement("div");
+    popup.className = "player-damage";
+    popup.textContent = `-${amount}`;
+    popup.style.left = `${playerX}px`;
+    popup.style.top = `${playerY - 500}px`;
+    world.appendChild(popup);
+    window.setTimeout(() => popup.remove(), 820);
+  }
+
+  function damagePlayer(amount) {
+    if (playerDead || !Number.isFinite(amount) || amount <= 0) return false;
+    const applied = Math.min(playerHp, Math.max(0, Math.round(amount)));
+    if (applied <= 0) return false;
+    playerHp = Math.max(0, playerHp - applied);
+    createPlayerDamageText(applied);
+    updatePlayerHpHud();
+    if (playerHp <= 0) {
+      playerDead = true;
+      keys.clear();
+      attackHeld = false;
+      if (attacking) cancelAttackImmediately();
+      if (blocking) stopBlocking();
+      moving = false;
+      playerEl.classList.remove("player--moving");
+      playerEl.classList.add("player--idle");
+      setIdleSprite();
+    }
+    return true;
+  }
+
+  function playerInsideEnemyReach(actor, reach) {
+    return Math.hypot(playerX - actor.x, playerY - actor.y) <= reach;
+  }
+
   let viewportWidth = window.innerWidth;
   let viewportHeight = window.innerHeight;
   let fitScale = 1;
@@ -17232,7 +17629,7 @@
   }
 
   function startAttackCombo() {
-    if (attacking) return;
+    if (playerDead || attacking) return;
 
     attacking = true;
     moving = false;
@@ -17323,7 +17720,7 @@
   }
 
   function startBlocking() {
-    if (blocking) return;
+    if (playerDead || blocking) return;
 
     // Remember the orientation that existed BEFORE CTRL was pressed.
     blockFacing = facing === "left" ? "left" : facing === "down" ? "down" : "right";
@@ -17371,6 +17768,7 @@
   }
 
   function updatePlayer(deltaSeconds) {
+    if (playerDead) { clearIceVelocity(); updateIceVisual(); return; }
     if (blocking) { clearIceVelocity(); updateIceVisual(); setSprite(getBlockSprite()); return; }
     if (attacking) { clearIceVelocity(); updateIceVisual(); updateAttack(deltaSeconds); return; }
 
@@ -17663,6 +18061,7 @@
     }
 
     if (event.code === "Space") {
+      if (playerDead) return;
       attackHeld = true;
 
       if (!attacking) {
