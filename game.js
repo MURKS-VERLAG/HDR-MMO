@@ -3,7 +3,7 @@
 
   // R121 DEPLOYMENT VERIFICATION — harmless build marker.
   // If this line appears in DevTools, the browser is definitely running R121.
-  console.info("HDR BUILD R134 - BOAR COMMITTED ATTACK CYCLE FIX");
+  console.info("HDR BUILD R135 - BOAR OUTSIDE HABITAT + DEATH DEPTH SIZE");
 
   const MAPS = Object.freeze({
     oberkirch: Object.freeze({
@@ -6565,8 +6565,14 @@
   }
 
   function boarCombatStepAllowed(actor, nextX, nextY) {
+    // Hard world/terrain collision ALWAYS remains authoritative.
     if (!tierbannPointAllowed(nextX, nextY)) return false;
-    if (actor.tierbannAggressive) return true;
+
+    // R135: once a normal boar has been hit and is aggressive, its combat cycle
+    // may leave the habitat while pursuing / retreating / charging the player.
+    // Ambient peaceful movement is still habitat-bound elsewhere in the old AI.
+    if (actor.tierbannAggressive || actor.aggro) return true;
+
     return boarPointInPolygon(nextX, nextY, actor.zone.polygon);
   }
 
@@ -6600,13 +6606,12 @@
   function normalBoarShouldDisengage(actor) {
     if (!actor || actor.tierbannAggressive) return false;
 
+    // R135: leaving the red habitat is NOT enough to escape an angry boar.
+    // It gives up only when the player has created real distance. If the boar is
+    // outside its polygon at that moment, disengageNormalBoar() already sends it
+    // back into its original habitat using the existing return animation.
     const distance = Math.hypot(playerX - actor.x, playerY - actor.y);
-    const playerStillInHabitat =
-      actor.zone &&
-      actor.zone.polygon &&
-      boarPointInPolygon(playerX, playerY, actor.zone.polygon);
-
-    return !playerStillInHabitat || distance > BOAR_CONFIG.disengageDistance;
+    return distance > BOAR_CONFIG.disengageDistance;
   }
 
   function disengageNormalBoar(actor, now) {
@@ -10753,6 +10758,15 @@
   // HARD DEPTH SWITCH FOR THE TWO WALK-BEHIND TOWERS.
   function updateChurchPlayerDepth() {
     if (!playerEl) return;
+
+    // R135: a dead player is ground scenery. All animal actor layers begin above
+    // this value (rabbits 4, wolves/boars 5, bears 5+), so animals visibly pass
+    // in front of the corpse. Revive automatically restores the normal map depth
+    // on the next frame because playerDead becomes false.
+    if (playerDead) {
+      playerEl.style.zIndex = "3";
+      return;
+    }
 
     // R54 FIX:
     // Hubacker-only building sprites must be hidden BEFORE any map-specific
@@ -17967,7 +17981,11 @@
     const isClubDown = club.down.includes(src);
     const isClubUp = club.up.includes(src);
 
-    if (isClubLeft || isClubRight) {
+    if (src === PLAYER_DEATH.sprite) {
+      // R135: horizontal corpse artwork is intentionally larger than the living
+      // idle body while staying anchored to the exact death foot position.
+      spriteScale = 1.45;
+    } else if (isClubLeft || isClubRight) {
       // Source sheet is a wide 2x2 composition; normalized 2:3 canvases need
       // this fixed bottom-center scale to match the existing player's world size.
       spriteScale = 2.50;
