@@ -3,7 +3,7 @@
 
   // R121 DEPLOYMENT VERIFICATION — harmless build marker.
   // If this line appears in DevTools, the browser is definitely running R121.
-  console.info("HDR BUILD R136 - TRUE BOAR FREE AGGRO + HARD DEATH DEPTH");
+  console.info("HDR BUILD R137 - RAMSBACH PLATEAU ACCESS RESTORED");
 
   const MAPS = Object.freeze({
     oberkirch: Object.freeze({
@@ -8302,8 +8302,10 @@
   }
 
   function ramsbachPointTouchesRedWall(x, y) {
-    // R124: red terrain lines are always hard collision.
-    // No blue-passage exemption and no perimeter snap exemption exist anymore.
+    // R137: red terrain lines remain absolute hard collision everywhere EXCEPT
+    // the explicitly marked BLUE bridge -> plateau access corridor. This restores
+    // the intended opening without weakening any other Ramsbach boundary.
+    if (worldPointInPolygon(x, y, RAMSBACH_TERRAIN.castleBluePassage)) return false;
 
     const radius = RAMSBACH_TERRAIN.redWallRadius;
     for (const polyline of RAMSBACH_TERRAIN.redWalls) {
@@ -8321,8 +8323,9 @@
   function isRamsbachCastleBlockedFootPoint(x, y) {
     if (MAP.id !== "ramsbach") return false;
 
-    // R124: BLUE zone is hard collision again and takes priority over any overlap.
-    if (worldPointInPolygon(x, y, RAMSBACH_TERRAIN.castleBluePassage)) return true;
+    // R137: BLUE marked strip is the intended bridge -> plateau access corridor.
+    // It must stay walkable even where it overlaps the castle artwork.
+    if (worldPointInPolygon(x, y, RAMSBACH_TERRAIN.castleBluePassage)) return false;
 
     // PINK: no hitbox at all — player can walk freely behind the motif.
     if (worldPointInPolygon(x, y, RAMSBACH_TERRAIN.castleBehindZone)) return false;
