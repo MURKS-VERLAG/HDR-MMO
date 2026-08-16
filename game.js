@@ -3,7 +3,7 @@
 
   // R121 DEPLOYMENT VERIFICATION — harmless build marker.
   // If this line appears in DevTools, the browser is definitely running R121.
-  console.info("HDR BUILD R154 - INVENTORY HOVER LAYER + CALIPH TOOLTIP");
+  console.info("HDR BUILD R155 - OPPENAU MAP + RAMSBACH NORTH TRANSITION");
 
   const MAPS = Object.freeze({
     oberkirch: Object.freeze({
@@ -54,6 +54,13 @@
       image: "assets/maps/MAP 7 RAMSBACH.webp",
       width: 10240,
       height: 6827
+    }),
+    oppenau: Object.freeze({
+      id: "oppenau",
+      name: "OPPENAU",
+      image: "assets/maps/MAP 8 OPPENAU.webp",
+      width: 10240,
+      height: 5760
     })
   });
 
@@ -261,6 +268,18 @@
     hubackerFromRamsbachSpawn: Object.freeze({
       x: 4050,
       y: 165
+    }),
+
+    // R155 MAP 7 RAMSBACH -> MAP 8 OPPENAU: existing red-arrow north road.
+    ramsbachOppenauNorth: Object.freeze({
+      x1: 3000,
+      x2: 4500,
+      leaveY: -18
+    }),
+    // Spawn just inside OPPENAU on the matching south continuation.
+    oppenauFromRamsbachSpawn: Object.freeze({
+      x: 3700,
+      y: 5635
     })
   });
 
@@ -772,7 +791,9 @@
     "renchtalstadion": "assets/audio/maps/RENCHTALSTADION - MEDIEVAL BATTLE.mp3",
     "oedsbach": "assets/audio/maps/OEDSBACH - THE HOLLOW KNIGHTS MARCH.mp3",
     // R114: dedicated RAMSBACH track supplied by the user.
-    "ramsbach": "assets/audio/maps/RAMSBACH - THE RING'S CALL.mp3"
+    "ramsbach": "assets/audio/maps/RAMSBACH - THE RING'S CALL.mp3",
+    // R155 dedicated OPPENAU track supplied by the user.
+    "oppenau": "assets/audio/maps/OPPENAU - DIE GROSSE REISE.mp3"
   });
 
   const MAP_MUSIC_VOLUME = 1.0;
@@ -9602,6 +9623,11 @@
       x >= MAP_EXIT_CONFIG.ramsbachHubackerSouth.x1 &&
       x <= MAP_EXIT_CONFIG.ramsbachHubackerSouth.x2;
 
+    const inRamsbachOppenauNorthExit =
+      MAP.id === "ramsbach" &&
+      x >= MAP_EXIT_CONFIG.ramsbachOppenauNorth.x1 &&
+      x <= MAP_EXIT_CONFIG.ramsbachOppenauNorth.x2;
+
     // R53 FINAL STADIUM EXIT FIX:
     // These two lanes were already known by clampPlayer() and checkMapExit(),
     // but canMoveFootTo() still rejected every step past MAP.height - 10.
@@ -9635,7 +9661,8 @@
         (inOberkirchNorthExit && y >= oberkirchNorthLeaveFloor) ||
         (inWinterbachNorthExit && y >= winterbachNorthLeaveFloor) ||
         (inLautenbachNorthExit && y >= lautenbachNorthLeaveFloor) ||
-        (inHubackerRamsbachNorthExit && y >= MAP_EXIT_CONFIG.hubackerRamsbachNorth.leaveY - 80);
+        (inHubackerRamsbachNorthExit && y >= MAP_EXIT_CONFIG.hubackerRamsbachNorth.leaveY - 80) ||
+        (inRamsbachOppenauNorthExit && y >= MAP_EXIT_CONFIG.ramsbachOppenauNorth.leaveY - 80);
 
       if (!allowedNorth) return false;
     }
@@ -18872,6 +18899,14 @@
     );
   }
 
+  function playerInRamsbachOppenauNorthExitLane() {
+    return (
+      MAP.id === "ramsbach" &&
+      playerX >= MAP_EXIT_CONFIG.ramsbachOppenauNorth.x1 &&
+      playerX <= MAP_EXIT_CONFIG.ramsbachOppenauNorth.x2
+    );
+  }
+
   function playerInOberkirchStadiumSouthExitLane() {
     return (
       MAP.id === "oberkirch-zentrum" &&
@@ -18910,6 +18945,12 @@
     const movingUp = keys.has("KeyW") || keys.has("ArrowUp");
     const movingDown = keys.has("KeyS") || keys.has("ArrowDown");
     const movingRight = keys.has("KeyD") || keys.has("ArrowRight");
+
+    // R155 RAMSBACH red-arrow north road -> OPPENAU.
+    if (playerInRamsbachOppenauNorthExitLane() && movingUp && playerY <= MAP_EXIT_CONFIG.ramsbachOppenauNorth.leaveY) {
+      switchMap(MAPS.oppenau, MAP_EXIT_CONFIG.oppenauFromRamsbachSpawn, true);
+      return true;
+    }
 
     // R111 HUBACKER yellow north arrow -> RAMSBACH blue south road.
     if (playerInHubackerRamsbachNorthExitLane() && movingUp && playerY <= MAP_EXIT_CONFIG.hubackerRamsbachNorth.leaveY) {
@@ -19570,7 +19611,8 @@
         playerInWinterbachNorthRightExitLane() ||
         playerInLautenbachNorthLeftExitLane() ||
         playerInLautenbachNorthRightExitLane() ||
-        playerInHubackerRamsbachNorthExitLane()
+        playerInHubackerRamsbachNorthExitLane() ||
+        playerInRamsbachOppenauNorthExitLane()
       ) &&
       (keys.has("KeyW") || keys.has("ArrowUp"));
 
@@ -19608,6 +19650,8 @@
         ) - 80;
       } else if (MAP.id === "hubacker") {
         leaveFloor = MAP_EXIT_CONFIG.hubackerRamsbachNorth.leaveY - 80;
+      } else if (MAP.id === "ramsbach") {
+        leaveFloor = MAP_EXIT_CONFIG.ramsbachOppenauNorth.leaveY - 80;
       }
 
       playerY = Math.max(
