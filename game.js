@@ -3,7 +3,7 @@
 
   // R121 DEPLOYMENT VERIFICATION — harmless build marker.
   // If this line appears in DevTools, the browser is definitely running R121.
-  console.info("HDR BUILD R135 - BOAR OUTSIDE HABITAT + DEATH DEPTH SIZE");
+  console.info("HDR BUILD R136 - TRUE BOAR FREE AGGRO + HARD DEATH DEPTH");
 
   const MAPS = Object.freeze({
     oberkirch: Object.freeze({
@@ -6564,15 +6564,56 @@
     createRabbitDust({ x: actor.x, y: actor.y });
   }
 
+  function boarAggroWorldPointAllowed(actor, x, y) {
+    // R136: aggressive NORMAL boars use animal-world collision, NOT
+    // canMoveFootTo(). The player helper contains player-sized map-edge and
+    // exit-lane restrictions that wrongly cage boars near their old habitats.
+    const marginX = 70;
+    const marginY = 70;
+    if (x < marginX || x > MAP.width - marginX) return false;
+    if (y < marginY || y > MAP.height - marginY) return false;
+
+    // Preserve the actual hard terrain/building obstacles of each map.
+    if (MAP.id === "winterbach-ranglehen") {
+      if (isWinterbachBlockedFootPoint(x, y)) return false;
+      if (isWinterbachObsthofBlockedFootPoint(x, y)) return false;
+      return true;
+    }
+
+    if (MAP.id === "lautenbach") {
+      if (isLautenbachBlockedFootPoint(x, y)) return false;
+      if (isLautenbachBuildingBlockedFootPoint(x, y)) return false;
+      return true;
+    }
+
+    if (MAP.id === "hubacker") {
+      if (isHubackerBlockedFootPoint(x, y)) return false;
+      return true;
+    }
+
+    if (MAP.id === "ramsbach") {
+      try {
+        if (isRamsbachBlockedFootPoint(x, y)) return false;
+      } catch (_) {}
+      return true;
+    }
+
+    return true;
+  }
+
   function boarCombatStepAllowed(actor, nextX, nextY) {
-    // Hard world/terrain collision ALWAYS remains authoritative.
+    // Existing Tierbann summons keep their established collision unchanged.
+    if (actor.tierbannAggressive) {
+      return tierbannPointAllowed(nextX, nextY);
+    }
+
+    // R136: once hit/aggressive, a normal boar may genuinely leave its habitat.
+    if (actor.aggro) {
+      return boarAggroWorldPointAllowed(actor, nextX, nextY);
+    }
+
+    // Peaceful ambient boars remain strictly habitat-bound.
     if (!tierbannPointAllowed(nextX, nextY)) return false;
-
-    // R135: once a normal boar has been hit and is aggressive, its combat cycle
-    // may leave the habitat while pursuing / retreating / charging the player.
-    // Ambient peaceful movement is still habitat-bound elsewhere in the old AI.
-    if (actor.tierbannAggressive || actor.aggro) return true;
-
     return boarPointInPolygon(nextX, nextY, actor.zone.polygon);
   }
 
@@ -10764,7 +10805,7 @@
     // in front of the corpse. Revive automatically restores the normal map depth
     // on the next frame because playerDead becomes false.
     if (playerDead) {
-      playerEl.style.zIndex = "3";
+      playerEl.style.zIndex = "2";
       return;
     }
 
@@ -17671,6 +17712,9 @@
     playerEl.classList.remove("player--moving", "player--respawn-glow");
     playerEl.classList.add("player--idle");
 
+    // R136: corpse is hard-pinned below every animal actor layer immediately.
+    playerEl.style.zIndex = "2";
+
     // The supplied horizontal death pose remains visible until revive.
     // Force bypasses any cached activeSprite state from the fatal attack frame.
     forceSprite(PLAYER_DEATH.sprite);
@@ -17712,6 +17756,9 @@
     setIdleSprite();
     hidePlayerDeathUI();
     resetEnemyAggroAfterPlayerDeath(now);
+
+    // Immediately restore the correct live-character world depth.
+    updateChurchPlayerDepth();
 
     playerEl.classList.remove("player--respawn-glow");
     void playerEl.offsetWidth;
@@ -17984,7 +18031,7 @@
     if (src === PLAYER_DEATH.sprite) {
       // R135: horizontal corpse artwork is intentionally larger than the living
       // idle body while staying anchored to the exact death foot position.
-      spriteScale = 1.45;
+      spriteScale = 1.80;
     } else if (isClubLeft || isClubRight) {
       // Source sheet is a wide 2x2 composition; normalized 2:3 canvases need
       // this fixed bottom-center scale to match the existing player's world size.
@@ -18310,6 +18357,9 @@
       // can overwrite it.
       playerEl.classList.remove("player--moving", "player--ice-sliding");
       playerEl.classList.add("player--idle");
+
+      // R136: death depth has absolute priority over all map-specific depth rules.
+      playerEl.style.zIndex = "2";
       if (activeSprite !== PLAYER_DEATH.sprite) forceSprite(PLAYER_DEATH.sprite);
       return;
     }
