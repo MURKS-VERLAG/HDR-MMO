@@ -3,7 +3,7 @@
 
   // R121 DEPLOYMENT VERIFICATION — harmless build marker.
   // If this line appears in DevTools, the browser is definitely running R121.
-  console.info("HDR BUILD R151 - HEALTH CONSUMABLES + QUICKBAR STACKS + DAMAGE BUFF");
+  console.info("HDR BUILD R152 - INVENTORY TOOLTIP LAYER FIX + CALIPH LAMP TOOLTIP");
 
   const MAPS = Object.freeze({
     oberkirch: Object.freeze({
@@ -17153,6 +17153,57 @@
         height: 92%;
       }
 
+      /* R152 MINIFIX: every hovered inventory item rises above every non-hovered
+         inventory item, so ALL hover cards always cover neighboring item artwork. */
+      .inventory-item:hover {
+        z-index: 1000;
+      }
+
+      /* R152 GEISTFLASCHE DES KALIFEN hover card. */
+      .inventory-caliph-tooltip {
+        position: absolute;
+        z-index: 1100;
+        left: calc(100% + 14px);
+        top: 50%;
+        width: clamp(270px, 26vw, 410px);
+        transform: translateY(-50%);
+        box-sizing: border-box;
+        padding: 17px 20px;
+        border: 1px solid rgba(82,0,24,.82);
+        border-radius: 7px;
+        background: rgba(92,0,30,.78);
+        box-shadow: 0 10px 28px rgba(0,0,0,.68);
+        color: #000000;
+        font-family: "Old English Text MT", "Lucida Blackletter", "UnifrakturCook", Georgia, serif;
+        pointer-events: none;
+        opacity: 0;
+        visibility: hidden;
+        transition: opacity 100ms ease, visibility 100ms ease;
+        white-space: normal;
+      }
+
+      .inventory-item--quickslot:hover .inventory-caliph-tooltip {
+        opacity: 1;
+        visibility: visible;
+      }
+
+      .inventory-caliph-tooltip__title {
+        margin-bottom: 11px;
+        color: #000000;
+        font-size: clamp(17px, 2vh, 25px);
+        font-weight: 900;
+        line-height: 1.15;
+        letter-spacing: .4px;
+      }
+
+      .inventory-caliph-tooltip__line {
+        margin-top: 6px;
+        color: #000000;
+        font-size: clamp(13px, 1.55vh, 18px);
+        font-weight: 800;
+        line-height: 1.28;
+      }
+
       /* R151 consumable hover cards: dark translucent, red heading + heart, white values. */
       .inventory-consumable-tooltip {
         position: absolute;
@@ -17718,6 +17769,31 @@
   }
 
 
+  function createCaliphLampTooltip() {
+    const tooltip = document.createElement("div");
+    tooltip.className = "inventory-caliph-tooltip";
+
+    const title = document.createElement("div");
+    title.className = "inventory-caliph-tooltip__title";
+    title.textContent = "GEISTFLASCHE DES KALIFEN";
+
+    const chanceSummon = document.createElement("div");
+    chanceSummon.className = "inventory-caliph-tooltip__line";
+    chanceSummon.textContent = "50% Chance den Kalifen zu beschwören.";
+
+    const chanceMood = document.createElement("div");
+    chanceMood.className = "inventory-caliph-tooltip__line";
+    chanceMood.textContent = "50% Chance seine Laune zu spüren.";
+
+    const bears = document.createElement("div");
+    bears.className = "inventory-caliph-tooltip__line";
+    bears.textContent = "Unwirksam gegen Bären";
+
+    tooltip.append(title, chanceSummon, chanceMood, bears);
+    return tooltip;
+  }
+
+
   function createHealthConsumableTooltip(itemId) {
     const item = HEALTH_CONSUMABLE_BY_ID[itemId];
     if (!item) return document.createDocumentFragment();
@@ -17989,7 +18065,9 @@
       } else if (stack.type === "quickslot") {
         item.draggable = true;
 
-        if (HEALTH_CONSUMABLE_BY_ID[stack.id]) {
+        if (stack.id === CALIPH_LAMP_ITEM.id) {
+          item.appendChild(createCaliphLampTooltip());
+        } else if (HEALTH_CONSUMABLE_BY_ID[stack.id]) {
           item.appendChild(createHealthConsumableTooltip(stack.id));
         }
 
