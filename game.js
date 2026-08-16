@@ -3,7 +3,7 @@
 
   // R121 DEPLOYMENT VERIFICATION — harmless build marker.
   // If this line appears in DevTools, the browser is definitely running R121.
-  console.info("HDR BUILD R140 - RAMSBACH BEAR CHASE SYNC + PLATEAU SEAM GUARD");
+  console.info("HDR BUILD R141 - EXP ORBS + LEVEL 1-10 + FOUR SHIELD EXP HUD");
 
   const MAPS = Object.freeze({
     oberkirch: Object.freeze({
@@ -5367,6 +5367,17 @@
   }
 
   function respawnRabbit(actor, now) {
+    // R141: EXP essence appears only AFTER the corpse has fully disappeared.
+    if (actor.expRewardEligible && !actor.expOrbSpawned) {
+      spawnPlayerExpOrb(
+        "rabbit",
+        actor.x,
+        actor.y,
+        actor.zone.mapId || "oberkirch-zentrum"
+      );
+      actor.expOrbSpawned = true;
+    }
+
     // Corpse fade is complete now: reveal any rolled loot at the exact death position.
     if (!actor.lootSpawned && actor.pendingLoot && actor.pendingLoot.length) {
       actor.pendingLoot.forEach((item, index) =>
@@ -5403,6 +5414,8 @@
     actor.fadeStarted = false;
     actor.pendingLoot = [];
     actor.lootSpawned = false;
+    actor.expRewardEligible = false;
+    actor.expOrbSpawned = false;
 
     actor.element.classList.remove(
       "map-rabbit--dead",
@@ -5430,6 +5443,8 @@
     }
 
     if (actor.hp <= 0) {
+      actor.expRewardEligible = true;
+      actor.expOrbSpawned = false;
       killRabbit(actor, now);
       return;
     }
@@ -5483,6 +5498,11 @@
   }
 
   function respawnWolf(actor, now) {
+    if (actor.expRewardEligible && !actor.expOrbSpawned) {
+      spawnPlayerExpOrb("wolf", actor.x, actor.y, actor.mapId);
+      actor.expOrbSpawned = true;
+    }
+
     if (!actor.lootSpawned && actor.pendingLoot && actor.pendingLoot.length) {
       actor.pendingLoot.forEach((item, i) => spawnRabbitLoot(item, actor.x, actor.y, actor.mapId, i));
     }
@@ -5516,6 +5536,8 @@
     actor.respawnAt = 0;
     actor.fadeAt = 0;
     actor.fadeStarted = false;
+    actor.expRewardEligible = false;
+    actor.expOrbSpawned = false;
     actor.pauseUntil = now + 600 + Math.random() * 1600;
     actor.nextDecision = actor.pauseUntil;
     actor.nextFrameAt = now + WOLF_CONFIG.frameDuration;
@@ -5538,8 +5560,11 @@
       createRabbitDust(actor);
       largeAnimalCriticalKnockback(actor, direction, "map-wolf--critical-hit");
     }
-    if (actor.hp <= 0) killWolf(actor, now);
-    else {
+    if (actor.hp <= 0) {
+      actor.expRewardEligible = true;
+      actor.expOrbSpawned = false;
+      killWolf(actor, now);
+    } else {
       actor.pauseUntil = now + 250;
       actor.nextDecision = now + 250;
     }
@@ -5579,6 +5604,12 @@
   }
 
   function respawnBoar(actor, now) {
+    if (actor.expRewardEligible && !actor.expOrbSpawned) {
+      const expMapId = actor.zone.mapId || BOAR_CONFIG.mapId;
+      spawnPlayerExpOrb("boar", actor.x, actor.y, expMapId);
+      actor.expOrbSpawned = true;
+    }
+
     if (!actor.lootSpawned && actor.pendingLoot && actor.pendingLoot.length) {
       const mapId = actor.zone.mapId || BOAR_CONFIG.mapId;
       actor.pendingLoot.forEach((item, i) => spawnRabbitLoot(item, actor.x, actor.y, mapId, i));
@@ -5614,6 +5645,8 @@
     actor.respawnAt = 0;
     actor.fadeAt = 0;
     actor.fadeStarted = false;
+    actor.expRewardEligible = false;
+    actor.expOrbSpawned = false;
     actor.pauseUntil = now + 700 + Math.random() * 1800;
     actor.moveEndAt = 0;
     actor.element.classList.remove("map-boar--death-fading", "map-boar--critical-hit", "map-boar--away");
@@ -5642,6 +5675,8 @@
     }
 
     if (actor.hp <= 0) {
+      actor.expRewardEligible = true;
+      actor.expOrbSpawned = false;
       killBoar(actor, now);
       return;
     }
@@ -7379,7 +7414,9 @@
       hp: MOLE_CONFIG.maxHp,
       phase: "digging",
       phaseEndAt: now + MOLE_CONFIG.digDuration,
-      dead: false
+      dead: false,
+      expRewardEligible: false,
+      expOrbSpawned: false
     };
 
     moleDigAudio.pause();
@@ -7444,6 +7481,16 @@
 
     window.setTimeout(() => {
       finished.element.remove();
+
+      if (finished.expRewardEligible && !finished.expOrbSpawned) {
+        spawnPlayerExpOrb(
+          "mole",
+          finished.x,
+          finished.y,
+          finished.mapId || MAP.id
+        );
+        finished.expOrbSpawned = true;
+      }
     }, MOLE_CONFIG.fadeDuration + 30);
 
     moleEvent = null;
@@ -7561,6 +7608,8 @@
     playRabbitHitSound();
 
     if (moleEvent.hp <= 0) {
+      moleEvent.expRewardEligible = true;
+      moleEvent.expOrbSpawned = false;
       killMole(performance.now());
     }
   }
@@ -7937,6 +7986,11 @@
         opacity: 1;
         visibility: visible;
       }
+
+      .ramsbach-bear--death-fading {
+        opacity: 0;
+        transition: opacity 420ms ease !important;
+      }
     `;
     document.head.appendChild(style);
   }
@@ -8026,7 +8080,13 @@
       attackImpactAt: 0,
       attackEndAt: 0,
       nextPlayerAttackAt: 0,
-      attackVariant: 0
+      attackVariant: 0,
+      expRewardEligible: false,
+      expOrbSpawned: false,
+      corpseFadeAt: 0,
+      corpseDespawnAt: 0,
+      corpseFadeStarted: false,
+      corpseHidden: false
     };
 
     root.style.left = `${x}px`;
@@ -8061,7 +8121,8 @@
     // animation, habitat or combat state.
     for (const actor of ramsbachBearActors) {
       if (!actor || !actor.root) continue;
-      actor.root.style.display = visible ? "" : "none";
+      const shouldShow = visible && !(actor.dead && actor.corpseHidden);
+      actor.root.style.display = shouldShow ? "" : "none";
     }
   }
 
@@ -8081,6 +8142,7 @@
 
   function killRamsbachBear(actor) {
     if (!actor || actor.dead) return;
+    const deathNow = performance.now();
     playRandomAnimalCombatSfx(ANIMAL_COMBAT_SFX.bearDeath);
     actor.dead = true;
     actor.hp = 0;
@@ -8090,8 +8152,13 @@
     actor.attackImpactDone = false;
     actor.pauseUntil = Infinity;
     actor.nextDecision = Infinity;
+    actor.corpseDespawnAt = deathNow + 6500;
+    actor.corpseFadeAt = actor.corpseDespawnAt - 420;
+    actor.corpseFadeStarted = false;
+    actor.corpseHidden = false;
+    actor.root.classList.remove("ramsbach-bear--death-fading");
 
-    // R130: supplied bear death image is the final permanent layer.
+    // R130: supplied bear death image is the final corpse layer.
     const deathLayer = 6; // 2 side + 2 down + 2 attack
     actor.images.forEach((img, index) => {
       img.classList.toggle("ramsbach-bear__sprite--visible", index === deathLayer);
@@ -8117,6 +8184,8 @@
     }
 
     if (actor.hp <= 0) {
+      actor.expRewardEligible = true;
+      actor.expOrbSpawned = false;
       killRamsbachBear(actor);
       return;
     }
@@ -8228,6 +8297,35 @@
       if (!active) continue;
       if (actor.dead) {
         updateRamsbachBearDepth(actor);
+
+        if (
+          !actor.corpseFadeStarted &&
+          actor.corpseFadeAt &&
+          now >= actor.corpseFadeAt
+        ) {
+          actor.corpseFadeStarted = true;
+          actor.root.classList.add("ramsbach-bear--death-fading");
+        }
+
+        if (
+          !actor.corpseHidden &&
+          actor.corpseDespawnAt &&
+          now >= actor.corpseDespawnAt
+        ) {
+          actor.corpseHidden = true;
+          actor.root.style.display = "none";
+
+          if (actor.expRewardEligible && !actor.expOrbSpawned) {
+            spawnPlayerExpOrb(
+              "bear",
+              actor.x,
+              actor.y,
+              RAMSBACH_BEAR_CONFIG.mapId
+            );
+            actor.expOrbSpawned = true;
+          }
+        }
+
         continue;
       }
 
@@ -11386,6 +11484,406 @@
 
   let playerHud = null;
 
+  // ------------------------------------------------------------------
+  // R141 — CENTRAL PLAYER EXP / LEVEL SYSTEM
+  // EXP is awarded ONLY when the golden orb physically reaches the player.
+  // Four HUD shields represent the four quarters of the CURRENT level.
+  // ------------------------------------------------------------------
+  const PLAYER_EXP_CONFIG = Object.freeze({
+    maxLevel: 10,
+    mobExp: Object.freeze({
+      rabbit: 0.5,
+      mole: 5,
+      boar: 30,
+      wolf: 75,
+      bear: 500
+    }),
+    toNextLevel: Object.freeze({
+      1: 100,
+      2: 150,
+      3: 200,
+      4: 300,
+      5: 500,
+      6: 720,
+      7: 1000,
+      8: 1400,
+      9: 2000
+    }),
+    orb: Object.freeze({
+      collectRadius: 92,
+      hoverMs: 240,
+      startSpeed: 420,
+      acceleration: 880,
+      maxSpeed: 1850,
+      wobbleSpeed: 245
+    })
+  });
+
+  let playerExp = 0;
+  let playerExpOrbs = [];
+  let playerExpHudFills = [];
+  let playerExpHudAnimationQueue = [];
+  let playerExpHudAnimating = false;
+
+  function cleanHalfExp(value) {
+    return Math.round((Number(value) || 0) * 2) / 2;
+  }
+
+  function playerExpNeeded(level = playerLevel) {
+    return PLAYER_EXP_CONFIG.toNextLevel[level] || 0;
+  }
+
+  function playerExpProgress() {
+    if (playerLevel >= PLAYER_EXP_CONFIG.maxLevel) return 1;
+    const needed = playerExpNeeded();
+    if (!needed) return 0;
+    return Math.max(0, Math.min(1, playerExp / needed));
+  }
+
+  function renderPlayerExpHudProgress(progress, immediate = false) {
+    const safe = Math.max(0, Math.min(1, Number(progress) || 0));
+    const scaled = safe * 4;
+
+    playerExpHudFills.forEach((fill, index) => {
+      const local = Math.max(0, Math.min(1, scaled - index));
+      if (immediate) {
+        const oldTransition = fill.style.transition;
+        fill.style.transition = "none";
+        fill.style.height = `${local * 100}%`;
+        void fill.offsetHeight;
+        fill.style.transition = oldTransition;
+      } else {
+        fill.style.height = `${local * 100}%`;
+      }
+    });
+  }
+
+  function processPlayerExpHudAnimationQueue() {
+    if (playerExpHudAnimating || !playerExpHudAnimationQueue.length) return;
+    playerExpHudAnimating = true;
+
+    const next = playerExpHudAnimationQueue.shift();
+    renderPlayerExpHudProgress(next, false);
+
+    window.setTimeout(() => {
+      playerExpHudAnimating = false;
+      processPlayerExpHudAnimationQueue();
+    }, 500);
+  }
+
+  function queuePlayerExpHudProgress(progress) {
+    playerExpHudAnimationQueue.push(Math.max(0, Math.min(1, progress)));
+    processPlayerExpHudAnimationQueue();
+  }
+
+  function grantPlayerExp(amount) {
+    let remaining = cleanHalfExp(amount);
+    if (remaining <= 0) return;
+
+    if (playerLevel >= PLAYER_EXP_CONFIG.maxLevel) {
+      playerLevel = PLAYER_EXP_CONFIG.maxLevel;
+      playerExp = 0;
+      queuePlayerExpHudProgress(1);
+      return;
+    }
+
+    // Each crossed level first visually completes all four shields, then resets
+    // them for the next level. Overflow EXP is never lost.
+    while (remaining > 0 && playerLevel < PLAYER_EXP_CONFIG.maxLevel) {
+      const needed = playerExpNeeded(playerLevel);
+      if (!needed) break;
+
+      const room = cleanHalfExp(needed - playerExp);
+
+      if (remaining >= room) {
+        playerExp = needed;
+        queuePlayerExpHudProgress(1);
+        remaining = cleanHalfExp(remaining - room);
+        playerLevel += 1;
+
+        if (playerLevel >= PLAYER_EXP_CONFIG.maxLevel) {
+          playerLevel = PLAYER_EXP_CONFIG.maxLevel;
+          playerExp = 0;
+          queuePlayerExpHudProgress(1);
+          remaining = 0;
+          break;
+        }
+
+        playerExp = 0;
+        queuePlayerExpHudProgress(0);
+      } else {
+        playerExp = cleanHalfExp(playerExp + remaining);
+        remaining = 0;
+        queuePlayerExpHudProgress(playerExpProgress());
+      }
+    }
+  }
+
+  function createPlayerExpHudFill(root, image) {
+    if (!root || playerExpHudFills.length) return;
+
+    const layer = document.createElement("div");
+    layer.className = "player-exp-shields-fill-layer";
+
+    // Four independent shield interiors. The clip is intentionally conservative:
+    // gold can never bleed outside the painted bronze shield borders.
+    const lefts = [1.2, 25.5, 49.8, 74.1];
+
+    playerExpHudFills = lefts.map((left, index) => {
+      const slot = document.createElement("div");
+      slot.className = "player-exp-shield-slot";
+      slot.style.left = `${left}%`;
+      slot.dataset.expShield = String(index + 1);
+
+      const fill = document.createElement("div");
+      fill.className = "player-exp-shield-fill";
+      fill.style.height = "0%";
+
+      slot.appendChild(fill);
+      layer.appendChild(slot);
+      return fill;
+    });
+
+    root.insertBefore(layer, image);
+    image.classList.add("player-exp-shields-frame");
+    renderPlayerExpHudProgress(playerExpProgress(), true);
+  }
+
+  function installPlayerExpStyles() {
+    if (document.getElementById("playerExpStyles")) return;
+
+    const style = document.createElement("style");
+    style.id = "playerExpStyles";
+    style.textContent = `
+      .player-exp-shields-fill-layer {
+        position:absolute;
+        inset:0;
+        z-index:0;
+        overflow:hidden;
+        pointer-events:none;
+      }
+
+      #playerHudExp .player-exp-shields-frame {
+        position:relative;
+        z-index:2;
+      }
+
+      .player-exp-shield-slot {
+        position:absolute;
+        bottom:5.8%;
+        width:23.1%;
+        height:88.8%;
+        overflow:hidden;
+        clip-path:polygon(
+          50% 1%,
+          89% 13%,
+          91% 40%,
+          83% 66%,
+          67% 84%,
+          50% 98%,
+          33% 84%,
+          17% 66%,
+          9% 40%,
+          11% 13%
+        );
+      }
+
+      .player-exp-shield-fill {
+        position:absolute;
+        z-index:1;
+        left:0;
+        right:0;
+        bottom:0;
+        height:0%;
+        background:
+          radial-gradient(circle at 48% 70%, rgba(255,255,155,.98) 0 8%, rgba(255,229,35,.98) 35%, rgba(230,158,0,.98) 100%);
+        box-shadow:
+          inset 0 0 9px rgba(255,255,190,.88),
+          0 0 8px rgba(255,205,0,.65);
+        transition:height 440ms cubic-bezier(.22,.76,.18,1);
+        will-change:height;
+      }
+
+      .player-exp-orb {
+        position:absolute;
+        z-index:155;
+        width:34px;
+        height:34px;
+        margin-left:-17px;
+        margin-top:-17px;
+        border-radius:50%;
+        pointer-events:none;
+        background:
+          radial-gradient(circle at 38% 32%,
+            #fffbd0 0 12%,
+            #fff16a 24%,
+            #ffc400 52%,
+            #d27a00 78%,
+            rgba(145,71,0,.15) 100%);
+        box-shadow:
+          0 0 7px rgba(255,255,190,.98),
+          0 0 18px rgba(255,215,30,.92),
+          0 0 36px rgba(255,153,0,.58);
+        filter:brightness(1.08);
+        will-change:left,top,transform,opacity;
+      }
+
+      .player-exp-orb::after {
+        content:"";
+        position:absolute;
+        inset:7px;
+        border-radius:50%;
+        background:rgba(255,255,226,.80);
+        filter:blur(2px);
+      }
+
+      .player-exp-puff {
+        position:absolute;
+        z-index:160;
+        width:46px;
+        height:46px;
+        margin-left:-23px;
+        margin-top:-23px;
+        border-radius:50%;
+        pointer-events:none;
+        background:radial-gradient(circle,
+          rgba(255,255,220,.96) 0 8%,
+          rgba(255,226,55,.88) 24%,
+          rgba(255,165,0,.54) 48%,
+          rgba(255,145,0,0) 72%);
+        box-shadow:
+          0 0 18px rgba(255,230,80,.90),
+          0 0 42px rgba(255,170,0,.62);
+        animation:playerExpPuff 420ms ease-out forwards;
+      }
+
+      @keyframes playerExpPuff {
+        0%   { transform:scale(.38); opacity:1; }
+        58%  { transform:scale(1.55); opacity:.92; }
+        100% { transform:scale(2.15); opacity:0; }
+      }
+    `;
+    document.head.appendChild(style);
+  }
+
+  function createPlayerExpPuff(x, y) {
+    const puff = document.createElement("div");
+    puff.className = "player-exp-puff";
+    puff.style.left = `${x}px`;
+    puff.style.top = `${y}px`;
+    world.appendChild(puff);
+    window.setTimeout(() => puff.remove(), 470);
+  }
+
+  function spawnPlayerExpOrb(mobType, x, y, mapId) {
+    const expValue = PLAYER_EXP_CONFIG.mobExp[mobType];
+    if (!Number.isFinite(expValue) || expValue <= 0) return false;
+
+    // Never create a cross-map ghost orb.
+    if (!MAP || mapId !== MAP.id) return false;
+
+    const element = document.createElement("div");
+    element.className = "player-exp-orb";
+    element.style.left = `${x}px`;
+    element.style.top = `${y}px`;
+    world.appendChild(element);
+
+    const now = performance.now();
+    playerExpOrbs.push({
+      element,
+      mapId,
+      mobType,
+      exp: expValue,
+      x,
+      y: y - 52,
+      bornAt: now,
+      seed: Math.random() * Math.PI * 2,
+      collected: false
+    });
+
+    element.style.left = `${x}px`;
+    element.style.top = `${y - 52}px`;
+    return true;
+  }
+
+  function collectPlayerExpOrb(orb) {
+    if (!orb || orb.collected) return;
+    orb.collected = true;
+
+    createPlayerExpPuff(playerX, playerY - 150);
+    grantPlayerExp(orb.exp);
+
+    orb.element.remove();
+  }
+
+  function updatePlayerExpOrbs(deltaSeconds, now) {
+    if (!playerExpOrbs.length) return;
+
+    const survivors = [];
+
+    for (const orb of playerExpOrbs) {
+      if (!orb || orb.collected || !orb.element.isConnected) continue;
+
+      // An orb can never follow the player across a map transition.
+      if (!MAP || orb.mapId !== MAP.id) {
+        orb.element.remove();
+        continue;
+      }
+
+      const ageMs = now - orb.bornAt;
+      const targetX = playerX;
+      const targetY = playerY - 145;
+      const dx = targetX - orb.x;
+      const dy = targetY - orb.y;
+      const distance = Math.hypot(dx, dy);
+
+      if (distance <= PLAYER_EXP_CONFIG.orb.collectRadius) {
+        collectPlayerExpOrb(orb);
+        continue;
+      }
+
+      if (ageMs < PLAYER_EXP_CONFIG.orb.hoverMs) {
+        // Tiny magical lift before magnetic attraction begins.
+        orb.y -= 46 * deltaSeconds;
+        orb.x += Math.sin(ageMs * 0.020 + orb.seed) * 22 * deltaSeconds;
+      } else {
+        const len = distance || 1;
+        const nx = dx / len;
+        const ny = dy / len;
+
+        const flightAge = Math.max(0, (ageMs - PLAYER_EXP_CONFIG.orb.hoverMs) / 1000);
+        const speed = Math.min(
+          PLAYER_EXP_CONFIG.orb.maxSpeed,
+          PLAYER_EXP_CONFIG.orb.startSpeed +
+            flightAge * PLAYER_EXP_CONFIG.orb.acceleration
+        );
+
+        // Side-to-side magnetic wobble. It becomes calmer near the player so
+        // the orb always lands smoothly instead of orbiting the target.
+        const nearFactor = Math.max(0.08, Math.min(1, distance / 780));
+        const wobble =
+          Math.sin(ageMs * 0.0105 + orb.seed) *
+          PLAYER_EXP_CONFIG.orb.wobbleSpeed *
+          nearFactor;
+
+        const px = -ny;
+        const py = nx;
+
+        orb.x += (nx * speed + px * wobble) * deltaSeconds;
+        orb.y += (ny * speed + py * wobble) * deltaSeconds;
+      }
+
+      const pulse = 1 + Math.sin(ageMs * 0.016 + orb.seed) * 0.12;
+      orb.element.style.left = `${orb.x}px`;
+      orb.element.style.top = `${orb.y}px`;
+      orb.element.style.transform = `scale(${pulse})`;
+
+      survivors.push(orb);
+    }
+
+    playerExpOrbs = survivors;
+  }
+
   function installPlayerHudStyles() {
     if (document.getElementById("playerHudStyles")) return;
 
@@ -12497,6 +12995,7 @@
   function createPlayerHud() {
     if (playerHud) return;
     installPlayerHudStyles();
+    installPlayerExpStyles();
 
     const main = createPlayerHudPiece("playerHudMain", PLAYER_HUD.mainImage, "player-hud-piece--left");
     const exp = createPlayerHudPiece("playerHudExp", PLAYER_HUD.expImage, "player-hud-piece--right");
@@ -12505,6 +13004,9 @@
     const hpText = document.createElement("div");
     hpText.className = "player-hp-text";
     main.root.append(hpFill, hpText);
+
+    createPlayerExpHudFill(exp.root, exp.image);
+
     playerHud = { main, exp, hpFill, hpText };
 
     createPlayerQuickSlots(main.root);
@@ -18727,6 +19229,7 @@
 
         updateTierbannsteine(deltaSeconds, now);
         updateMole(now);
+        updatePlayerExpOrbs(deltaSeconds, now);
         updateOedegard(now);
         updateOedsbachShadows(now);
         updatePlayerHudVisibility();
