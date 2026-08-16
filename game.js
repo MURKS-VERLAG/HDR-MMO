@@ -3,7 +3,7 @@
 
   // R121 DEPLOYMENT VERIFICATION — harmless build marker.
   // If this line appears in DevTools, the browser is definitely running R121.
-  console.info("HDR BUILD R139 - HUBACKER FOG + WINTERBACH SNOW + ANIMAL COMBAT SFX + RAMSBACH GUARD");
+  console.info("HDR BUILD R140 - RAMSBACH BEAR CHASE SYNC + PLATEAU SEAM GUARD");
 
   const MAPS = Object.freeze({
     oberkirch: Object.freeze({
@@ -6151,8 +6151,14 @@
       moved = true;
     }
 
-    actor.element.style.left = `${actor.x}px`;
-    actor.element.style.top = `${actor.y}px`;
+    // R140: Tierbann actors use .element; RAMSBACH bears use .root.
+    // Keep the visible DOM position synchronized with the logical actor position
+    // on EVERY chase step so bears can never move invisibly and later teleport.
+    const visual = actor.element || actor.root;
+    if (visual) {
+      visual.style.left = `${actor.x}px`;
+      visual.style.top = `${actor.y}px`;
+    }
     return moved;
   }
 
@@ -8314,7 +8320,10 @@
     postBridgeGuardWall: Object.freeze([
       Object.freeze([5260, 3968]),
       Object.freeze([5535, 3968]),
-      Object.freeze([5725, 3575])
+      Object.freeze([5725, 3575]),
+      // R140: closes the tiny left-side escape around the previous endpoint
+      // without touching the intended bridge -> plateau entrance.
+      Object.freeze([5845, 3370])
     ]),
 
     // RED lines from the supplied reference, stored as independent polylines.
