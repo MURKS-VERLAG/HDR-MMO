@@ -3,7 +3,7 @@
 
   // R121 DEPLOYMENT VERIFICATION — harmless build marker.
   // If this line appears in DevTools, the browser is definitely running R121.
-  console.info("HDR BUILD R149 - WHITE STAG CLEAN COMBAT SCALE PRELOAD");
+  console.info("HDR BUILD R150 - WHITE STAG DEFENSE SPEED DEATH HITBOX FIX");
 
   const MAPS = Object.freeze({
     oberkirch: Object.freeze({
@@ -508,10 +508,12 @@
     weaponIcon: "assets/items/kits/white-stag/WHITE STAG WEAPON.png",
     inventoryWidth: 2,
     inventoryHeight: 3,
-    armor: 30,
-    damageReduction: 0.30,
+    armor: 50,
+    damageReduction: 0.50,
+    movementSpeedMultiplier: 0.90,
     damage: 120,
     criticalDamage: 180,
+    dead: "assets/player/kits/white-stag/death/WHITE STAG DEAD.png",
 
     // R146 — complete movement-only sprite set while the kit is equipped.
     // RIGHT source = supplied sheet 1. LEFT = exact mirrored RIGHT frames.
@@ -5232,8 +5234,21 @@
   function playBoarHitSound() { playInterruptibleAnimalHitSound("boar"); }
 
   function rabbitAttackDirection() {
-    if (attackSequence === ATTACK_DOWN || attackSequence === CLUB_ATTACK_DOWN) return "down";
-    if (attackSequence === ATTACK_LEFT || attackSequence === CLUB_ATTACK_LEFT) return "left";
+    // R150: White Stag attacks reuse the EXACT same directional hitbox logic
+    // as the already-proven fist/club combat. No oversized weapon-only reach.
+    if (
+      attackSequence === ATTACK_DOWN ||
+      attackSequence === CLUB_ATTACK_DOWN ||
+      attackSequence === WHITE_STAG_ATTACK_DOWN
+    ) return "down";
+
+    if (
+      attackSequence === ATTACK_LEFT ||
+      attackSequence === CLUB_ATTACK_LEFT ||
+      attackSequence === WHITE_STAG_ATTACK_LEFT
+    ) return "left";
+
+    // RIGHT and UP deliberately follow the same existing fist-combat fallback.
     return "right";
   }
 
@@ -8896,7 +8911,7 @@
       0,
       Math.min(
         metrics.total,
-        ramsbachSnapDistance + direction * PLAYER.speed * deltaSeconds
+        ramsbachSnapDistance + direction * currentPlayerMoveSpeed() * deltaSeconds
       )
     );
 
@@ -9311,7 +9326,7 @@
   function movePlayerOnIce(inputX,inputY,deltaSeconds){
     const inputLength=Math.hypot(inputX,inputY),hasInput=inputLength>0;
     if(hasInput){ iceVelocityX+=(inputX/inputLength)*ICE_PHYSICS.acceleration*deltaSeconds; iceVelocityY+=(inputY/inputLength)*ICE_PHYSICS.acceleration*deltaSeconds; }
-    const speed=Math.hypot(iceVelocityX,iceVelocityY); if(speed>ICE_PHYSICS.maxSpeed){ const s=ICE_PHYSICS.maxSpeed/speed; iceVelocityX*=s; iceVelocityY*=s; }
+    const speed=Math.hypot(iceVelocityX,iceVelocityY); const maxIceSpeed=ICE_PHYSICS.maxSpeed*(equippedKitItem?WHITE_STAG_KIT.movementSpeedMultiplier:1); if(speed>maxIceSpeed){ const s=maxIceSpeed/speed; iceVelocityX*=s; iceVelocityY*=s; }
     const drag=Math.pow(hasInput?ICE_PHYSICS.dragMoving:ICE_PHYSICS.dragNoInput,deltaSeconds*60); iceVelocityX*=drag; iceVelocityY*=drag;
     if(Math.hypot(iceVelocityX,iceVelocityY)<ICE_PHYSICS.minSpeed&&!hasInput){ clearIceVelocity(); updateIceVisual(); return; }
     const cx=playerX+iceVelocityX*deltaSeconds; if(canMoveFootTo(cx,playerY)) playerX=cx; else iceVelocityX=0;
@@ -9759,7 +9774,7 @@
     }
 
     const metrics = getPathMetrics(activeBridge.path);
-    const step = horizontalDirection * PLAYER.speed * deltaSeconds;
+    const step = horizontalDirection * currentPlayerMoveSpeed() * deltaSeconds;
     const nextDistance = Math.max(0, Math.min(metrics.total, activeBridge.distance + step));
     const point = pointAtBridgeDistance(activeBridge.path, nextDistance);
 
@@ -10055,7 +10070,7 @@
     const length = Math.hypot(dx, dy) || 1;
     const nx = dx / length;
     const ny = dy / length;
-    const amount = PLAYER.speed * deltaSeconds;
+    const amount = currentPlayerMoveSpeed() * deltaSeconds;
 
     // Axis-separated collision gives natural sliding along river banks.
     const candidateX = playerX + nx * amount;
@@ -17551,6 +17566,7 @@
     for (const text of [
       `Rüstung +${WHITE_STAG_KIT.armor}`,
       `${Math.round(WHITE_STAG_KIT.damageReduction * 100)}% weniger Schaden`,
+      `Bewegungsgeschwindigkeit -${Math.round((1 - WHITE_STAG_KIT.movementSpeedMultiplier) * 100)}%`,
       `${WHITE_STAG_KIT.damage} Angriff`,
       `${WHITE_STAG_KIT.criticalDamage} Krit`
     ]) {
@@ -17593,6 +17609,7 @@
     equippedKitItem = removed;
     equippedWeapon = WHITE_STAG_KIT.id;
     applyWhiteStagKitStats(true);
+    if (!playerDead && !attacking) setIdleSprite();
     renderInventory();
     return true;
   }
@@ -17605,6 +17622,7 @@
     equippedKitItem = null;
     equippedWeapon = null;
     applyWhiteStagKitStats(false);
+    if (!playerDead && !attacking) setIdleSprite();
     inventoryState.currentPage = free.pageIndex;
     renderInventory();
     return true;
@@ -18796,6 +18814,7 @@
     ...WHITE_STAG_KIT.attack.left,
     ...WHITE_STAG_KIT.attack.down,
     ...WHITE_STAG_KIT.attack.up,
+    WHITE_STAG_KIT.dead,
 
     PLAYER.attackFinish,
     PLAYER.attackFinishLeft
@@ -18870,6 +18889,10 @@
     return audio;
   });
 
+  function currentPlayerDeathSprite() {
+    return equippedKitItem ? WHITE_STAG_KIT.dead : PLAYER_DEATH.sprite;
+  }
+
   function playerRespawnProtected(now = performance.now()) {
     return now < playerRespawnProtectedUntil;
   }
@@ -18914,8 +18937,18 @@
 
   function showPlayerDeathUI() {
     const ui = createPlayerDeathUI();
+
+    // R150 fail-safe: the revive panel must appear even if a stale/deferred
+    // stylesheet or DOM replacement interferes with the class-based visibility.
+    if (!ui.root.isConnected) document.body.appendChild(ui.root);
     ui.root.classList.add("player-death-ui--visible");
     ui.root.setAttribute("aria-hidden", "false");
+    ui.root.style.display = "grid";
+    ui.root.style.opacity = "1";
+    ui.root.style.visibility = "visible";
+    ui.root.style.pointerEvents = "auto";
+    ui.root.style.zIndex = "2147483646";
+
     window.setTimeout(() => ui.revive.focus(), 80);
   }
 
@@ -18923,6 +18956,9 @@
     if (!playerDeathUI) return;
     playerDeathUI.root.classList.remove("player-death-ui--visible");
     playerDeathUI.root.setAttribute("aria-hidden", "true");
+    playerDeathUI.root.style.opacity = "0";
+    playerDeathUI.root.style.visibility = "hidden";
+    playerDeathUI.root.style.pointerEvents = "none";
   }
 
   function resetEnemyAggroAfterPlayerDeath(now) {
@@ -18997,7 +19033,7 @@
 
     // The supplied horizontal death pose remains visible until revive.
     // Force bypasses any cached activeSprite state from the fatal attack frame.
-    forceSprite(PLAYER_DEATH.sprite);
+    forceSprite(currentPlayerDeathSprite());
 
     playRandomPlayerDeathSound();
     resetEnemyAggroAfterPlayerDeath(performance.now());
@@ -19121,6 +19157,10 @@
   let attackStep = 0;
   let attackTimer = 0;
   let blockFacing = "right";
+
+  function currentPlayerMoveSpeed() {
+    return PLAYER.speed * (equippedKitItem ? WHITE_STAG_KIT.movementSpeedMultiplier : 1);
+  }
 
   const keys = new Set();
   let lastFrame = performance.now();
@@ -19327,7 +19367,9 @@
       WHITE_STAG_KIT.attack.down.includes(src) ||
       WHITE_STAG_KIT.attack.up.includes(src);
 
-    if (src === PLAYER_DEATH.sprite) {
+    const isWhiteStagDeath = src === WHITE_STAG_KIT.dead;
+
+    if (src === PLAYER_DEATH.sprite || isWhiteStagDeath) {
       // R135: horizontal corpse artwork is intentionally larger than the living
       // idle body while staying anchored to the exact death foot position.
       spriteScale = 1.80;
@@ -19343,7 +19385,7 @@
       // R149: S/down is the visual size reference and stays exactly as before.
       // Side attacks need +10% relative to R148; rear/up only +5%.
       if (WHITE_STAG_KIT.attack.right.includes(src) || WHITE_STAG_KIT.attack.left.includes(src)) {
-        spriteScale = 1.21; // 1.10 * 1.10
+        spriteScale = 1.2705; // R150: another +5% over R149 side-attack size
       } else if (WHITE_STAG_KIT.attack.up.includes(src)) {
         spriteScale = 1.155; // 1.10 * 1.05
       } else {
@@ -19653,7 +19695,8 @@
 
       // R136: death depth has absolute priority over all map-specific depth rules.
       playerEl.style.zIndex = "2";
-      if (activeSprite !== PLAYER_DEATH.sprite) forceSprite(PLAYER_DEATH.sprite);
+      const deathSprite = currentPlayerDeathSprite();
+      if (activeSprite !== deathSprite) forceSprite(deathSprite);
       return;
     }
     if (attacking) { clearIceVelocity(); updateIceVisual(); updateAttack(deltaSeconds); return; }
