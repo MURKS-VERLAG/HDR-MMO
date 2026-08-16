@@ -3,7 +3,7 @@
 
   // R121 DEPLOYMENT VERIFICATION — harmless build marker.
   // If this line appears in DevTools, the browser is definitely running R121.
-  console.info("HDR BUILD R129 - BOAR DAMAGE LEASH HUD SIZE FIX");
+  console.info("HDR BUILD R130 - DEATH REVIVE FLOW + BEAR DEATH");
 
   const MAPS = Object.freeze({
     oberkirch: Object.freeze({
@@ -255,6 +255,9 @@
     standRight: "assets/player/PLAYER STAND RIGHT.png",
     standLeft: "assets/player/PLAYER STAND LEFT.png",
     standUp: "assets/player/PLAYER STAND UP.png",
+
+    // R130 — player death pose supplied by the user.
+    dead: "assets/player/PLAYER DEAD.png",
 
     // R43 SIDE WALK: existing frame, new in-between frame, repeated 4x.
     // Existing 4-frame order stays untouched; supplied new sheet stays 1 -> 4.
@@ -3170,7 +3173,13 @@
       }
 
       const wolfDistanceToPlayer = Math.hypot(playerX - actor.x, playerY - actor.y);
-      if (actor.tierbannAggressive || actor.aggro || wolfPlayerInActorHabitat(actor) || wolfDistanceToPlayer <= WOLF_CONFIG.aggroRadius) {
+
+      // R130: during the visible 3s revive shimmer, wolves must not immediately
+      // re-lock the player at the exact death point.
+      if (playerRespawnProtected(now)) {
+        actor.aggro = false;
+        actor.attackingPlayer = false;
+      } else if (actor.tierbannAggressive || actor.aggro || wolfPlayerInActorHabitat(actor) || wolfDistanceToPlayer <= WOLF_CONFIG.aggroRadius) {
         actor.aggro = true;
         updateWolfPlayerCombat(actor, deltaSeconds, now);
         continue;
@@ -4220,7 +4229,10 @@
         continue;
       }
 
-      if (actor.tierbannAggressive || actor.aggro) {
+      if (playerRespawnProtected(now)) {
+        actor.aggro = false;
+        actor.combatPhase = "idle";
+      } else if (actor.tierbannAggressive || actor.aggro) {
         updateBoarPlayerCombat(actor, deltaSeconds, now);
         continue;
       }
@@ -7532,6 +7544,7 @@
       "assets/mobs/bears/BLACK BEAR ATTACK 1.png",
       "assets/mobs/bears/BLACK BEAR ATTACK 2.png"
     ]),
+    deadFrame: "assets/mobs/bears/BLACK BEAR DEAD.png",
     attackDamage: 100,
     attackCooldown: 1800,
     attackWindup: 430,
@@ -7649,7 +7662,8 @@
     const sources = [
       ...RAMSBACH_BEAR_CONFIG.sideFrames,
       ...RAMSBACH_BEAR_CONFIG.downFrames,
-      ...RAMSBACH_BEAR_CONFIG.attackFrames
+      ...RAMSBACH_BEAR_CONFIG.attackFrames,
+      RAMSBACH_BEAR_CONFIG.deadFrame
     ];
     const images = sources.map((src) => {
       const img = document.createElement("img");
@@ -7707,7 +7721,8 @@
     for (const src of [
       ...RAMSBACH_BEAR_CONFIG.sideFrames,
       ...RAMSBACH_BEAR_CONFIG.downFrames,
-      ...RAMSBACH_BEAR_CONFIG.attackFrames
+      ...RAMSBACH_BEAR_CONFIG.attackFrames,
+      RAMSBACH_BEAR_CONFIG.deadFrame
     ]) {
       const preload = new Image();
       preload.decoding = "async";
@@ -7740,9 +7755,18 @@
     actor.moving = false;
     actor.aggro = false;
     actor.attackingPlayer = false;
+    actor.attackImpactDone = false;
     actor.pauseUntil = Infinity;
     actor.nextDecision = Infinity;
-    actor.root.style.display = "none";
+
+    // R130: supplied bear death image is the final permanent layer.
+    const deathLayer = 6; // 2 side + 2 down + 2 attack
+    actor.images.forEach((img, index) => {
+      img.classList.toggle("ramsbach-bear__sprite--visible", index === deathLayer);
+    });
+    actor.images[deathLayer].style.transform = actor.facing < 0 ? "scaleX(-1)" : "scaleX(1)";
+    actor.root.style.display = MAP.id === RAMSBACH_BEAR_CONFIG.mapId ? "" : "none";
+    updateRamsbachBearDepth(actor);
   }
 
   function damageRamsbachBear(actor, amount, critical, direction, now, saustark = false) {
@@ -7865,12 +7889,19 @@
 
     for (const actor of ramsbachBearActors) {
       const active = MAP.id === RAMSBACH_BEAR_CONFIG.mapId;
-      actor.root.style.display = active && !actor.dead ? "" : "none";
-      if (!active || actor.dead) continue;
+      actor.root.style.display = active ? "" : "none";
+      if (!active) continue;
+      if (actor.dead) {
+        updateRamsbachBearDepth(actor);
+        continue;
+      }
 
       updateRamsbachBearDepth(actor);
 
-      if (actor.aggro) {
+      if (playerRespawnProtected(now)) {
+        actor.aggro = false;
+        actor.attackingPlayer = false;
+      } else if (actor.aggro) {
         updateRamsbachBearPlayerCombat(actor, deltaSeconds, now);
         actor.root.style.left = `${actor.x}px`;
         actor.root.style.top = `${actor.y}px`;
@@ -11202,6 +11233,107 @@
         filter:
           drop-shadow(0 0 12px rgba(255,74,0,.90))
           drop-shadow(0 5px 5px rgba(0,0,0,.42));
+      }
+
+
+      /* --------------------------------------------------------------
+         R130 PLAYER DEATH / REVIVE OVERLAY
+         Uses the same dark translucent visual language as stadium UI.
+         -------------------------------------------------------------- */
+      #playerDeathUI {
+        position: fixed;
+        inset: 0;
+        z-index: 2147483400;
+        display: grid;
+        place-items: center;
+        pointer-events: none;
+        opacity: 0;
+        visibility: hidden;
+        transition: opacity 220ms ease, visibility 220ms ease;
+      }
+
+      #playerDeathUI.player-death-ui--visible {
+        opacity: 1;
+        visibility: visible;
+        pointer-events: auto;
+      }
+
+      .player-death-ui__panel {
+        width: min(460px, 82vw);
+        box-sizing: border-box;
+        padding: 20px 34px 25px;
+        border: 1px solid rgba(198,151,60,.62);
+        background: rgba(4,4,4,.84);
+        box-shadow:
+          0 20px 70px rgba(0,0,0,.78),
+          inset 0 0 30px rgba(158,108,33,.10);
+        backdrop-filter: blur(3px);
+        text-align: center;
+      }
+
+      .player-death-ui__skull {
+        display: block;
+        width: min(150px, 34vw);
+        height: 145px;
+        object-fit: contain;
+        margin: -3px auto 5px;
+        pointer-events: none;
+        user-select: none;
+        -webkit-user-drag: none;
+        filter: drop-shadow(0 8px 8px rgba(0,0,0,.72));
+      }
+
+      .player-death-ui__revive {
+        appearance: none;
+        border: 0;
+        outline: none;
+        padding: 7px 15px 3px;
+        background: transparent;
+        color: #ffffff;
+        cursor: pointer;
+        font-family: "Old English Text MT", "Lucida Blackletter", "UnifrakturCook", Georgia, serif;
+        font-size: clamp(30px, 3.4vw, 48px);
+        font-weight: 900;
+        line-height: 1;
+        letter-spacing: 1.4px;
+        text-shadow: 0 2px 2px #000;
+        transition:
+          transform 150ms ease,
+          color 150ms ease,
+          text-shadow 150ms ease,
+          filter 150ms ease;
+      }
+
+      .player-death-ui__revive:hover,
+      .player-death-ui__revive:focus-visible {
+        color: #ffffff;
+        transform: scale(1.07);
+        text-shadow:
+          0 2px 2px #000,
+          0 0 7px rgba(255,255,255,.95),
+          0 0 18px rgba(255,255,255,.82),
+          0 0 34px rgba(255,255,255,.48);
+        filter: brightness(1.28);
+      }
+
+      /* Three-second respawn shimmer. Applied to the sprite only so the
+         player's world transform / foot anchor can never be disturbed. */
+      .player--respawn-glow #playerSprite {
+        animation: playerRespawnGlow 360ms ease-in-out 8 alternate;
+      }
+
+      @keyframes playerRespawnGlow {
+        from {
+          opacity: .50;
+          filter: brightness(1.05) drop-shadow(0 0 2px rgba(255,255,255,.25));
+        }
+        to {
+          opacity: 1;
+          filter:
+            brightness(1.75)
+            drop-shadow(0 0 8px rgba(255,255,255,.92))
+            drop-shadow(0 0 22px rgba(255,255,255,.62));
+        }
       }
 
       @media (max-width: 1100px) {
@@ -17279,6 +17411,202 @@
   let playerHp = PLAYER_MAX_HP;
   let playerDead = false;
 
+  // R130 death / revive state.
+  const PLAYER_DEATH = Object.freeze({
+    sprite: PLAYER.dead,
+    skull: "assets/ui/death/DEATH SKULL.png",
+    sounds: Object.freeze([
+      "assets/audio/player/PLAYER DEATH 1.mp3",
+      "assets/audio/player/PLAYER DEATH 2.mp3"
+    ]),
+    respawnProtectionMs: 3000
+  });
+
+  let playerDeathUI = null;
+  let playerRespawnProtectedUntil = 0;
+  let playerDeathX = 0;
+  let playerDeathY = 0;
+
+  const playerDeathAudios = PLAYER_DEATH.sounds.map((src) => {
+    const audio = new Audio(encodeURI(src));
+    audio.preload = "auto";
+    audio.loop = false;
+    audio.volume = 1.0;
+    return audio;
+  });
+
+  function playerRespawnProtected(now = performance.now()) {
+    return now < playerRespawnProtectedUntil;
+  }
+
+  function playRandomPlayerDeathSound() {
+    if (!playerDeathAudios.length) return;
+    const audio = playerDeathAudios[Math.floor(Math.random() * playerDeathAudios.length)];
+    try { audio.currentTime = 0; } catch (_) {}
+    audio.play().catch(() => {});
+  }
+
+  function createPlayerDeathUI() {
+    if (playerDeathUI) return playerDeathUI;
+
+    const root = document.createElement("div");
+    root.id = "playerDeathUI";
+    root.setAttribute("aria-hidden", "true");
+
+    const panel = document.createElement("div");
+    panel.className = "player-death-ui__panel";
+
+    const skull = document.createElement("img");
+    skull.className = "player-death-ui__skull";
+    skull.src = encodeURI(PLAYER_DEATH.skull);
+    skull.alt = "";
+    skull.draggable = false;
+
+    const revive = document.createElement("button");
+    revive.className = "player-death-ui__revive";
+    revive.type = "button";
+    revive.textContent = "WIEDERBELEBEN";
+
+    revive.addEventListener("click", () => revivePlayerAtDeathPoint());
+
+    panel.append(skull, revive);
+    root.appendChild(panel);
+    document.body.appendChild(root);
+
+    playerDeathUI = { root, panel, skull, revive };
+    return playerDeathUI;
+  }
+
+  function showPlayerDeathUI() {
+    const ui = createPlayerDeathUI();
+    ui.root.classList.add("player-death-ui--visible");
+    ui.root.setAttribute("aria-hidden", "false");
+    window.setTimeout(() => ui.revive.focus(), 80);
+  }
+
+  function hidePlayerDeathUI() {
+    if (!playerDeathUI) return;
+    playerDeathUI.root.classList.remove("player-death-ui--visible");
+    playerDeathUI.root.setAttribute("aria-hidden", "true");
+  }
+
+  function resetEnemyAggroAfterPlayerDeath(now) {
+    // Wolves: cancel the exact attack/chase state that was active on death.
+    for (const actor of wolfActors) {
+      if (!actor || actor.dead || actor.away) continue;
+      actor.aggro = false;
+      actor.attackingPlayer = false;
+      actor.attackImpactDone = false;
+      actor.attackImpactAt = 0;
+      actor.attackEndAt = 0;
+      actor.nextPlayerAttackAt = now + PLAYER_DEATH.respawnProtectionMs;
+      actor.moving = false;
+      actor.howling = false;
+      actor.frameIndex = 0;
+      if (actor.ready) wolfShowStaticLayer(actor, 0);
+      actor.pauseUntil = now + 650 + Math.random() * 550;
+      actor.nextDecision = actor.pauseUntil;
+    }
+
+    // Boars: normal combat phase is fully cancelled. Tierbann identity stays
+    // intact, but it cannot damage the player during the protection window.
+    for (const actor of boarActors) {
+      if (!actor || actor.dead || actor.away) continue;
+      actor.aggro = false;
+      actor.combatPhase = "idle";
+      actor.combatUntil = 0;
+      actor.chargeHitDone = false;
+      actor.chargeVX = 0;
+      actor.chargeVY = 0;
+      actor.retreatVX = 0;
+      actor.retreatVY = 0;
+      actor.moving = false;
+      if (actor.ready) boarShowLayer(actor, 0);
+      actor.pauseUntil = now + 650 + Math.random() * 550;
+      actor.nextDecision = actor.pauseUntil;
+    }
+
+    // Ramsbach black bears: same clean reset.
+    for (const actor of ramsbachBearActors) {
+      if (!actor || actor.dead || actor.away) continue;
+      actor.aggro = false;
+      actor.attackingPlayer = false;
+      actor.attackImpactDone = false;
+      actor.attackImpactAt = 0;
+      actor.attackEndAt = 0;
+      actor.nextPlayerAttackAt = now + PLAYER_DEATH.respawnProtectionMs;
+      actor.moving = false;
+      actor.pauseUntil = now + 700 + Math.random() * 650;
+      actor.nextDecision = actor.pauseUntil;
+      setRamsbachBearFrame(actor, actor.family || "side", 0, actor.facing || 1);
+    }
+  }
+
+  function killPlayer() {
+    if (playerDead) return;
+
+    playerDead = true;
+    playerDeathX = playerX;
+    playerDeathY = playerY;
+
+    keys.clear();
+    attackHeld = false;
+    if (attacking) cancelAttackImmediately();
+    if (blocking) stopBlocking();
+    moving = false;
+
+    playerEl.classList.remove("player--moving", "player--respawn-glow");
+    playerEl.classList.add("player--idle");
+
+    // The supplied horizontal death pose remains visible until revive.
+    setSprite(PLAYER_DEATH.sprite);
+
+    playRandomPlayerDeathSound();
+    resetEnemyAggroAfterPlayerDeath(performance.now());
+    showPlayerDeathUI();
+  }
+
+  function revivePlayerAtDeathPoint() {
+    if (!playerDead) return;
+
+    const now = performance.now();
+
+    // Exact death coordinates: no map spawn, no teleport.
+    playerX = playerDeathX;
+    playerY = playerDeathY;
+    playerHp = PLAYER_MAX_HP;
+    playerDead = false;
+    playerRespawnProtectedUntil = now + PLAYER_DEATH.respawnProtectionMs;
+
+    keys.clear();
+    attackHeld = false;
+    attacking = false;
+    blocking = false;
+    moving = false;
+    currentAnimation = "idle";
+    walkFrame = 0;
+    walkFrameTimer = 0;
+
+    updatePlayerHpHud();
+    playerEl.style.left = `${playerX}px`;
+    playerEl.style.top = `${playerY}px`;
+    playerEl.classList.remove("player--moving");
+    playerEl.classList.add("player--idle");
+
+    // Return to the normal character art, then flash for exactly the requested
+    // three-second protection period.
+    setIdleSprite();
+    hidePlayerDeathUI();
+    resetEnemyAggroAfterPlayerDeath(now);
+
+    playerEl.classList.remove("player--respawn-glow");
+    void playerEl.offsetWidth;
+    playerEl.classList.add("player--respawn-glow");
+    window.setTimeout(() => {
+      playerEl.classList.remove("player--respawn-glow");
+    }, PLAYER_DEATH.respawnProtectionMs);
+  }
+
   function updatePlayerHpHud() {
     if (!playerHud || !playerHud.hpFill) return;
     const ratio = Math.max(0, Math.min(1, playerHp / PLAYER_MAX_HP));
@@ -17297,23 +17625,21 @@
   }
 
   function damagePlayer(amount) {
-    if (playerDead || !Number.isFinite(amount) || amount <= 0) return false;
+    if (
+      playerDead ||
+      playerRespawnProtected() ||
+      !Number.isFinite(amount) ||
+      amount <= 0
+    ) return false;
+
     const applied = Math.min(playerHp, Math.max(0, Math.round(amount)));
     if (applied <= 0) return false;
+
     playerHp = Math.max(0, playerHp - applied);
     createPlayerDamageText(applied);
     updatePlayerHpHud();
-    if (playerHp <= 0) {
-      playerDead = true;
-      keys.clear();
-      attackHeld = false;
-      if (attacking) cancelAttackImmediately();
-      if (blocking) stopBlocking();
-      moving = false;
-      playerEl.classList.remove("player--moving");
-      playerEl.classList.add("player--idle");
-      setIdleSprite();
-    }
+
+    if (playerHp <= 0) killPlayer();
     return true;
   }
 
