@@ -3,7 +3,7 @@
 
   // R121 DEPLOYMENT VERIFICATION — harmless build marker.
   // If this line appears in DevTools, the browser is definitely running R121.
-  console.info("HDR BUILD R138 - BEAR MAP VISIBILITY + MOLE MAP FILTER + ANIMAL SIZES");
+  console.info("HDR BUILD R139 - HUBACKER FOG + WINTERBACH SNOW + ANIMAL COMBAT SFX + RAMSBACH GUARD");
 
   const MAPS = Object.freeze({
     oberkirch: Object.freeze({
@@ -653,6 +653,45 @@
 
   const MAP_MUSIC_VOLUME = 1.0;
   const MAP_MUSIC_FADE_MS = 1400;
+
+  // ------------------------------------------------------------------
+  // R139 ANIMAL COMBAT / PROXIMITY SFX — supplied by user.
+  // ------------------------------------------------------------------
+  const ANIMAL_COMBAT_SFX = Object.freeze({
+    wolfAttack: Object.freeze([
+      "assets/audio/animals/wolf/WOLF ATTACK 1.mp3",
+      "assets/audio/animals/wolf/WOLF ATTACK 2.mp3",
+      "assets/audio/animals/wolf/WOLF ATTACK 3.mp3",
+      "assets/audio/animals/wolf/WOLF ATTACK 4.mp3"
+    ]),
+    bearAttack: Object.freeze([
+      "assets/audio/animals/bear/BEAR ATTACK 1.mp3",
+      "assets/audio/animals/bear/BEAR ATTACK 2.mp3"
+    ]),
+    bearNearby: Object.freeze([
+      "assets/audio/animals/bear/BEAR GROWL 1.mp3",
+      "assets/audio/animals/bear/BEAR GROWL 2.mp3"
+    ]),
+    bearDeath: Object.freeze([
+      "assets/audio/animals/bear/BEAR DEATH 1.mp3",
+      "assets/audio/animals/bear/BEAR DEATH 2.mp3"
+    ]),
+    boarHitsPlayer: Object.freeze([
+      "assets/audio/animals/boar/BOAR PLAYER HIT 1.mp3",
+      "assets/audio/animals/boar/BOAR PLAYER HIT 2.mp3"
+    ])
+  });
+
+  function playRandomAnimalCombatSfx(pool) {
+    if (!Array.isArray(pool) || !pool.length) return null;
+    const src = pool[Math.floor(Math.random() * pool.length)];
+    const audio = new Audio(encodeURI(src));
+    audio.preload = "auto";
+    audio.loop = false;
+    audio.volume = 1.0;
+    audio.play().catch(() => {});
+    return audio;
+  }
 
   // R79 STADIUM MUSIC:
   // RENCHTALSTADION inherits the currently running OBERKIRCH track until
@@ -1777,6 +1816,109 @@
   function setRamsbachFogVisibility(visible) {
     if (!ramsbachFogRoot) return;
     ramsbachFogRoot.style.display = visible ? "block" : "none";
+  }
+
+  // ------------------------------------------------------------------
+  // R139 HUBACKER — same proven moving fog as Ramsbach, deliberately weaker.
+  // ------------------------------------------------------------------
+  let hubackerFogRoot = null;
+
+  function createHubackerFog() {
+    if (hubackerFogRoot) return;
+    installOedsbachAtmosphereStyles();
+
+    const root = document.createElement("div");
+    root.className = "oedsbach-screen-fog hubacker-screen-fog";
+    root.style.display = MAP.id === "hubacker" ? "block" : "none";
+    root.style.opacity = "0.34";
+
+    // Same drifting veil system as Ramsbach, one veil fewer and lower opacity.
+    for (let i = 0; i < 4; i += 1) {
+      const veil = document.createElement("div");
+      veil.className = "oedsbach-screen-fog__veil";
+      root.appendChild(veil);
+    }
+
+    game.appendChild(root);
+    hubackerFogRoot = root;
+  }
+
+  function setHubackerFogVisibility(visible) {
+    if (!hubackerFogRoot) return;
+    hubackerFogRoot.style.display = visible ? "block" : "none";
+  }
+
+  // ------------------------------------------------------------------
+  // R139 WINTERBACH — screen-space snowfall, visual only.
+  // ------------------------------------------------------------------
+  let winterbachSnowRoot = null;
+
+  function installWinterbachSnowStyles() {
+    if (document.getElementById("winterbachSnowStyles")) return;
+    const style = document.createElement("style");
+    style.id = "winterbachSnowStyles";
+    style.textContent = `
+      .winterbach-screen-snow {
+        position:absolute;
+        inset:0;
+        z-index:4250;
+        overflow:hidden;
+        pointer-events:none;
+        display:none;
+      }
+      .winterbach-snowflake {
+        position:absolute;
+        top:-9vh;
+        border-radius:50%;
+        background:rgba(255,255,255,.92);
+        box-shadow:0 0 4px rgba(255,255,255,.72);
+        opacity:var(--snow-opacity,.78);
+        animation:winterbachSnowFall var(--snow-duration,9s) linear infinite;
+        animation-delay:var(--snow-delay,0s);
+        will-change:transform;
+      }
+      @keyframes winterbachSnowFall {
+        from {
+          transform:translate3d(0,-10vh,0);
+        }
+        to {
+          transform:translate3d(var(--snow-drift,80px),118vh,0);
+        }
+      }
+    `;
+    document.head.appendChild(style);
+  }
+
+  function createWinterbachSnow() {
+    if (winterbachSnowRoot) return;
+    installWinterbachSnowStyles();
+
+    const root = document.createElement("div");
+    root.className = "winterbach-screen-snow";
+    root.style.display = MAP.id === "winterbach-ranglehen" ? "block" : "none";
+
+    // Many small independent flakes = continuous natural snowfall without assets.
+    for (let i = 0; i < 86; i += 1) {
+      const flake = document.createElement("div");
+      flake.className = "winterbach-snowflake";
+      const size = 2.5 + Math.random() * 6.5;
+      flake.style.left = `${Math.random() * 100}%`;
+      flake.style.width = `${size}px`;
+      flake.style.height = `${size}px`;
+      flake.style.setProperty("--snow-duration", `${6.5 + Math.random() * 8.5}s`);
+      flake.style.setProperty("--snow-delay", `${-Math.random() * 14}s`);
+      flake.style.setProperty("--snow-drift", `${-120 + Math.random() * 240}px`);
+      flake.style.setProperty("--snow-opacity", `${0.46 + Math.random() * 0.46}`);
+      root.appendChild(flake);
+    }
+
+    game.appendChild(root);
+    winterbachSnowRoot = root;
+  }
+
+  function setWinterbachSnowVisibility(visible) {
+    if (!winterbachSnowRoot) return;
+    winterbachSnowRoot.style.display = visible ? "block" : "none";
   }
 
   function createOedsbachShadowSystem() {
@@ -6487,6 +6629,7 @@
       actor.element.style.setProperty("--wolf-facing", actor.facing);
     }
     wolfShowStaticLayer(actor, 3);
+    playRandomAnimalCombatSfx(ANIMAL_COMBAT_SFX.wolfAttack);
   }
 
   function wolfCombatChaseStep(actor, dx, dy, amount) {
@@ -6762,7 +6905,10 @@
     boarCombatMove(actor, actor.chargeVX, actor.chargeVY, BOAR_CONFIG.chargeSpeed * deltaSeconds);
     if (!actor.chargeHitDone && boarChargeHitsPlayer(actor)) {
       actor.chargeHitDone = true;
-      damagePlayer(BOAR_CONFIG.chargeDamage);
+      const playerWasDamaged = damagePlayer(BOAR_CONFIG.chargeDamage);
+      if (playerWasDamaged) {
+        playRandomAnimalCombatSfx(ANIMAL_COMBAT_SFX.boarHitsPlayer);
+      }
       actor.combatPhase = "impact";
       actor.combatUntil = now + BOAR_CONFIG.impactDuration;
       boarShowLayer(actor, 4);
@@ -7726,6 +7872,27 @@
   });
 
   let ramsbachBearActors = [];
+  let nextRamsbachBearNearbySoundAt = 0;
+
+  function playRandomRamsbachBearNearbySound(now) {
+    if (MAP.id !== RAMSBACH_BEAR_CONFIG.mapId) return;
+    if (now < nextRamsbachBearNearbySoundAt) return;
+
+    const nearby = ramsbachBearActors.filter((actor) =>
+      actor &&
+      !actor.dead &&
+      !actor.away &&
+      Math.hypot(playerX - actor.x, playerY - actor.y) <= BOAR_CONFIG.soundDistance
+    );
+
+    if (!nearby.length) {
+      nextRamsbachBearNearbySoundAt = now + 900;
+      return;
+    }
+
+    playRandomAnimalCombatSfx(ANIMAL_COMBAT_SFX.bearNearby);
+    nextRamsbachBearNearbySoundAt = now + BOAR_CONFIG.soundInterval;
+  }
 
   function installRamsbachBearStyles() {
     if (document.getElementById("ramsbachBearStyles")) return;
@@ -7908,6 +8075,7 @@
 
   function killRamsbachBear(actor) {
     if (!actor || actor.dead) return;
+    playRandomAnimalCombatSfx(ANIMAL_COMBAT_SFX.bearDeath);
     actor.dead = true;
     actor.hp = 0;
     actor.moving = false;
@@ -7999,6 +8167,7 @@
     actor.attackVariant = Math.random() < 0.5 ? 0 : 1;
     actor.moving = false;
     showRamsbachBearAttackFrame(actor, actor.attackVariant);
+    playRandomAnimalCombatSfx(ANIMAL_COMBAT_SFX.bearAttack);
   }
 
   function updateRamsbachBearPlayerCombat(actor, deltaSeconds, now) {
@@ -8044,6 +8213,8 @@
 
   function updateRamsbachBears(deltaSeconds, now) {
     if (MAP.id !== RAMSBACH_BEAR_CONFIG.mapId) return;
+
+    playRandomRamsbachBearNearbySound(now);
 
     for (const actor of ramsbachBearActors) {
       const active = MAP.id === RAMSBACH_BEAR_CONFIG.mapId;
@@ -8136,6 +8307,15 @@
   // ------------------------------------------------------------------
   const RAMSBACH_TERRAIN = Object.freeze({
     redWallRadius: 44,
+
+    // R139: tiny remaining post-bridge escape seam from the supplied screenshot.
+    // This guard is intentionally evaluated BEFORE castleBluePassage's red-wall
+    // exemption, so the real plateau entrance stays open but the upper glitch is sealed.
+    postBridgeGuardWall: Object.freeze([
+      Object.freeze([5260, 3968]),
+      Object.freeze([5535, 3968]),
+      Object.freeze([5725, 3575])
+    ]),
 
     // RED lines from the supplied reference, stored as independent polylines.
     // Bridge/ramp openings stay open exactly where the markup leaves a gap.
@@ -8321,12 +8501,22 @@
   }
 
   function ramsbachPointTouchesRedWall(x, y) {
-    // R137: red terrain lines remain absolute hard collision everywhere EXCEPT
-    // the explicitly marked BLUE bridge -> plateau access corridor. This restores
-    // the intended opening without weakening any other Ramsbach boundary.
+    const radius = RAMSBACH_TERRAIN.redWallRadius;
+
+    // R139: this one short seam MUST remain hard even inside the blue passage.
+    const guard = RAMSBACH_TERRAIN.postBridgeGuardWall;
+    for (let i = 0; i < guard.length - 1; i += 1) {
+      const a = guard[i];
+      const b = guard[i + 1];
+      if (boarPointToSegmentDistance(x, y, a[0], a[1], b[0], b[1]) <= radius) {
+        return true;
+      }
+    }
+
+    // Existing R137 exception remains unchanged for every OTHER red wall:
+    // the intended bridge -> plateau corridor stays freely traversable.
     if (worldPointInPolygon(x, y, RAMSBACH_TERRAIN.castleBluePassage)) return false;
 
-    const radius = RAMSBACH_TERRAIN.redWallRadius;
     for (const polyline of RAMSBACH_TERRAIN.redWalls) {
       for (let i = 0; i < polyline.length - 1; i += 1) {
         const a = polyline[i];
@@ -17108,6 +17298,8 @@
     setOedsbachShadowVisibility(MAP.id === "oedsbach");
     setRamsbachWorldVisibility(MAP.id === "ramsbach");
     setRamsbachFogVisibility(MAP.id === "ramsbach");
+    setHubackerFogVisibility(MAP.id === "hubacker");
+    setWinterbachSnowVisibility(MAP.id === "winterbach-ranglehen");
     setRamsbachBearVisibility(MAP.id === RAMSBACH_BEAR_CONFIG.mapId);
     updatePlayerHudVisibility();
 
@@ -18835,6 +19027,8 @@
   createOedegard();
   createOedsbachFog();
   createRamsbachFog();
+  createHubackerFog();
+  createWinterbachSnow();
   createOedsbachShadowSystem();
 
   // R99: cache/decode every Caliph visual and preload every circle voice at boot.
