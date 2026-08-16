@@ -3,7 +3,7 @@
 
   // R121 DEPLOYMENT VERIFICATION — harmless build marker.
   // If this line appears in DevTools, the browser is definitely running R121.
-  console.info("HDR BUILD R153 - TAB RESUME ANIMATION STABILITY");
+  console.info("HDR BUILD R154 - INVENTORY HOVER LAYER + CALIPH TOOLTIP");
 
   const MAPS = Object.freeze({
     oberkirch: Object.freeze({
@@ -17062,6 +17062,13 @@
         overflow: visible;
       }
 
+      /* R154: hovered item owns the top inventory stacking context.
+         EVERY tooltip/card therefore stays above all sibling inventory icons. */
+      .inventory-item:hover,
+      .inventory-item:focus-within {
+        z-index: 100;
+      }
+
       .inventory-item__icon {
         position: absolute;
         z-index: 3;
@@ -17151,6 +17158,61 @@
       .inventory-item--quickslot .inventory-item__icon {
         width: 92%;
         height: 92%;
+      }
+
+      /* R154 CALIPH LAMP hover card. */
+      .inventory-caliph-tooltip {
+        position: absolute;
+        z-index: 46;
+        left: calc(100% + 14px);
+        top: 50%;
+        width: clamp(250px, 25vw, 390px);
+        transform: translateY(-50%);
+        box-sizing: border-box;
+        padding: 17px 20px;
+        border: 1px solid rgba(218,174,72,.72);
+        border-radius: 7px;
+        background: rgba(8,8,8,.94);
+        box-shadow: 0 10px 28px rgba(0,0,0,.72);
+        color: #ffffff;
+        font-family: Georgia, "Times New Roman", serif;
+        pointer-events: none;
+        opacity: 0;
+        visibility: hidden;
+        transition: opacity 100ms ease, visibility 100ms ease;
+        white-space: normal;
+      }
+
+      .inventory-item--quickslot:hover .inventory-caliph-tooltip {
+        opacity: 1;
+        visibility: visible;
+      }
+
+      .inventory-caliph-tooltip__title {
+        margin-bottom: 9px;
+        color: #e6bd55;
+        font-family: "Old English Text MT", "Lucida Blackletter", "UnifrakturCook", Georgia, serif;
+        font-size: clamp(18px, 2.05vh, 26px);
+        font-weight: 900;
+        letter-spacing: .7px;
+        text-shadow: 0 1px 2px #000;
+      }
+
+      .inventory-caliph-tooltip__description {
+        margin-bottom: 12px;
+        color: #f0eadb;
+        font-size: clamp(13px, 1.55vh, 18px);
+        font-style: italic;
+        line-height: 1.3;
+      }
+
+      .inventory-caliph-tooltip__stat {
+        margin-top: 5px;
+        color: #ffffff;
+        font-size: clamp(13px, 1.55vh, 18px);
+        font-weight: 800;
+        line-height: 1.28;
+        text-shadow: 0 1px 2px #000;
       }
 
       /* R151 consumable hover cards: dark translucent, red heading + heart, white values. */
@@ -17718,6 +17780,31 @@
   }
 
 
+  function createCaliphLampTooltip() {
+    const tooltip = document.createElement("div");
+    tooltip.className = "inventory-caliph-tooltip";
+
+    const title = document.createElement("div");
+    title.className = "inventory-caliph-tooltip__title";
+    title.textContent = CALIPH_LAMP_ITEM.name;
+
+    const description = document.createElement("div");
+    description.className = "inventory-caliph-tooltip__description";
+    description.textContent = CALIPH_LAMP_ITEM.description;
+
+    const chance = document.createElement("div");
+    chance.className = "inventory-caliph-tooltip__stat";
+    chance.textContent = `${Math.round(CALIPH_LAMP_ULTIMATE.successChance * 100)}% CHANCE AUF BESCHWÖRUNG`;
+
+    const cooldown = document.createElement("div");
+    cooldown.className = "inventory-caliph-tooltip__stat";
+    cooldown.textContent = `${Math.round(CALIPH_LAMP_ULTIMATE.cooldownMs / 1000)} SEKUNDEN ABKLINGZEIT`;
+
+    tooltip.append(title, description, chance, cooldown);
+    return tooltip;
+  }
+
+
   function createHealthConsumableTooltip(itemId) {
     const item = HEALTH_CONSUMABLE_BY_ID[itemId];
     if (!item) return document.createDocumentFragment();
@@ -17989,7 +18076,9 @@
       } else if (stack.type === "quickslot") {
         item.draggable = true;
 
-        if (HEALTH_CONSUMABLE_BY_ID[stack.id]) {
+        if (stack.id === CALIPH_LAMP_ITEM.id) {
+          item.appendChild(createCaliphLampTooltip());
+        } else if (HEALTH_CONSUMABLE_BY_ID[stack.id]) {
           item.appendChild(createHealthConsumableTooltip(stack.id));
         }
 
