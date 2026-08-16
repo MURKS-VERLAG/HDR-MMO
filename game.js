@@ -3,7 +3,7 @@
 
   // R121 DEPLOYMENT VERIFICATION — harmless build marker.
   // If this line appears in DevTools, the browser is definitely running R121.
-  console.info("HDR BUILD R130 - DEATH REVIVE FLOW + BEAR DEATH");
+  console.info("HDR BUILD R131 - WOLF PACK AGGRO + DEATH UI LAYOUT");
 
   const MAPS = Object.freeze({
     oberkirch: Object.freeze({
@@ -3131,6 +3131,24 @@
   function updateWolves(deltaSeconds, now) {
     const activeActors = wolfActors.filter(actor => actor.mapId === MAP.id);
 
+    // R131 PACK AGGRO:
+    // Entering one wolf habitat activates every living wolf belonging
+    // to that exact habitat. Individual proximity aggro remains additional.
+    const playerOccupiedWolfHabitats = new Set();
+    if (!playerDead && !playerRespawnProtected(now)) {
+      for (const actor of activeActors) {
+        if (
+          actor &&
+          !actor.dead &&
+          !actor.away &&
+          actor.habitat &&
+          wolfPointInsideHabitat(playerX, playerY, actor.habitat)
+        ) {
+          playerOccupiedWolfHabitats.add(actor.habitat);
+        }
+      }
+    }
+
     for (const actor of wolfActors) {
       actor.element.style.display = actor.mapId === MAP.id ? "" : "none";
 
@@ -3179,7 +3197,12 @@
       if (playerRespawnProtected(now)) {
         actor.aggro = false;
         actor.attackingPlayer = false;
-      } else if (actor.tierbannAggressive || actor.aggro || wolfPlayerInActorHabitat(actor) || wolfDistanceToPlayer <= WOLF_CONFIG.aggroRadius) {
+      } else if (
+        actor.tierbannAggressive ||
+        actor.aggro ||
+        playerOccupiedWolfHabitats.has(actor.habitat) ||
+        wolfDistanceToPlayer <= WOLF_CONFIG.aggroRadius
+      ) {
         actor.aggro = true;
         updateWolfPlayerCombat(actor, deltaSeconds, now);
         continue;
@@ -11259,9 +11282,9 @@
       }
 
       .player-death-ui__panel {
-        width: min(460px, 82vw);
+        width: min(560px, 86vw);
         box-sizing: border-box;
-        padding: 20px 34px 25px;
+        padding: 24px 42px 30px;
         border: 1px solid rgba(198,151,60,.62);
         background: rgba(4,4,4,.84);
         box-shadow:
@@ -11273,10 +11296,10 @@
 
       .player-death-ui__skull {
         display: block;
-        width: min(150px, 34vw);
-        height: 145px;
+        width: min(135px, 30vw);
+        height: 132px;
         object-fit: contain;
-        margin: -3px auto 5px;
+        margin: 0 auto 10px;
         pointer-events: none;
         user-select: none;
         -webkit-user-drag: none;
@@ -11284,18 +11307,24 @@
       }
 
       .player-death-ui__revive {
+        display: block;
+        width: 100%;
+        box-sizing: border-box;
         appearance: none;
         border: 0;
         outline: none;
-        padding: 7px 15px 3px;
+        margin: 0 auto;
+        padding: 8px 8px 5px;
         background: transparent;
         color: #ffffff;
         cursor: pointer;
         font-family: "Old English Text MT", "Lucida Blackletter", "UnifrakturCook", Georgia, serif;
-        font-size: clamp(30px, 3.4vw, 48px);
+        font-size: clamp(25px, 2.65vw, 38px);
         font-weight: 900;
-        line-height: 1;
-        letter-spacing: 1.4px;
+        line-height: 1.05;
+        letter-spacing: 1px;
+        white-space: nowrap;
+        text-align: center;
         text-shadow: 0 2px 2px #000;
         transition:
           transform 150ms ease,
