@@ -3,7 +3,7 @@
 
   // R121 DEPLOYMENT VERIFICATION — harmless build marker.
   // If this line appears in DevTools, the browser is definitely running R121.
-  console.info("HDR BUILD R148 - WHITE STAG COMBAT");
+  console.info("HDR BUILD R149 - WHITE STAG CLEAN COMBAT SCALE PRELOAD");
 
   const MAPS = Object.freeze({
     oberkirch: Object.freeze({
@@ -18791,6 +18791,12 @@
     WHITE_STAG_KIT.idle.left,
     WHITE_STAG_KIT.idle.down,
 
+    // R149 — preload/decode the complete White Stag combat set too.
+    ...WHITE_STAG_KIT.attack.right,
+    ...WHITE_STAG_KIT.attack.left,
+    ...WHITE_STAG_KIT.attack.down,
+    ...WHITE_STAG_KIT.attack.up,
+
     PLAYER.attackFinish,
     PLAYER.attackFinishLeft
   ];
@@ -19333,8 +19339,18 @@
       spriteScale = 1.25;
     } else if (isClubUp) {
       spriteScale = 1.75;
-    } else if (isWhiteStagWalk || isWhiteStagIdle || isWhiteStagAttack) {
-      // R147: all currently implemented White Stag kit player artwork +10%.
+    } else if (isWhiteStagAttack) {
+      // R149: S/down is the visual size reference and stays exactly as before.
+      // Side attacks need +10% relative to R148; rear/up only +5%.
+      if (WHITE_STAG_KIT.attack.right.includes(src) || WHITE_STAG_KIT.attack.left.includes(src)) {
+        spriteScale = 1.21; // 1.10 * 1.10
+      } else if (WHITE_STAG_KIT.attack.up.includes(src)) {
+        spriteScale = 1.155; // 1.10 * 1.05
+      } else {
+        spriteScale = 1.10; // DOWN unchanged — reference size
+      }
+    } else if (isWhiteStagWalk || isWhiteStagIdle) {
+      // Existing R147 movement/rest size remains untouched.
       spriteScale = 1.10;
     } else if (src === PLAYER.standUp || isUpAttack) {
       spriteScale = 1.16;
