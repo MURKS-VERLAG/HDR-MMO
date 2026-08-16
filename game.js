@@ -3,7 +3,7 @@
 
   // R121 DEPLOYMENT VERIFICATION — harmless build marker.
   // If this line appears in DevTools, the browser is definitely running R121.
-  console.info("HDR BUILD R144 - WEISSER HIRSCH KIT STARTER VISIBILITY FIX");
+  console.info("HDR BUILD R145 - WHITE STAG KIT SLOT-ALIGNED THREE-PART VISUAL");
 
   const MAPS = Object.freeze({
     oberkirch: Object.freeze({
@@ -16685,12 +16685,15 @@
     page2Rect: Object.freeze({ x1: 252, y1: 713, x2: 490, y2: 772 }),
 
     // Painted top-left weapon equipment slot on the supplied inventory artwork.
-    // R143: blue marked weapon area is two painted boxes high.
+    // R143: blue marked Saukeule area remains two painted boxes high.
     weaponEquipRect: Object.freeze({ x1: 45, y1: 196, x2: 125, y2: 405 }),
-    // R143 white-stag kit equipment positions from supplied marked screenshot.
-    kitWeaponEquipRect: Object.freeze({ x1: 45, y1: 405, x2: 125, y2: 590 }),
-    kitArmorEquipRect: Object.freeze({ x1: 205, y1: 196, x2: 335, y2: 390 }),
-    kitHelmetEquipRect: Object.freeze({ x1: 370, y1: 205, x2: 465, y2: 330 })
+
+    // R145 WHITE STAG KIT — aligned directly to the marked painted equipment areas.
+    // Antler weapon spans ALL THREE left equipment boxes.
+    kitWeaponEquipRect: Object.freeze({ x1: 45, y1: 196, x2: 125, y2: 590 }),
+    // Armor and helmet are deliberately shifted downward versus R144.
+    kitArmorEquipRect: Object.freeze({ x1: 205, y1: 246, x2: 335, y2: 440 }),
+    kitHelmetEquipRect: Object.freeze({ x1: 370, y1: 255, x2: 465, y2: 380 })
   });
 
   let playerLevel = 1;
@@ -16976,9 +16979,56 @@
         cursor: pointer;
       }
 
-      .inventory-item--equipment-kit .inventory-item__icon {
-        width: 96%;
-        height: 96%;
+      /* R145: the unequipped White Stag kit is ONE logical 2x3 item,
+         but is drawn as three separate cut-out pieces on the exact painted cells:
+         left top = helmet (1 cell), left bottom = armor (2 cells),
+         right column = antler weapon (3 cells). */
+      .inventory-white-stag-kit-parts {
+        position:absolute;
+        inset:0;
+        z-index:3;
+        pointer-events:none;
+      }
+
+      .inventory-white-stag-kit-part {
+        position:absolute;
+        overflow:visible;
+        pointer-events:none;
+      }
+
+      .inventory-white-stag-kit-part img {
+        position:absolute;
+        inset:0;
+        width:100%;
+        height:100%;
+        object-fit:contain;
+        object-position:50% 50%;
+        display:block;
+        pointer-events:none;
+        filter:drop-shadow(0 2px 2px rgba(0,0,0,.72));
+      }
+
+      /* Parent 2x3 rect contains the small painted gaps between cells.
+         These percentages reproduce the actual 64px cells + raster gaps. */
+      .inventory-white-stag-kit-part--helmet {
+        left:0%;
+        top:0%;
+        width:47.76%;
+        height:31.25%;
+      }
+
+      .inventory-white-stag-kit-part--armor {
+        left:0%;
+        top:34.11%;
+        width:47.76%;
+        height:65.89%;
+      }
+
+      .inventory-white-stag-kit-part--weapon {
+        left:52.24%;
+        top:0%;
+        width:47.76%;
+        height:100%;
       }
 
       .inventory-item--equipment-kit:hover .inventory-kit-tooltip {
@@ -17045,13 +17095,14 @@
       }
 
       .inventory-kit-equip-icon {
-        position: absolute;
-        inset: 2%;
-        width: 96%;
-        height: 96%;
-        object-fit: contain;
-        pointer-events: none;
-        filter: drop-shadow(0 2px 2px rgba(0,0,0,.75));
+        position:absolute;
+        inset:0;
+        width:100%;
+        height:100%;
+        object-fit:contain;
+        object-position:50% 50%;
+        pointer-events:none;
+        filter:drop-shadow(0 2px 2px rgba(0,0,0,.75));
       }
 
       .inventory-item--equipped {
@@ -17375,6 +17426,35 @@
   }
 
 
+  function createWhiteStagKitInventoryVisual() {
+    const root = document.createElement("div");
+    root.className = "inventory-white-stag-kit-parts";
+
+    const parts = [
+      ["helmet", WHITE_STAG_KIT.helmetIcon],
+      ["armor", WHITE_STAG_KIT.armorIcon],
+      ["weapon", WHITE_STAG_KIT.weaponIcon]
+    ];
+
+    for (const [kind, src] of parts) {
+      const part = document.createElement("div");
+      part.className = `inventory-white-stag-kit-part inventory-white-stag-kit-part--${kind}`;
+
+      const img = document.createElement("img");
+      img.src = encodeURI(src);
+      img.alt = "";
+      img.draggable = false;
+      img.addEventListener("error", () => {
+        console.warn(`White Stag ${kind} inventory asset failed to load:`, src);
+      });
+
+      part.appendChild(img);
+      root.appendChild(part);
+    }
+
+    return root;
+  }
+
   function createWhiteStagKitTooltip() {
     const tooltip = document.createElement("div");
     tooltip.className = "inventory-kit-tooltip";
@@ -17530,6 +17610,9 @@
         const icon = document.createElement("div");
         icon.className = "inventory-item__penny";
         item.appendChild(icon);
+      } else if (stack.id === WHITE_STAG_KIT.id) {
+        // R145: NO combined kit symbol. The three real cut-outs occupy the 2x3 block.
+        item.appendChild(createWhiteStagKitInventoryVisual());
       } else if (stack.icon) {
         const icon = document.createElement("img");
         icon.className = "inventory-item__icon";
@@ -17538,10 +17621,6 @@
         icon.draggable = false;
         icon.addEventListener("error", () => {
           console.warn("Inventory icon failed to load:", stack.icon);
-          if (stack.id === WHITE_STAG_KIT.id) {
-            item.classList.add("inventory-item--asset-missing");
-            item.dataset.assetMissing = "WHITE STAG KIT";
-          }
         });
         item.appendChild(icon);
       }
