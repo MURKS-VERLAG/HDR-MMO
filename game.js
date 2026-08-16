@@ -3,7 +3,7 @@
 
   // R121 DEPLOYMENT VERIFICATION — harmless build marker.
   // If this line appears in DevTools, the browser is definitely running R121.
-  console.info("HDR BUILD R133 - BOAR CHARGE PRIORITY + PLAYER DEATH SPRITE LOCK");
+  console.info("HDR BUILD R134 - BOAR COMMITTED ATTACK CYCLE FIX");
 
   const MAPS = Object.freeze({
     oberkirch: Object.freeze({
@@ -5481,15 +5481,16 @@
   function damageBoar(actor, amount, critical, direction, now, saustark = false) {
     if (!actor || actor.dead || actor.away) return;
 
-    // R133: remember the combat phase BEFORE damage. A running charge is a
-    // committed attack and may never be cancelled just because the player hits.
+    // R134: only the FIRST hit that wakes a peaceful normal boar may alter its
+    // combat cycle. Once aggro is active, further player hits deal damage only.
+    // They must never restart retreat/prepare or cancel a committed charge.
+    const wasAggro = Boolean(actor.aggro);
     const phaseBeforeHit = actor.combatPhase;
 
     actor.hp = Math.max(0, actor.hp - amount);
     createRabbitDamageText(actor, amount, critical, saustark);
     playBoarHitSound();
     actor.aggro = true;
-    actor.moving = false;
 
     if (critical) {
       createRabbitDust(actor);
@@ -5501,33 +5502,32 @@
       return;
     }
 
-    if (phaseBeforeHit === "charge") {
-      // COMMITTED CHARGE:
-      // keep chargeVX / chargeVY / chargeHitDone / combatUntil exactly intact.
-      // The boar can still collide with and damage the player, then performs
-      // its normal impact -> retreat sequence.
-      actor.combatPhase = "charge";
-      boarShowLayer(actor, 3);
+    // First retaliation trigger:
+    // player earns breathing room, then the boar MUST complete
+    // retreat -> prepare -> charge.
+    if (!wasAggro) {
+      actor.moving = false;
+      beginBoarRetreat(actor, now);
       return;
     }
 
-    if (phaseBeforeHit === "impact") {
-      // The charge already connected. Preserve the impact pause; the existing
-      // update then sends the boar into retreat.
-      actor.combatPhase = "impact";
+    // Already fighting: preserve the exact existing phase and timers.
+    // Holding the attack key can therefore damage the boar, but can no longer
+    // lock it forever in retreat/prepare.
+    if (
+      phaseBeforeHit === "retreat" ||
+      phaseBeforeHit === "prepare" ||
+      phaseBeforeHit === "charge" ||
+      phaseBeforeHit === "impact"
+    ) {
       return;
     }
 
-    if (phaseBeforeHit === "retreat") {
-      // Never cancel the player's earned breathing room.
-      actor.combatPhase = "retreat";
-      boarShowLayer(actor, 1);
-      return;
-    }
-
-    // Idle / prepare hit: player earns tempo first. The boar backs away before
-    // it is allowed to prepare a new charge.
-    beginBoarRetreat(actor, now);
+    // Defensive recovery for an unexpected aggressive idle state.
+    actor.moving = false;
+    actor.combatPhase = "prepare";
+    actor.combatUntil = now + 420;
+    boarShowLayer(actor, 0);
   }
 
   function resolveBoarAttackFrame(frame) {
