@@ -3,7 +3,7 @@
 
   // R121 DEPLOYMENT VERIFICATION — harmless build marker.
   // If this line appears in DevTools, the browser is definitely running R121.
-  console.info("HDR BUILD R143 - WEISSER HIRSCH KIT INVENTORY");
+  console.info("HDR BUILD R144 - WEISSER HIRSCH KIT STARTER VISIBILITY FIX");
 
   const MAPS = Object.freeze({
     oberkirch: Object.freeze({
@@ -16986,6 +16986,21 @@
         visibility: visible;
       }
 
+      .inventory-item--equipment-kit.inventory-item--asset-missing::before {
+        content: "KIT-ASSET FEHLT";
+        position:absolute;
+        inset:8%;
+        display:grid;
+        place-items:center;
+        border:2px solid #e6bd55;
+        background:rgba(20,12,4,.86);
+        color:#e6bd55;
+        font:900 clamp(10px,1.25vh,15px)/1.15 Georgia,serif;
+        text-align:center;
+        z-index:5;
+        pointer-events:none;
+      }
+
       .inventory-kit-tooltip {
         position: absolute;
         z-index: 45;
@@ -17521,7 +17536,13 @@
         icon.src = encodeURI(stack.icon);
         icon.alt = "";
         icon.draggable = false;
-        icon.addEventListener("error", () => console.warn("Inventory icon failed to load:", stack.icon));
+        icon.addEventListener("error", () => {
+          console.warn("Inventory icon failed to load:", stack.icon);
+          if (stack.id === WHITE_STAG_KIT.id) {
+            item.classList.add("inventory-item--asset-missing");
+            item.dataset.assetMissing = "WHITE STAG KIT";
+          }
+        });
         item.appendChild(icon);
       }
 
@@ -17633,6 +17654,40 @@
 
   function findFirstFreeInventorySlot() {
     return findFirstFreeInventoryArea(1, 1);
+  }
+
+  // R144: deterministic starter placement for the first White Stag kit.
+  // The generic addItemToInventory path remains untouched for normal loot/crafting.
+  function addStarterWhiteStagKit() {
+    if (findInventoryStack(WHITE_STAG_KIT_ITEM.id) || equippedKitItem) return true;
+
+    const stack = {
+      id: WHITE_STAG_KIT_ITEM.id,
+      name: WHITE_STAG_KIT_ITEM.name,
+      description: WHITE_STAG_KIT_ITEM.description || "",
+      icon: WHITE_STAG_KIT_ITEM.icon,
+      width: WHITE_STAG_KIT_ITEM.width,
+      height: WHITE_STAG_KIT_ITEM.height,
+      quantity: 1,
+      stackable: false,
+      type: WHITE_STAG_KIT_ITEM.type
+    };
+
+    // Page I, columns 3+4, rows 1-3: exactly beside the starter club/lamp.
+    const preferredPage = 0;
+    const preferredSlot = 2;
+    if (canPlaceInventoryItem(preferredPage, preferredSlot, stack.width, stack.height)) {
+      placeInventoryItem(preferredPage, preferredSlot, stack);
+      return true;
+    }
+
+    const free = findFirstFreeInventoryArea(stack.width, stack.height);
+    if (!free) {
+      console.warn("White Stag starter kit could not be placed: no free 2x3 inventory area.");
+      return false;
+    }
+    placeInventoryItem(free.pageIndex, free.slotIndex, stack);
+    return true;
   }
 
   function addItemToInventory(item) {
@@ -19855,8 +19910,8 @@
     // Remove this line later when Ödegard's quest awards it.
     addItemToInventory(CALIPH_LAMP_ITEM);
 
-    // R143 TEST: first armor kit starts beside Saukeule and Caliph lamp.
-    addItemToInventory(WHITE_STAG_KIT_ITEM);
+    // R144: first armor kit is seeded deterministically into the marked 2x3 area.
+    addStarterWhiteStagKit();
 
     // Install immediately as a black curtain so OBERKIRCH never flashes before
     // the new-game sequence. It is screen UI only; no map state is changed.
