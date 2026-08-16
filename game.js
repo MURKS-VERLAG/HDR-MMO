@@ -3,7 +3,7 @@
 
   // R121 DEPLOYMENT VERIFICATION — harmless build marker.
   // If this line appears in DevTools, the browser is definitely running R121.
-  console.info("HDR BUILD R141 - EXP ORBS + LEVEL 1-10 + FOUR SHIELD EXP HUD");
+  console.info("HDR BUILD R142 - WINTERBACH ORIGINAL RETURN + LEVEL TITLE HUD");
 
   const MAPS = Object.freeze({
     oberkirch: Object.freeze({
@@ -78,6 +78,20 @@
       // Existing original north exit pair remains untouched.
       x: 5485,
       y: 5925
+    }),
+
+    // R142: missing reverse direction for the ORIGINAL OBERKIRCH <-> WINTERBACH road.
+    // Screenshot/player position is centered on this bottom road around X 5477.
+    winterbachOriginalSouth: Object.freeze({
+      x1: 4900,
+      x2: 6150,
+      leavePadding: 18
+    }),
+
+    // R142: exact OBERKIRCH top-road arrival from the supplied screenshot.
+    oberkirchOriginalNorthReturnSpawn: Object.freeze({
+      x: 2590,
+      y: 673
     }),
 
     // R18 NEW GREEN ARROW on MAP 1.
@@ -9334,8 +9348,16 @@
 
     const inWinterbachSouthExit =
       MAP.id === "winterbach-ranglehen" &&
-      x >= MAP_EXIT_CONFIG.winterbachSouth.x1 &&
-      x <= MAP_EXIT_CONFIG.winterbachSouth.x2;
+      (
+        (
+          x >= MAP_EXIT_CONFIG.winterbachSouth.x1 &&
+          x <= MAP_EXIT_CONFIG.winterbachSouth.x2
+        ) ||
+        (
+          x >= MAP_EXIT_CONFIG.winterbachOriginalSouth.x1 &&
+          x <= MAP_EXIT_CONFIG.winterbachOriginalSouth.x2
+        )
+      );
 
     const inWinterbachNorthExit =
       MAP.id === "winterbach-ranglehen" &&
@@ -11524,6 +11546,7 @@
   let playerExpHudFills = [];
   let playerExpHudAnimationQueue = [];
   let playerExpHudAnimating = false;
+  let playerLevelTitleHud = null;
 
   function cleanHalfExp(value) {
     return Math.round((Number(value) || 0) * 2) / 2;
@@ -11576,6 +11599,17 @@
     processPlayerExpHudAnimationQueue();
   }
 
+  function playerRankTitle(level = playerLevel) {
+    if (level >= 10) return "WAFFENKNECHT";
+    if (level >= 5) return "GEFOLGSMANN";
+    return "KNECHT";
+  }
+
+  function updatePlayerLevelTitleHud() {
+    if (!playerLevelTitleHud) return;
+    playerLevelTitleHud.textContent = `LV ${playerLevel} · ${playerRankTitle(playerLevel)}`;
+  }
+
   function grantPlayerExp(amount) {
     let remaining = cleanHalfExp(amount);
     if (remaining <= 0) return;
@@ -11584,6 +11618,7 @@
       playerLevel = PLAYER_EXP_CONFIG.maxLevel;
       playerExp = 0;
       queuePlayerExpHudProgress(1);
+      updatePlayerLevelTitleHud();
       return;
     }
 
@@ -11617,6 +11652,8 @@
         queuePlayerExpHudProgress(playerExpProgress());
       }
     }
+
+    updatePlayerLevelTitleHud();
   }
 
   function createPlayerExpHudFill(root, image) {
@@ -11646,7 +11683,14 @@
 
     root.insertBefore(layer, image);
     image.classList.add("player-exp-shields-frame");
+
+    const levelTitle = document.createElement("div");
+    levelTitle.className = "player-exp-level-title";
+    root.appendChild(levelTitle);
+    playerLevelTitleHud = levelTitle;
+
     renderPlayerExpHudProgress(playerExpProgress(), true);
+    updatePlayerLevelTitleHud();
   }
 
   function installPlayerExpStyles() {
@@ -11666,6 +11710,29 @@
       #playerHudExp .player-exp-shields-frame {
         position:relative;
         z-index:2;
+      }
+
+      .player-exp-level-title {
+        position:absolute;
+        z-index:4;
+        left:50%;
+        bottom:calc(100% + 3px);
+        transform:translateX(-50%);
+        width:max-content;
+        max-width:150%;
+        white-space:nowrap;
+        pointer-events:none;
+        user-select:none;
+        color:#e4b447;
+        font-family:"Old English Text MT", "Lucida Blackletter", "UnifrakturCook", Georgia, serif;
+        font-size:clamp(11px, 1.15vw, 17px);
+        font-weight:900;
+        line-height:1;
+        letter-spacing:.5px;
+        text-align:center;
+        text-shadow:
+          0 1px 2px #000,
+          0 0 3px rgba(255,203,76,.48);
       }
 
       .player-exp-shield-slot {
@@ -17891,6 +17958,14 @@
     );
   }
 
+  function playerInWinterbachOriginalSouthExitLane() {
+    return (
+      MAP.id === "winterbach-ranglehen" &&
+      playerX >= MAP_EXIT_CONFIG.winterbachOriginalSouth.x1 &&
+      playerX <= MAP_EXIT_CONFIG.winterbachOriginalSouth.x2
+    );
+  }
+
   function playerInWinterbachNorthLeftExitLane() {
     return (
       MAP.id === "winterbach-ranglehen" &&
@@ -18179,7 +18254,22 @@
       return true;
     }
 
-    // Existing MAP 2 lower OBERKIRCH return remains untouched.
+    // R142: ORIGINAL MAP 2 lower road -> ORIGINAL OBERKIRCH north road.
+    // Uses the exact same iris/map-title transition system as every other route.
+    if (
+      playerInWinterbachOriginalSouthExitLane() &&
+      movingDown &&
+      playerY >= MAP.height + MAP_EXIT_CONFIG.winterbachOriginalSouth.leavePadding
+    ) {
+      switchMap(
+        MAPS.oberkirch,
+        MAP_EXIT_CONFIG.oberkirchOriginalNorthReturnSpawn,
+        true
+      );
+      return true;
+    }
+
+    // Existing later MAP 2 lower-right OBERKIRCH return remains untouched.
     if (
       playerInWinterbachSouthExitLane() &&
       movingDown &&
@@ -18619,6 +18709,7 @@
     const southExitOpen =
       (
         playerInWinterbachSouthExitLane() ||
+        playerInWinterbachOriginalSouthExitLane() ||
         playerInLautenbachSouthLeftExitLane() ||
         playerInLautenbachSouthRightExitLane() ||
         playerInHubackerSouthLeftExitLane() ||
