@@ -3,7 +3,7 @@
 
   // R121 DEPLOYMENT VERIFICATION — harmless build marker.
   // If this line appears in DevTools, the browser is definitely running R121.
-  console.info("HDR BUILD R146 - WHITE STAG KIT WALK ANIMATIONS + BLOCK REMOVED");
+  console.info("HDR BUILD R147 - WHITE STAG CLEAN WALK + IDLE POSES + 10PCT SIZE");
 
   const MAPS = Object.freeze({
     oberkirch: Object.freeze({
@@ -541,6 +541,14 @@
         "assets/player/kits/white-stag/walk/WHITE STAG WALK UP 2.webp",
         "assets/player/kits/white-stag/walk/WHITE STAG WALK UP 3.webp"
       ])
+    }),
+
+    // R147 — dedicated rest poses after releasing movement.
+    // W / up deliberately keeps the existing R146 rear-facing rest frame.
+    idle: Object.freeze({
+      right: "assets/player/kits/white-stag/idle/WHITE STAG IDLE RIGHT.webp",
+      left: "assets/player/kits/white-stag/idle/WHITE STAG IDLE LEFT.webp",
+      down: "assets/player/kits/white-stag/idle/WHITE STAG IDLE DOWN.webp"
     })
   });
 
@@ -18729,6 +18737,9 @@
     ...WHITE_STAG_KIT.walk.left,
     ...WHITE_STAG_KIT.walk.down,
     ...WHITE_STAG_KIT.walk.up,
+    WHITE_STAG_KIT.idle.right,
+    WHITE_STAG_KIT.idle.left,
+    WHITE_STAG_KIT.idle.down,
 
     PLAYER.attackFinish,
     PLAYER.attackFinishLeft
@@ -19243,6 +19254,17 @@
     const isClubDown = club.down.includes(src);
     const isClubUp = club.up.includes(src);
 
+    const isWhiteStagWalk =
+      WHITE_STAG_KIT.walk.right.includes(src) ||
+      WHITE_STAG_KIT.walk.left.includes(src) ||
+      WHITE_STAG_KIT.walk.down.includes(src) ||
+      WHITE_STAG_KIT.walk.up.includes(src);
+
+    const isWhiteStagIdle =
+      src === WHITE_STAG_KIT.idle.right ||
+      src === WHITE_STAG_KIT.idle.left ||
+      src === WHITE_STAG_KIT.idle.down;
+
     if (src === PLAYER_DEATH.sprite) {
       // R135: horizontal corpse artwork is intentionally larger than the living
       // idle body while staying anchored to the exact death foot position.
@@ -19255,6 +19277,9 @@
       spriteScale = 1.25;
     } else if (isClubUp) {
       spriteScale = 1.75;
+    } else if (isWhiteStagWalk || isWhiteStagIdle) {
+      // R147: all currently implemented White Stag kit player artwork +10%.
+      spriteScale = 1.10;
     } else if (src === PLAYER.standUp || isUpAttack) {
       spriteScale = 1.16;
     } else if (isRightAttack || isLeftAttack) {
@@ -19271,11 +19296,21 @@
   }
 
   function setIdleSprite() {
-    // R146: until dedicated White-Stag idle/combat sheets arrive, keep the equipped
-    // character visually in-kit by resting on frame 1 of the matching walk direction.
     if (equippedKitItem) {
-      const kitFrames = WHITE_STAG_KIT.walk[facing] || WHITE_STAG_KIT.walk.down;
-      setSprite(kitFrames[0]);
+      // R147 exact requested rest poses:
+      // D/right = supplied idle image 1.
+      // A/left  = exact mirror of supplied idle image 1.
+      // S/down  = supplied idle image 2.
+      // W/up    = keep the already-working R146 rear-facing behaviour.
+      if (facing === "right") {
+        setSprite(WHITE_STAG_KIT.idle.right);
+      } else if (facing === "left") {
+        setSprite(WHITE_STAG_KIT.idle.left);
+      } else if (facing === "down") {
+        setSprite(WHITE_STAG_KIT.idle.down);
+      } else {
+        setSprite(WHITE_STAG_KIT.walk.up[0]);
+      }
       return;
     }
 
