@@ -3,7 +3,7 @@
 
   // R121 DEPLOYMENT VERIFICATION — harmless build marker.
   // If this line appears in DevTools, the browser is definitely running R121.
-  console.info("HDR BUILD R162 - OPPENAU GOAT + MAID AMBIENT");
+  console.info("HDR BUILD R163 - OPPENAU GOAT VISIBILITY + GATE DEPTH + BRIDGE ACCESS");
 
   const MAPS = Object.freeze({
     oberkirch: Object.freeze({
@@ -9117,12 +9117,20 @@
         x2: 3590, y2: 3180
       }),
 
-      // Visual RED gate-depth zone stays tied to the gate itself.
-      // R160 uses a body-height probe below, so the fade begins visibly earlier
-      // while the feet are still south of this rectangle.
+      // R163: upper gate uses the full visible gate-body band.
+      // This prevents the player from visually "standing on the roof":
+      // feet entering the roof/body section are already behind the gate.
       depthZone: Object.freeze({
-        x1: 2575, y1: 1900,
-        x2: 4050, y2: 2725
+        x1: 2575, y1: 1740,
+        x2: 4085, y2: 2865
+      }),
+
+      // Small deliberate opening from the arch/right edge directly onto the
+      // covered bridge snap line. This fixes the gate's upper-right silhouette
+      // blocking entry to the bridge from the LEFT.
+      bridgeApproach: Object.freeze({
+        x1: 3480, y1: 2450,
+        x2: 4185, y2: 3075
       })
     }),
 
@@ -9144,10 +9152,11 @@
         x2: 2860, y2: 5760
       }),
 
-      // Lower RED rectangle from the reference. Slightly extended vertically so
-      // the depth state covers the complete visual gate body.
+      // R163: depth is restricted to the ACTUAL lower-gate body.
+      // The old north edge (4190) kept the player translucent after he had
+      // already cleared the gate. Passage itself stays fully traversable.
       depthZone: Object.freeze({
-        x1: 1380, y1: 4190,
+        x1: 1380, y1: 4425,
         x2: 3500, y2: 5260
       })
     }),
@@ -9311,8 +9320,19 @@
   }
 
   function isOppenauGateBlockedFootPoint(config, x, y) {
-    // Central arch always remains walkable, including the RED behind-gate zone.
+    // Central arch always remains walkable.
     if (pointInOppenauRect(x, y, config.passage)) return false;
+
+    // R163: ONLY the upper gate owns this tiny bridge approach exception.
+    // It opens the route from the left side onto the existing covered-bridge
+    // snap line without weakening the rest of the gate hitbox.
+    if (
+      config.bridgeApproach &&
+      pointInOppenauRect(x, y, config.bridgeApproach)
+    ) {
+      return false;
+    }
+
     return sampleOppenauDecorAlpha(config, x, y);
   }
 
@@ -9340,19 +9360,31 @@
     return playerY - OPPENAU_DECOR.gateDepthBodyProbeOffsetY;
   }
 
+  function oppenauGateVisualProbeY(config) {
+    const bodyProbeY = oppenauGateDepthProbeY();
+
+    // R163: on the UPPER gate the visible roof/body sits high enough that the
+    // FOOT anchor must also participate, otherwise the player can appear to
+    // stand on the roof before the layer switches.
+    if (config === OPPENAU_DECOR.upperGate) {
+      const footInside = pointInOppenauRect(playerX, playerY, config.depthZone);
+      return footInside ? playerY : bodyProbeY;
+    }
+
+    return bodyProbeY;
+  }
+
   function oppenauGateFadeOpacityFor(config) {
     if (MAP.id !== "oppenau") return 1;
 
     const z = config.depthZone;
-    const probeY = oppenauGateDepthProbeY();
+    const probeY = oppenauGateVisualProbeY(config);
 
-    // X remains the player's centerline; Y follows the visible body rather than feet.
     if (!pointInOppenauRect(playerX, probeY, z)) return 1;
 
     // Feet must still be travelling inside the gate corridor.
     if (!pointInOppenauRect(playerX, playerY, config.passage)) return 1;
 
-    // Smooth fade from the south/north edges of the marked gate-depth body.
     const edgeDistance = Math.min(
       Math.abs(probeY - z.y1),
       Math.abs(z.y2 - probeY)
@@ -9369,9 +9401,9 @@
   function playerInOppenauGateDepthZone() {
     if (MAP.id !== "oppenau") return false;
 
-    const probeY = oppenauGateDepthProbeY();
-
     for (const config of [OPPENAU_DECOR.upperGate, OPPENAU_DECOR.lowerGate]) {
+      const probeY = oppenauGateVisualProbeY(config);
+
       if (
         pointInOppenauRect(playerX, probeY, config.depthZone) &&
         pointInOppenauRect(playerX, playerY, config.passage)
@@ -9456,7 +9488,10 @@
         transform-origin: 50% 100%;
         pointer-events: none;
         user-select: none;
-        z-index: 5;
+        /* R163: goat was present but hidden behind Oppenau decor at its
+           reference position. Ambient pair must render in the normal NPC
+           foreground layer. Timing/position/size stay unchanged. */
+        z-index: 95;
       }
 
       .oppenau-ambient-pair__sprite {
