@@ -9130,7 +9130,9 @@
       // blocking entry to the bridge from the LEFT.
       bridgeApproach: Object.freeze({
         x1: 3480, y1: 2450,
-        x2: 4185, y2: 3075
+        // MINIFIX: continue the right-side walkable pocket far enough behind
+        // the upper gate to include the supplied yellow-circle player position.
+        x2: 4185, y2: 3300
       })
     }),
 
@@ -9404,9 +9406,16 @@
     for (const config of [OPPENAU_DECOR.upperGate, OPPENAU_DECOR.lowerGate]) {
       const probeY = oppenauGateVisualProbeY(config);
 
+      const inGateRoute =
+        pointInOppenauRect(playerX, playerY, config.passage) ||
+        (config.bridgeApproach &&
+          pointInOppenauRect(playerX, playerY, config.bridgeApproach));
+
       if (
-        pointInOppenauRect(playerX, probeY, config.depthZone) &&
-        pointInOppenauRect(playerX, playerY, config.passage)
+        (pointInOppenauRect(playerX, probeY, config.depthZone) ||
+          (config.bridgeApproach &&
+            pointInOppenauRect(playerX, playerY, config.bridgeApproach))) &&
+        inGateRoute
       ) return true;
     }
     return false;
@@ -9457,7 +9466,7 @@
 
     goat: Object.freeze({
       x: 1990,
-      y: 2175,
+      y: 2460,
       width: 390,
       height: 410,
 
@@ -9496,15 +9505,15 @@
     // Points 4 -> 5 are the already-established covered bridge snap line
     // from R158: (3810,2675) -> (5230,3065).
     route: Object.freeze([
-      Object.freeze({ x: 1990, y: 2175 }),
+      Object.freeze({ x: 1990, y: 2460 }),
       Object.freeze({ x: 2260, y: 2290 }),
       Object.freeze({ x: 2860, y: 2320 }),
       Object.freeze({ x: 3340, y: 2495 }),
       Object.freeze({ x: 3810, y: 2675 }),
       Object.freeze({ x: 5230, y: 3065 }),
-      Object.freeze({ x: 5410, y: 3290 }),
-      Object.freeze({ x: 5450, y: 3535 }),
-      Object.freeze({ x: 5370, y: 3825 })
+      // MINIFIX: stop directly after the covered bridge, once the goat is visible again.
+      // This is the supplied screenshot position beside the maid without overlap.
+      Object.freeze({ x: 5410, y: 3290 })
     ]),
 
     bridgeStartIndex: 4,
