@@ -3,7 +3,7 @@
 
   // R121 DEPLOYMENT VERIFICATION — harmless build marker.
   // If this line appears in DevTools, the browser is definitely running R121.
-  console.info("HDR BUILD R166 - OEDSBACH REDNECK POSITION + HUT ASSET FIX");
+  console.info("HDR BUILD R167 - KUHBACH MAP TRANSITION");
 
   const MAPS = Object.freeze({
     oberkirch: Object.freeze({
@@ -61,6 +61,13 @@
       image: "assets/maps/MAP 8 OPPENAU.webp",
       width: 10240,
       height: 5760
+    }),
+    kuhbach: Object.freeze({
+      id: "kuhbach",
+      name: "KUHBACH",
+      image: "assets/maps/MAP 9 KUHBACH.webp",
+      width: 10000,
+      height: 5998
     })
   });
 
@@ -281,6 +288,29 @@
     oppenauFromRamsbachSpawn: Object.freeze({
       x: 2615,
       y: 5505
+    }),
+
+    // R167 MAP 8 OPPENAU -> MAP 9 KUHBACH: lower-right road leaves east.
+    oppenauKuhbachEast: Object.freeze({
+      y1: 3900,
+      y2: 5050,
+      leaveX: 10258
+    }),
+    // Spawn on KUHBACH's lower-left incoming road.
+    kuhbachFromOppenauSpawn: Object.freeze({
+      x: 260,
+      y: 5200
+    }),
+
+    // Reverse route: KUHBACH lower-left road -> OPPENAU lower-right road.
+    kuhbachOppenauWest: Object.freeze({
+      y1: 4700,
+      y2: 5650,
+      leaveX: -18
+    }),
+    oppenauFromKuhbachSpawn: Object.freeze({
+      x: 9980,
+      y: 4475
     })
   });
 
@@ -794,7 +824,9 @@
     // R114: dedicated RAMSBACH track supplied by the user.
     "ramsbach": "assets/audio/maps/RAMSBACH - THE RING'S CALL.mp3",
     // R155 dedicated OPPENAU track supplied by the user.
-    "oppenau": "assets/audio/maps/OPPENAU - DIE GROSSE REISE.mp3"
+    "oppenau": "assets/audio/maps/OPPENAU - DIE GROSSE REISE.mp3",
+    // R167 KUHBACH currently continues the OPPENAU journey theme.
+    "kuhbach": "assets/audio/maps/OPPENAU - DIE GROSSE REISE.mp3"
   });
 
   const MAP_MUSIC_VOLUME = 1.0;
@@ -11645,11 +11677,28 @@
       y >= MAP_EXIT_CONFIG.winterbachOedsbachEast.y1 &&
       y <= MAP_EXIT_CONFIG.winterbachOedsbachEast.y2;
 
-    if (x < halfW) return false;
+    const inOppenauKuhbachEastExit =
+      MAP.id === "oppenau" &&
+      y >= MAP_EXIT_CONFIG.oppenauKuhbachEast.y1 &&
+      y <= MAP_EXIT_CONFIG.oppenauKuhbachEast.y2;
+
+    const inKuhbachOppenauWestExit =
+      MAP.id === "kuhbach" &&
+      y >= MAP_EXIT_CONFIG.kuhbachOppenauWest.y1 &&
+      y <= MAP_EXIT_CONFIG.kuhbachOppenauWest.y2;
+
+    if (x < halfW) {
+      const westExitAllowed =
+        inKuhbachOppenauWestExit &&
+        x >= MAP_EXIT_CONFIG.kuhbachOppenauWest.leaveX - 80;
+      if (!westExitAllowed) return false;
+    }
     if (x > MAP.width - halfW) {
       const eastExitAllowed =
-        inWinterbachOedsbachEastExit &&
-        x <= MAP_EXIT_CONFIG.winterbachOedsbachEast.leaveX + 80;
+        (inWinterbachOedsbachEastExit &&
+          x <= MAP_EXIT_CONFIG.winterbachOedsbachEast.leaveX + 80) ||
+        (inOppenauKuhbachEastExit &&
+          x <= MAP_EXIT_CONFIG.oppenauKuhbachEast.leaveX + 80);
       if (!eastExitAllowed) return false;
     }
 
@@ -21081,6 +21130,22 @@
     );
   }
 
+  function playerInOppenauKuhbachEastExitLane() {
+    return (
+      MAP.id === "oppenau" &&
+      playerY >= MAP_EXIT_CONFIG.oppenauKuhbachEast.y1 &&
+      playerY <= MAP_EXIT_CONFIG.oppenauKuhbachEast.y2
+    );
+  }
+
+  function playerInKuhbachOppenauWestExitLane() {
+    return (
+      MAP.id === "kuhbach" &&
+      playerY >= MAP_EXIT_CONFIG.kuhbachOppenauWest.y1 &&
+      playerY <= MAP_EXIT_CONFIG.kuhbachOppenauWest.y2
+    );
+  }
+
   function playerInOberkirchStadiumSouthExitLane() {
     return (
       MAP.id === "oberkirch-zentrum" &&
@@ -21118,7 +21183,28 @@
 
     const movingUp = keys.has("KeyW") || keys.has("ArrowUp");
     const movingDown = keys.has("KeyS") || keys.has("ArrowDown");
+    const movingLeft = keys.has("KeyA") || keys.has("ArrowLeft");
     const movingRight = keys.has("KeyD") || keys.has("ArrowRight");
+
+    // R167 OPPENAU lower-right road -> KUHBACH lower-left road.
+    if (
+      playerInOppenauKuhbachEastExitLane() &&
+      movingRight &&
+      playerX >= MAP_EXIT_CONFIG.oppenauKuhbachEast.leaveX
+    ) {
+      switchMap(MAPS.kuhbach, MAP_EXIT_CONFIG.kuhbachFromOppenauSpawn, true);
+      return true;
+    }
+
+    // R167 KUHBACH lower-left road -> OPPENAU lower-right road.
+    if (
+      playerInKuhbachOppenauWestExitLane() &&
+      movingLeft &&
+      playerX <= MAP_EXIT_CONFIG.kuhbachOppenauWest.leaveX
+    ) {
+      switchMap(MAPS.oppenau, MAP_EXIT_CONFIG.oppenauFromKuhbachSpawn, true);
+      return true;
+    }
 
     // R155 RAMSBACH red-arrow north road -> OPPENAU.
     if (playerInRamsbachOppenauNorthExitLane() && movingUp && playerY <= MAP_EXIT_CONFIG.ramsbachOppenauNorth.leaveY) {
@@ -21765,13 +21851,28 @@
     // exactly like the established north/south exits, the player must be
     // allowed to physically cross the map edge inside the marked lane.
     const eastExitOpen =
-      playerInWinterbachOedsbachEastExitLane() &&
+      (
+        playerInWinterbachOedsbachEastExitLane() ||
+        playerInOppenauKuhbachEastExitLane()
+      ) &&
       (keys.has("KeyD") || keys.has("ArrowRight"));
 
+    const westExitOpen =
+      playerInKuhbachOppenauWestExitLane() &&
+      (keys.has("KeyA") || keys.has("ArrowLeft"));
+
     if (eastExitOpen) {
+      const leaveX = MAP.id === "oppenau"
+        ? MAP_EXIT_CONFIG.oppenauKuhbachEast.leaveX
+        : MAP_EXIT_CONFIG.winterbachOedsbachEast.leaveX;
       playerX = Math.max(
         halfW,
-        Math.min(MAP_EXIT_CONFIG.winterbachOedsbachEast.leaveX + 80, playerX)
+        Math.min(leaveX + 80, playerX)
+      );
+    } else if (westExitOpen) {
+      playerX = Math.max(
+        MAP_EXIT_CONFIG.kuhbachOppenauWest.leaveX - 80,
+        Math.min(MAP.width - halfW, playerX)
       );
     } else {
       playerX = Math.max(halfW, Math.min(MAP.width - halfW, playerX));
