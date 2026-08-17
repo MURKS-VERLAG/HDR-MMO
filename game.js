@@ -3,7 +3,7 @@
 
   // R121 DEPLOYMENT VERIFICATION — harmless build marker.
   // If this line appears in DevTools, the browser is definitely running R121.
-  console.info("HDR BUILD R159 - OPPENAU GATES ROCK + DEPTH PASSAGES");
+  console.info("HDR BUILD R160 - OPPENAU GATE PASSAGE + DEPTH FIX");
 
   const MAPS = Object.freeze({
     oberkirch: Object.freeze({
@@ -8976,8 +8976,17 @@
   function isOppenauTerrainBlockedFootPoint(x, y) {
     if (MAP.id !== "oppenau") return false;
 
-    // BLUE exception always wins over the painted RED area.
+    // BLUE castle exception always wins over the painted RED area.
     if (worldPointInPolygon(x, y, OPPENAU_TERRAIN.castleBluePassage)) {
+      return false;
+    }
+
+    // R160: both gate center corridors are deliberate holes through the RED
+    // terrain collision. This is what makes BOTH gates fully passable north/south.
+    if (
+      pointInOppenauRect(x, y, OPPENAU_DECOR.upperGate.passage) ||
+      pointInOppenauRect(x, y, OPPENAU_DECOR.lowerGate.passage)
+    ) {
       return false;
     }
 
@@ -9100,15 +9109,20 @@
       zIndex: 92,
 
       // Central arch is the ONLY walkable part of the gate silhouette.
+      // R160: this is a THROUGH-CORRIDOR, not merely the visible black arch.
+      // It extends completely through the gate so the player's FOOT anchor can
+      // leave on the north side instead of colliding with the facade/roof above.
       passage: Object.freeze({
-        x1: 3010, y1: 2480,
-        x2: 3590, y2: 3125
+        x1: 3010, y1: 1810,
+        x2: 3590, y2: 3180
       }),
 
-      // RED rectangle from the user's reference: player goes behind/fades here.
+      // Visual RED gate-depth zone stays tied to the gate itself.
+      // R160 uses a body-height probe below, so the fade begins visibly earlier
+      // while the feet are still south of this rectangle.
       depthZone: Object.freeze({
-        x1: 2575, y1: 1965,
-        x2: 4050, y2: 2635
+        x1: 2575, y1: 1900,
+        x2: 4050, y2: 2725
       })
     }),
 
@@ -9123,15 +9137,18 @@
       zIndex: 92,
 
       // Yellow-circle / main arch passage. Spawn from RAMSBACH sits here.
+      // R160: full north/south THROUGH-CORRIDOR. The old y1=5050 stopped at
+      // the visible arch apex, which trapped the FOOT anchor when walking north.
       passage: Object.freeze({
-        x1: 2390, y1: 5050,
+        x1: 2390, y1: 4140,
         x2: 2860, y2: 5760
       }),
 
-      // Lower RED rectangle from the user's reference.
+      // Lower RED rectangle from the reference. Slightly extended vertically so
+      // the depth state covers the complete visual gate body.
       depthZone: Object.freeze({
-        x1: 1380, y1: 4285,
-        x2: 3500, y2: 5225
+        x1: 1380, y1: 4190,
+        x2: 3500, y2: 5260
       })
     }),
 
@@ -9146,7 +9163,10 @@
       zIndex: 88
     }),
 
-    gateFadeBand: 150
+    // Player coordinates are FOOT coordinates. Gate occlusion must react to
+    // the visible body, otherwise the effect starts one W-tap too late.
+    gateDepthBodyProbeOffsetY: 235,
+    gateFadeBand: 185
   });
 
   const oppenauDecorElements = new Map();
@@ -9314,35 +9334,46 @@
     return false;
   }
 
+  function oppenauGateDepthProbeY() {
+    // playerY is the FOOT anchor; use the lower torso/body as the visual probe.
+    // This pulls the layer/fade transition DOWN on screen by the requested amount.
+    return playerY - OPPENAU_DECOR.gateDepthBodyProbeOffsetY;
+  }
+
   function oppenauGateFadeOpacityFor(config) {
     if (MAP.id !== "oppenau") return 1;
 
     const z = config.depthZone;
-    if (!pointInOppenauRect(playerX, playerY, z)) return 1;
+    const probeY = oppenauGateDepthProbeY();
 
-    // The player can only physically enter this zone through the arch corridor.
+    // X remains the player's centerline; Y follows the visible body rather than feet.
+    if (!pointInOppenauRect(playerX, probeY, z)) return 1;
+
+    // Feet must still be travelling inside the gate corridor.
     if (!pointInOppenauRect(playerX, playerY, config.passage)) return 1;
 
-    // Smoothly fade from either edge of the RED zone, fully hidden in its body.
+    // Smooth fade from the south/north edges of the marked gate-depth body.
     const edgeDistance = Math.min(
-      Math.abs(playerY - z.y1),
-      Math.abs(z.y2 - playerY)
+      Math.abs(probeY - z.y1),
+      Math.abs(z.y2 - probeY)
     );
     const t = Math.max(
       0,
       Math.min(1, edgeDistance / OPPENAU_DECOR.gateFadeBand)
     );
 
-    // smoothstep: 0 at edge -> 1 deeper inside; opacity is inverse.
     const smooth = t * t * (3 - 2 * t);
     return 1 - smooth;
   }
 
   function playerInOppenauGateDepthZone() {
     if (MAP.id !== "oppenau") return false;
+
+    const probeY = oppenauGateDepthProbeY();
+
     for (const config of [OPPENAU_DECOR.upperGate, OPPENAU_DECOR.lowerGate]) {
       if (
-        pointInOppenauRect(playerX, playerY, config.depthZone) &&
+        pointInOppenauRect(playerX, probeY, config.depthZone) &&
         pointInOppenauRect(playerX, playerY, config.passage)
       ) return true;
     }
