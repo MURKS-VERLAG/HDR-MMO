@@ -3,7 +3,7 @@
 
   // R121 DEPLOYMENT VERIFICATION — harmless build marker.
   // If this line appears in DevTools, the browser is definitely running R121.
-  console.info("HDR BUILD R161 - OPPENAU MOOSMAENNLE ROUTES");
+  console.info("HDR BUILD R162 - OPPENAU GOAT + MAID AMBIENT");
 
   const MAPS = Object.freeze({
     oberkirch: Object.freeze({
@@ -9398,6 +9398,218 @@
     );
   }
 
+
+
+
+  // ------------------------------------------------------------------
+  // R162 OPPENAU — AMBIENT ZIEGE + MAID
+  // Building block for the later Unterrock/Ziegen event.
+  //
+  // Timing is deliberately tied to performance.now() instead of chained
+  // setTimeout calls. This keeps the animation correct after tab changes.
+  //
+  // First 10 seconds: both standard.
+  // Then every 10 seconds, synchronously:
+  //   0..3 s goat ALT + maid PHASE 1
+  //   3..6 s goat STANDARD + maid PHASE 2
+  //   6..10 s both STANDARD
+  // ------------------------------------------------------------------
+  const OPPENAU_AMBIENT_PAIR = Object.freeze({
+    mapId: "oppenau",
+    cycleMs: 10000,
+    initialDelayMs: 10000,
+    crossfadeMs: 320,
+
+    goat: Object.freeze({
+      x: 1990,
+      y: 2175,
+      width: 390,
+      height: 410,
+      standard: "assets/npcs/oppenau/goat/OPPENAU GOAT NORMAL.webp",
+      alternate: "assets/npcs/oppenau/goat/OPPENAU GOAT ALT.webp"
+    }),
+
+    maid: Object.freeze({
+      x: 5220,
+      y: 3865,
+      width: 405,
+      height: 555,
+      standard: "assets/npcs/oppenau/maid/OPPENAU MAID NORMAL.webp",
+      phase1: "assets/npcs/oppenau/maid/OPPENAU MAID LOOK UP.webp",
+      phase2: "assets/npcs/oppenau/maid/OPPENAU MAID HANDKERCHIEF.webp"
+    })
+  });
+
+  let oppenauAmbientPairStartAt = 0;
+  let oppenauAmbientGoat = null;
+  let oppenauAmbientMaid = null;
+
+  function installOppenauAmbientPairStyles() {
+    if (document.getElementById("oppenauAmbientPairStyles")) return;
+
+    const style = document.createElement("style");
+    style.id = "oppenauAmbientPairStyles";
+    style.textContent = `
+      .oppenau-ambient-pair {
+        position: absolute;
+        transform: translate(-50%, -100%);
+        transform-origin: 50% 100%;
+        pointer-events: none;
+        user-select: none;
+        z-index: 5;
+      }
+
+      .oppenau-ambient-pair__sprite {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+        object-position: center bottom;
+        opacity: 0;
+        transition: opacity ${OPPENAU_AMBIENT_PAIR.crossfadeMs}ms ease;
+        will-change: opacity;
+        pointer-events: none;
+      }
+
+      .oppenau-ambient-pair__sprite--visible {
+        opacity: 1;
+      }
+    `;
+
+    document.head.appendChild(style);
+  }
+
+  function preloadOppenauAmbientPairSprites() {
+    const sources = [
+      OPPENAU_AMBIENT_PAIR.goat.standard,
+      OPPENAU_AMBIENT_PAIR.goat.alternate,
+      OPPENAU_AMBIENT_PAIR.maid.standard,
+      OPPENAU_AMBIENT_PAIR.maid.phase1,
+      OPPENAU_AMBIENT_PAIR.maid.phase2
+    ];
+
+    for (const src of sources) {
+      const image = new Image();
+      image.decoding = "async";
+      image.src = encodeURI(src);
+    }
+  }
+
+  function createOppenauAmbientActor(id, config, sources) {
+    const root = document.createElement("div");
+    root.id = id;
+    root.className = "oppenau-ambient-pair";
+    root.style.left = `${config.x}px`;
+    root.style.top = `${config.y}px`;
+    root.style.width = `${config.width}px`;
+    root.style.height = `${config.height}px`;
+
+    const images = sources.map((src, index) => {
+      const image = document.createElement("img");
+      image.className =
+        "oppenau-ambient-pair__sprite" +
+        (index === 0 ? " oppenau-ambient-pair__sprite--visible" : "");
+      image.src = encodeURI(src);
+      image.alt = "";
+      image.draggable = false;
+      root.appendChild(image);
+      return image;
+    });
+
+    root.style.display =
+      MAP.id === OPPENAU_AMBIENT_PAIR.mapId ? "" : "none";
+
+    world.appendChild(root);
+
+    return {
+      root,
+      images,
+      visibleIndex: 0
+    };
+  }
+
+  function setOppenauAmbientFrame(actor, index) {
+    if (!actor || actor.visibleIndex === index) return;
+
+    actor.images.forEach((image, imageIndex) => {
+      image.classList.toggle(
+        "oppenau-ambient-pair__sprite--visible",
+        imageIndex === index
+      );
+    });
+
+    actor.visibleIndex = index;
+  }
+
+  function createOppenauAmbientPair() {
+    installOppenauAmbientPairStyles();
+    preloadOppenauAmbientPairSprites();
+
+    if (!oppenauAmbientGoat) {
+      oppenauAmbientGoat = createOppenauAmbientActor(
+        "oppenau-ambient-goat",
+        OPPENAU_AMBIENT_PAIR.goat,
+        [
+          OPPENAU_AMBIENT_PAIR.goat.standard,
+          OPPENAU_AMBIENT_PAIR.goat.alternate
+        ]
+      );
+    }
+
+    if (!oppenauAmbientMaid) {
+      oppenauAmbientMaid = createOppenauAmbientActor(
+        "oppenau-ambient-maid",
+        OPPENAU_AMBIENT_PAIR.maid,
+        [
+          OPPENAU_AMBIENT_PAIR.maid.standard,
+          OPPENAU_AMBIENT_PAIR.maid.phase1,
+          OPPENAU_AMBIENT_PAIR.maid.phase2
+        ]
+      );
+    }
+
+    if (!oppenauAmbientPairStartAt) {
+      oppenauAmbientPairStartAt = performance.now();
+    }
+  }
+
+  function updateOppenauAmbientPair(now) {
+    if (!oppenauAmbientGoat || !oppenauAmbientMaid) return;
+
+    const visible = MAP.id === OPPENAU_AMBIENT_PAIR.mapId;
+    oppenauAmbientGoat.root.style.display = visible ? "" : "none";
+    oppenauAmbientMaid.root.style.display = visible ? "" : "none";
+
+    if (!visible) return;
+
+    const elapsed = now - oppenauAmbientPairStartAt;
+
+    // Explicitly preserve the standard reference pose for the first ten seconds.
+    if (elapsed < OPPENAU_AMBIENT_PAIR.initialDelayMs) {
+      setOppenauAmbientFrame(oppenauAmbientGoat, 0);
+      setOppenauAmbientFrame(oppenauAmbientMaid, 0);
+      return;
+    }
+
+    const phase =
+      (elapsed - OPPENAU_AMBIENT_PAIR.initialDelayMs) %
+      OPPENAU_AMBIENT_PAIR.cycleMs;
+
+    if (phase < 3000) {
+      // Synchronous 3-second first reaction.
+      setOppenauAmbientFrame(oppenauAmbientGoat, 1);
+      setOppenauAmbientFrame(oppenauAmbientMaid, 1);
+    } else if (phase < 6000) {
+      // Goat returns to standard; maid continues with her second 3-second pose.
+      setOppenauAmbientFrame(oppenauAmbientGoat, 0);
+      setOppenauAmbientFrame(oppenauAmbientMaid, 2);
+    } else {
+      // Rest of the ten-second cycle is the standard pair.
+      setOppenauAmbientFrame(oppenauAmbientGoat, 0);
+      setOppenauAmbientFrame(oppenauAmbientMaid, 0);
+    }
+  }
 
 
   // ------------------------------------------------------------------
@@ -21539,6 +21751,7 @@
         updateGoat(deltaSeconds, now);
         updateBoars(deltaSeconds, now);
         updateMoosmaennle(deltaSeconds, now);
+        updateOppenauAmbientPair(now);
 
         // R120: current five-bear system remains, but is completely isolated
         // from core player controls and is executed ONLY on RAMSBACH.
@@ -21979,6 +22192,7 @@
     createGoat();
     createBoars();
     createMoosmaennleSystem();
+    createOppenauAmbientPair();
     createRamsbachBears();
     createTierbannsteinSystem();
     createMoleSystem();
