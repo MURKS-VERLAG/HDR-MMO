@@ -3,7 +3,7 @@
 
   // R121 DEPLOYMENT VERIFICATION — harmless build marker.
   // If this line appears in DevTools, the browser is definitely running R121.
-  console.info("HDR BUILD R157 - OPPENAU BURG VISIBILITY FIX");
+  console.info("HDR BUILD R158 - OPPENAU COLLISION BRIDGES + ANIMALS");
 
   const MAPS = Object.freeze({
     oberkirch: Object.freeze({
@@ -2933,6 +2933,17 @@
     })
   ]);
 
+  // R158 OPPENAU — BLACK marked circle: exactly one normal wolf.
+  const OPPENAU_WOLF_HABITAT = Object.freeze({
+    mapId: "oppenau",
+    count: 1,
+    canExitTop: false,
+    cx: 5220,
+    cy: 1600,
+    rx: 500,
+    ry: 590
+  });
+
   // R48 PINK rectangle: while a HUBACKER wolf stands here,
   // NEUENSTEIN is explicitly foreground for that wolf.
   const HUBACKER_WOLF_NEUENSTEIN_FOREGROUND = Object.freeze([
@@ -3411,6 +3422,17 @@
           )
         );
       }
+    }
+
+    for (let i = 0; i < OPPENAU_WOLF_HABITAT.count; i += 1) {
+      wolfActors.push(
+        createWolfActor(
+          i,
+          OPPENAU_WOLF_HABITAT.mapId,
+          OPPENAU_WOLF_HABITAT,
+          OPPENAU_WOLF_HABITAT.canExitTop
+        )
+      );
     }
 
     nextWolfHowlAt = performance.now() + WOLF_CONFIG.howlInterval;
@@ -4019,6 +4041,27 @@
           [1750, 5104],
           [1840, 4725],
           [2140, 4445]
+        ]
+      },
+      {
+        // R158 OPPENAU — YELLOW marked circle: exactly two normal wild boars.
+        id: "oppenau-boar-circle",
+        mapId: "oppenau",
+        count: 2,
+        exits: [],
+        polygon: [
+          [8887, 3490],
+          [8782, 3730],
+          [8497, 3906],
+          [8107, 3970],
+          [7717, 3906],
+          [7432, 3730],
+          [7327, 3490],
+          [7432, 3250],
+          [7717, 3074],
+          [8107, 3010],
+          [8497, 3074],
+          [8782, 3250]
         ]
       }
     ])
@@ -8827,6 +8870,213 @@
   }
 
   // ------------------------------------------------------------------
+  // R158 MAP 8 OPPENAU — TERRAIN / RED NO-GO / WHITE BRIDGE SNAP
+  // Coordinates mapped 1:1 from the supplied marked screenshot.
+  // RED = hard player-foot collision.
+  // BLUE = castle exception, walkable + player behind castle.
+  // WHITE = forced A/D bridge centerlines; W+A / W+D / S+A / S+D also engage
+  // because the horizontal component owns movement while snapped.
+  // ------------------------------------------------------------------
+  const OPPENAU_TERRAIN = Object.freeze({
+    // Four independent RED inaccessible regions.
+    blockedPolygons: Object.freeze([
+      Object.freeze([
+        Object.freeze([1520, 62]),
+        Object.freeze([0, 349]),
+        Object.freeze([0, 5760]),
+        Object.freeze([528, 5760]),
+        Object.freeze([1319, 5264]),
+        Object.freeze([1078, 5225]),
+        Object.freeze([1792, 3961]),
+        Object.freeze([1660, 3326]),
+        Object.freeze([3142, 2775]),
+        Object.freeze([1870, 2489]),
+        Object.freeze([450, 1488]),
+        Object.freeze([644, 721]),
+        Object.freeze([1319, 550])
+      ]),
+      Object.freeze([
+        Object.freeze([4042, 2760]),
+        Object.freeze([4049, 3582]),
+        Object.freeze([4600, 4938]),
+        Object.freeze([4453, 5760]),
+        Object.freeze([5415, 5760]),
+        Object.freeze([5795, 4574]),
+        Object.freeze([6865, 3504]),
+        Object.freeze([6237, 3326]),
+        Object.freeze([5508, 3977]),
+        Object.freeze([5174, 4566]),
+        Object.freeze([4639, 3496]),
+        Object.freeze([4763, 2946])
+      ]),
+      Object.freeze([
+        Object.freeze([2529, 0]),
+        Object.freeze([2428, 0]),
+        Object.freeze([3887, 1364]),
+        Object.freeze([4042, 1775]),
+        Object.freeze([4042, 2706]),
+        Object.freeze([4786, 2899]),
+        Object.freeze([4895, 2535]),
+        Object.freeze([4243, 961]),
+        Object.freeze([3375, 248]),
+        Object.freeze([3056, 0])
+      ]),
+      Object.freeze([
+        Object.freeze([10100, 0]),
+        Object.freeze([9612, 0]),
+        Object.freeze([9138, 667]),
+        Object.freeze([8107, 1248]),
+        Object.freeze([7416, 2380]),
+        Object.freeze([6276, 3287]),
+        Object.freeze([6959, 3465]),
+        Object.freeze([7486, 3000]),
+        Object.freeze([8277, 1659]),
+        Object.freeze([9495, 814])
+      ])
+    ]),
+
+    // BLUE rectangle: only castle area that is walkable and places player behind.
+    castleBluePassage: Object.freeze([
+      Object.freeze([2390, 495]),
+      Object.freeze([2945, 495]),
+      Object.freeze([2945, 1015]),
+      Object.freeze([2390, 1015])
+    ]),
+
+    bridges: Object.freeze([
+      Object.freeze({
+        id: "oppenau-covered",
+        path: Object.freeze([
+          Object.freeze([3810, 2675]),
+          Object.freeze([5230, 3065])
+        ]),
+        engageDistance: 175
+      }),
+      Object.freeze({
+        id: "oppenau-stone",
+        path: Object.freeze([
+          Object.freeze([6245, 3315]),
+          Object.freeze([6970, 3545])
+        ]),
+        engageDistance: 165
+      })
+    ])
+  });
+
+  let activeOppenauBridgeSnap = null;
+
+  function playerInOppenauCastleBluePassage() {
+    return (
+      MAP.id === "oppenau" &&
+      worldPointInPolygon(playerX, playerY, OPPENAU_TERRAIN.castleBluePassage)
+    );
+  }
+
+  function isOppenauTerrainBlockedFootPoint(x, y) {
+    if (MAP.id !== "oppenau") return false;
+
+    // BLUE exception always wins over the painted RED area.
+    if (worldPointInPolygon(x, y, OPPENAU_TERRAIN.castleBluePassage)) {
+      return false;
+    }
+
+    for (const polygon of OPPENAU_TERRAIN.blockedPolygons) {
+      if (worldPointInPolygon(x, y, polygon)) return true;
+    }
+    return false;
+  }
+
+  function tryEngageOppenauBridgeSnap(dx, dy) {
+    if (MAP.id !== "oppenau") return false;
+
+    const horizontalDirection = dx > 0 ? 1 : dx < 0 ? -1 : 0;
+    if (!horizontalDirection) return false;
+
+    let best = null;
+    for (const bridge of OPPENAU_TERRAIN.bridges) {
+      const closest = closestPointOnBridgePath(playerX, playerY, bridge.path);
+      if (!closest || closest.distance > bridge.engageDistance) continue;
+
+      // Moving outward from a finished endpoint must release into free movement.
+      if (closest.progress <= 0.035 && horizontalDirection < 0) continue;
+      if (closest.progress >= 0.965 && horizontalDirection > 0) continue;
+
+      if (!best || closest.distance < best.closest.distance) {
+        best = { bridge, closest };
+      }
+    }
+
+    if (!best) return false;
+
+    activeOppenauBridgeSnap = {
+      id: best.bridge.id,
+      path: best.bridge.path,
+      distance: best.closest.pathDistance,
+      snapping: true
+    };
+    clearIceVelocity();
+    updateIceVisual();
+    return true;
+  }
+
+  function moveAlongOppenauBridgeSnap(dx, dy, deltaSeconds) {
+    if (!activeOppenauBridgeSnap) return false;
+
+    const horizontalDirection = dx > 0 ? 1 : dx < 0 ? -1 : 0;
+    const anchor = pointAtBridgeDistance(
+      activeOppenauBridgeSnap.path,
+      activeOppenauBridgeSnap.distance
+    );
+
+    if (activeOppenauBridgeSnap.snapping) {
+      const sx = anchor.x - playerX;
+      const sy = anchor.y - playerY;
+      const distance = Math.hypot(sx, sy);
+
+      if (distance > 5) {
+        const pull = Math.min(1, 10 * deltaSeconds);
+        playerX += sx * pull;
+        playerY += sy * pull;
+        return true;
+      }
+
+      playerX = anchor.x;
+      playerY = anchor.y;
+      activeOppenauBridgeSnap.snapping = false;
+    }
+
+    // W/S alone cannot drift off a bridge. A/D owns movement.
+    // Diagonals remain valid because their horizontal component is preserved.
+    if (!horizontalDirection) return true;
+
+    const metrics = getPathMetrics(activeOppenauBridgeSnap.path);
+    const nextDistance = Math.max(
+      0,
+      Math.min(
+        metrics.total,
+        activeOppenauBridgeSnap.distance +
+          horizontalDirection * currentPlayerMoveSpeed() * deltaSeconds
+      )
+    );
+
+    const point = pointAtBridgeDistance(activeOppenauBridgeSnap.path, nextDistance);
+    playerX = point.x;
+    playerY = point.y;
+    activeOppenauBridgeSnap.distance = nextDistance;
+
+    const leftDone = nextDistance <= 0.001 && horizontalDirection < 0;
+    const rightDone =
+      nextDistance >= metrics.total - 0.001 && horizontalDirection > 0;
+
+    if (leftDone || rightDone) {
+      activeOppenauBridgeSnap = null;
+      // Tiny exit nudge prevents immediate re-capture at the endpoint.
+      playerX += horizontalDirection * 18;
+    }
+    return true;
+  }
+
+  // ------------------------------------------------------------------
   // R156 MAP 8 OPPENAU — BURG
   // Exact supplied transparent castle, mirrored to match the reference composite.
   // LOWER half = hard foot collision / player foreground.
@@ -8839,8 +9089,8 @@
     top: 90,
     width: 2920,
     height: 1947,
-    groundedFromY: 0.50,
-    occluderToY: 0.39
+    groundedFromY: 0.0,
+    occluderToY: 0.0
   });
 
   let oppenauCastleBaseElement = null;
@@ -8919,11 +9169,12 @@
     // COMPLETE castle below the player.
     oppenauCastleBaseElement = makeLayer("oppenau-burg-base", 6);
 
-    // ONLY the upper third/tower above the player. This section has NO hitbox.
+    // R158: castle is now entirely BELOW the normal player.
+    // The only behind-castle exception is the BLUE passage, handled by player z-index.
     oppenauCastleForegroundElement = makeLayer(
       "oppenau-burg-upper-foreground",
-      110,
-      `inset(0 0 ${100 - OPPENAU_CASTLE.occluderToY * 100}% 0)`
+      4,
+      "none"
     );
 
     oppenauCastleBaseElement.addEventListener("load", () => {
@@ -8952,21 +9203,45 @@
 
   function isOppenauCastleBlockedFootPoint(x, y) {
     if (MAP.id !== "oppenau") return false;
+
+    // BLUE marked castle corner is the ONLY walkable castle section.
+    if (worldPointInPolygon(x, y, OPPENAU_TERRAIN.castleBluePassage)) {
+      return false;
+    }
+
     const c = OPPENAU_CASTLE;
-    if (x < c.left || x > c.left + c.width || y < c.top || y > c.top + c.height) return false;
+    if (
+      x < c.left || x > c.left + c.width ||
+      y < c.top || y > c.top + c.height
+    ) return false;
+
+    if (!oppenauCastleAlphaMask) return false;
 
     const localX = (x - c.left) / c.width;
     const localY = (y - c.top) / c.height;
-    // Upper castle is deliberately NO-HITBOX.
-    if (localY < c.groundedFromY) return false;
-    if (!oppenauCastleAlphaMask) return false;
 
-    // CSS mirrors the artwork, so alpha lookup mirrors X as well.
-    const px = Math.max(0, Math.min(oppenauCastleAlphaMask.width - 1,
-      Math.round((1 - localX) * (oppenauCastleAlphaMask.width - 1))));
-    const py = Math.max(0, Math.min(oppenauCastleAlphaMask.height - 1,
-      Math.round(localY * (oppenauCastleAlphaMask.height - 1))));
-    return oppenauCastleAlphaMask.alpha[py * oppenauCastleAlphaMask.width + px] >= 28;
+    // CSS mirrors the artwork, therefore the alpha lookup mirrors X too.
+    const px = Math.max(
+      0,
+      Math.min(
+        oppenauCastleAlphaMask.width - 1,
+        Math.round((1 - localX) * (oppenauCastleAlphaMask.width - 1))
+      )
+    );
+    const py = Math.max(
+      0,
+      Math.min(
+        oppenauCastleAlphaMask.height - 1,
+        Math.round(localY * (oppenauCastleAlphaMask.height - 1))
+      )
+    );
+
+    // COMPLETE visible castle silhouette blocks the player's FOOT anchor.
+    return (
+      oppenauCastleAlphaMask.alpha[
+        py * oppenauCastleAlphaMask.width + px
+      ] >= 28
+    );
   }
 
   function ramsbachPathFor(id) {
@@ -9888,7 +10163,10 @@
     }
 
 
-    // R156 OPPENAU: only the visible LOWER half of the mirrored castle blocks feet.
+    // R158 OPPENAU: every RED painted area is hard player-foot collision.
+    if (isOppenauTerrainBlockedFootPoint(x, y)) return false;
+
+    // R158 OPPENAU: complete visible castle blocks feet except BLUE passage.
     if (isOppenauCastleBlockedFootPoint(x, y)) return false;
 
     // New hard collision for church body + tavern.
@@ -10207,6 +10485,21 @@
     if (MAP.id !== "ramsbach" && activeRamsbachSnap) {
       activeRamsbachSnap = null;
       ramsbachSnapping = false;
+    }
+
+    if (MAP.id !== "oppenau" && activeOppenauBridgeSnap) {
+      activeOppenauBridgeSnap = null;
+    }
+
+    // R158 MAP 8: both WHITE bridge lines are forced A/D snap routes.
+    // A/D alone works; W+A, W+D, S+A and S+D work identically.
+    if (
+      MAP.id === "oppenau" &&
+      (activeOppenauBridgeSnap || tryEngageOppenauBridgeSnap(dx, dy))
+    ) {
+      moveAlongOppenauBridgeSnap(dx, dy, deltaSeconds);
+      clampPlayer();
+      return;
     }
 
     // R124 MAP 7: ONLY the river bridge uses A/D snap. All red/blue terrain boundaries are hard collision.
@@ -11556,9 +11849,10 @@
     }
 
     if (MAP.id === "oppenau") {
-      // Base/lower castle stays behind the player; the duplicated upper third
-      // is z=110 and therefore naturally hides the character when he walks behind it.
-      playerEl.style.zIndex = "100";
+      // R158: player is foreground everywhere on OPPENAU except the BLUE
+      // castle corner, where the castle base (z=6) intentionally occludes him.
+      playerEl.style.zIndex =
+        playerInOppenauCastleBluePassage() ? "5" : "100";
       return;
     }
 
@@ -18881,6 +19175,7 @@
     activeBridge = null;
     activeRamsbachSnap = null;
     ramsbachSnapping = false;
+    activeOppenauBridgeSnap = null;
 
     setOberkirchWorldVisibility(MAP.id === "oberkirch-zentrum");
     setWinterbachWorldVisibility(MAP.id === "winterbach-ranglehen");
