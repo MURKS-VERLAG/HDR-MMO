@@ -3,7 +3,7 @@
 
   // R121 DEPLOYMENT VERIFICATION — harmless build marker.
   // If this line appears in DevTools, the browser is definitely running R121.
-  console.info("HDR BUILD R168 - STADIUM SPECTATOR FLOW RESTORED");
+  console.info("HDR BUILD R169 - EXACT R164 STADIUM RESTORE");
 
   const MAPS = Object.freeze({
     oberkirch: Object.freeze({
@@ -15773,12 +15773,6 @@
         transition: filter 150ms ease, transform 150ms ease;
       }
 
-      /* R166: same proven direct-hover principle as the Oppenau goat. */
-      #stadiumBookmaker.stadium-bookmaker--interactive {
-        pointer-events: auto;
-        cursor: pointer;
-      }
-
       .stadium-bookmaker--hovered {
         transform: translate(-50%, -100%) scale(1.018);
         filter:
@@ -16395,14 +16389,11 @@
       const choice = button.dataset.stadiumChoice;
 
       if (choice === "spectator") {
-        if (stadiumState === "inactive" || stadiumState === "entrance-menu") {
-          // Restore the original stadium entry flow:
-          // ESC -> AUF TRIBÜNE PLATZNEHMEN -> old curtain/teleport ->
-          // spectator state -> Don Fredo hover/click -> existing bet/fight flow.
-          stadiumState = "entrance-menu";
+        if (stadiumState === "entrance-menu") {
           stadiumMoveToSpectator();
         } else {
-          // During countdown / arena intro / fight, this remains only "back to view".
+          // R74: ESC menu may also be opened during countdown / arena intro / fight.
+          // Returning to the current stadium view simply closes the menu.
           hideStadiumMenu();
         }
       } else if (choice === "oberkirch") {
@@ -16849,35 +16840,18 @@
       prepareStadiumBookmakerAlphaMask(base);
     }
 
-    // R167 — direct actor interaction, same proven principle as the Oppenau goat.
-    // IMPORTANT: hover is no longer gated behind stadiumState === "spectator".
-    // Fredo can therefore be approached during normal RENCHTALSTADION free-roam.
-    bookmaker.addEventListener("pointerenter", () => {
-      if (!stadiumBookmakerInteractionReady()) return;
-
-      stadiumBookmakerHovered = true;
-      bookmaker.classList.add("stadium-bookmaker--hovered");
-      game.classList.add("stadium-bookmaker-cursor");
-    });
-
-    bookmaker.addEventListener("pointerleave", () => {
-      clearStadiumBookmakerHover();
-    });
-
-    bookmaker.addEventListener("click", (event) => {
-      if (!stadiumBookmakerInteractionReady()) return;
-
-      event.preventDefault();
-      event.stopPropagation();
-      clearStadiumBookmakerHover();
-
-      // Don Fredo is already in the proper spectator state here.
-      // Continue into the untouched existing betting/fight pipeline.
-      keys.clear();
-      cancelAttackImmediately();
-      moving = false;
-      openStadiumBetUI();
-      setStadiumBookmakerVisibility();
+    game.addEventListener("pointermove", updateStadiumBookmakerHoverFromPointer);
+    game.addEventListener("pointerleave", clearStadiumBookmakerHover);
+    game.addEventListener("click", (event) => {
+      if (
+        stadiumBookmakerHovered &&
+        stadiumState === "spectator" &&
+        !stadiumMenuOpen &&
+        !stadiumBetOpen &&
+        !event.target.closest("#stadiumBetUI")
+      ) {
+        openStadiumBetUI();
+      }
     });
   }
 
@@ -16936,23 +16910,6 @@
     return mask.alpha[py * mask.width + px] >= STADIUM.bookmakerHoverAlphaThreshold;
   }
 
-  // R167 — DON FREDO is the entry point into the EXISTING stadium flow.
-  // Later map work can leave RENCHTALSTADION in "inactive" free-roam state;
-  // the old bookmaker code however only accepted "spectator", which made
-  // Fredo visible but completely dead to hover/click.
-  //
-  // Allow Fredo before a fight in all quiet stadium states. On CLICK we
-  // reconnect to the proven old "spectator -> bet -> fight" state machine.
-  function stadiumBookmakerInteractionReady() {
-    if (MAP.id !== STADIUM.mapId) return false;
-    if (!stadiumBookmaker || stadiumMenuOpen || stadiumBetOpen || stadiumResultOpen) return false;
-    if (stadiumFightStarted) return false;
-
-    // ORIGINAL STADIUM RULE:
-    // Don Fredo is interactive only after "AUF TRIBÜNE PLATZNEHMEN".
-    return stadiumState === "spectator";
-  }
-
   function clearStadiumBookmakerHover() {
     stadiumBookmakerHovered = false;
     game.classList.remove("stadium-bookmaker-cursor");
@@ -16961,29 +16918,12 @@
     }
   }
 
-  // R165 RENCHTALSTADION BOOKMAKER HOVER FIX:
-  // Hit-test against the bookmaker's actually rendered screen rectangle.
-  // This stays correct through camera translation, zoom and stadium transitions.
-  // The existing alpha mask keeps the interaction pixel-precise.
-  function stadiumBookmakerOpaqueAtClientPoint(clientX, clientY) {
-    if (!stadiumBookmaker || !stadiumBookmakerAlphaMask) return false;
-
-    const rect = stadiumBookmaker.root.getBoundingClientRect();
-    if (!rect.width || !rect.height) return false;
-
-    const u = (clientX - rect.left) / rect.width;
-    const v = (clientY - rect.top) / rect.height;
-    if (u < 0 || u > 1 || v < 0 || v > 1) return false;
-
-    const mask = stadiumBookmakerAlphaMask;
-    const px = Math.max(0, Math.min(mask.width - 1, Math.round(u * (mask.width - 1))));
-    const py = Math.max(0, Math.min(mask.height - 1, Math.round(v * (mask.height - 1))));
-    return mask.alpha[py * mask.width + px] >= STADIUM.bookmakerHoverAlphaThreshold;
-  }
-
   function updateStadiumBookmakerHoverFromPointer(event) {
     if (
-      !stadiumBookmakerInteractionReady() ||
+      MAP.id !== STADIUM.mapId ||
+      stadiumState !== "spectator" ||
+      stadiumMenuOpen ||
+      stadiumBetOpen ||
       !stadiumBookmaker ||
       !stadiumBookmakerAlphaMask
     ) {
@@ -16991,7 +16931,8 @@
       return;
     }
 
-    const hovered = stadiumBookmakerOpaqueAtClientPoint(event.clientX, event.clientY);
+    const point = clientPointToStadiumWorld(event.clientX, event.clientY);
+    const hovered = !!point && stadiumBookmakerOpaqueAtWorldPoint(point.x, point.y);
 
     stadiumBookmakerHovered = hovered;
     game.classList.toggle("stadium-bookmaker-cursor", hovered);
@@ -16999,14 +16940,10 @@
   }
 
   function openStadiumBetUI() {
-    if (!stadiumBetUI || MAP.id !== STADIUM.mapId || stadiumMenuOpen) return;
-    if (stadiumFightStarted || stadiumResultOpen) return;
-    if (stadiumState !== "spectator") return;
-
+    if (!stadiumBetUI || stadiumState !== "spectator" || stadiumMenuOpen) return;
     stadiumBetOpen = true;
     clearStadiumBookmakerHover();
     stadiumBetUI.root.classList.add("stadium-bet--visible");
-    setStadiumBookmakerVisibility();
   }
 
   function closeStadiumBetUI() {
@@ -18134,14 +18071,8 @@
 
   function setStadiumBookmakerVisibility() {
     if (!stadiumBookmaker) return;
-
-    const onStadium = MAP.id === STADIUM.mapId;
-    const interactive = stadiumBookmakerInteractionReady();
-
-    stadiumBookmaker.root.style.display = onStadium ? "block" : "none";
-    stadiumBookmaker.root.classList.toggle("stadium-bookmaker--interactive", interactive);
-
-    if (!interactive) clearStadiumBookmakerHover();
+    stadiumBookmaker.root.style.display = MAP.id === STADIUM.mapId ? "block" : "none";
+    if (MAP.id !== STADIUM.mapId) clearStadiumBookmakerHover();
   }
 
   function setStadiumGateVisibility() {
@@ -18270,7 +18201,6 @@
     await waitMs(90);
     stadiumUI.curtain.classList.remove("stadium-curtain--visible");
     stadiumState = "spectator";
-    setStadiumBookmakerVisibility();
   }
 
   async function stadiumReturnToOberkirch() {
