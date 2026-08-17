@@ -1516,6 +1516,156 @@
   }
 
   // ------------------------------------------------------------------
+  // R165 ÖDSBACH — REDNECK FREDNECK HÜTTE + FREDNECK
+  // Reference placement from the supplied ÖDSBACH screenshot.
+  // WHITE upper strip: walkable, player renders BEHIND the visible hut.
+  // PURPLE lower strip: walkable, player stays IN FRONT.
+  // Middle visible hut body: precise PNG-alpha foot collision.
+  // ------------------------------------------------------------------
+  const OEDSBACH_REDNECK = Object.freeze({
+    hut: Object.freeze({
+      id: "oedsbach-redneck-hut",
+      src: "assets/buildings/oedsbach/REDNECK FREDNECK HÜTTE.png",
+      left: 6420,
+      top: 1430,
+      width: 2050,
+      height: 1367,
+      // Supplied WHITE reference rectangle.
+      behind: Object.freeze({ x1: 0.05, y1: 0.00, x2: 0.98, y2: 0.53 }),
+      // Supplied PURPLE reference rectangle: explicitly no collision.
+      frontWalk: Object.freeze({ x1: 0.00, y1: 0.78, x2: 1.00, y2: 1.00 }),
+      collisionFromY: 0.53,
+      collisionToY: 0.78,
+      zIndex: 6
+    }),
+    fredneck: Object.freeze({
+      src: "assets/npcs/oedsbach/fredneck/REDNECK FREDNECK SLEEP.png",
+      x: 8506,
+      y: 1519,
+      width: 900,
+      height: 600,
+      zIndex: 7
+    })
+  });
+
+  let oedsbachRedneckHutEl = null;
+  let oedsbachFredneckEl = null;
+  let oedsbachRedneckHutMask = null;
+
+  function prepareOedsbachRedneckHutMask(image) {
+    if (!image || !image.naturalWidth || !image.naturalHeight) return;
+    try {
+      const canvas = document.createElement("canvas");
+      canvas.width = image.naturalWidth;
+      canvas.height = image.naturalHeight;
+      const ctx = canvas.getContext("2d", { willReadFrequently: true });
+      if (!ctx) return;
+      ctx.drawImage(image, 0, 0);
+      const pixels = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+      const alpha = new Uint8Array(canvas.width * canvas.height);
+      for (let src = 3, dst = 0; src < pixels.length; src += 4, dst += 1) alpha[dst] = pixels[src];
+      oedsbachRedneckHutMask = { width: canvas.width, height: canvas.height, alpha };
+    } catch (error) {
+      console.warn("ÖDSBACH REDNECK hut alpha mask unavailable:", error);
+    }
+  }
+
+  function oedsbachRedneckHutLocalPoint(x, y) {
+    const c = OEDSBACH_REDNECK.hut;
+    return {
+      x: (x - c.left) / c.width,
+      y: (y - c.top) / c.height
+    };
+  }
+
+  function pointInNormalizedRect(x, y, rect) {
+    return x >= rect.x1 && x <= rect.x2 && y >= rect.y1 && y <= rect.y2;
+  }
+
+  function oedsbachRedneckHutAlphaAt(localX, localY) {
+    const mask = oedsbachRedneckHutMask;
+    if (!mask || localX < 0 || localX > 1 || localY < 0 || localY > 1) return 0;
+    const px = Math.max(0, Math.min(mask.width - 1, Math.round(localX * (mask.width - 1))));
+    const py = Math.max(0, Math.min(mask.height - 1, Math.round(localY * (mask.height - 1))));
+    return mask.alpha[py * mask.width + px];
+  }
+
+  function isOedsbachRedneckHutBlockedFootPoint(x, y) {
+    if (MAP.id !== "oedsbach") return false;
+    const c = OEDSBACH_REDNECK.hut;
+    if (x < c.left || x > c.left + c.width || y < c.top || y > c.top + c.height) return false;
+    const p = oedsbachRedneckHutLocalPoint(x, y);
+
+    // WHITE and PURPLE marked zones are intentionally walkable.
+    if (pointInNormalizedRect(p.x, p.y, c.behind)) return false;
+    if (pointInNormalizedRect(p.x, p.y, c.frontWalk)) return false;
+
+    // Only the actual visible hut silhouette in the middle body blocks.
+    if (p.y < c.collisionFromY || p.y > c.collisionToY) return false;
+    return oedsbachRedneckHutAlphaAt(p.x, p.y) >= 28;
+  }
+
+  function playerBehindOedsbachRedneckHut() {
+    if (MAP.id !== "oedsbach") return false;
+    const p = oedsbachRedneckHutLocalPoint(playerX, playerY);
+    return pointInNormalizedRect(p.x, p.y, OEDSBACH_REDNECK.hut.behind);
+  }
+
+  function createOedsbachRedneckScene() {
+    if (!oedsbachRedneckHutEl) {
+      const c = OEDSBACH_REDNECK.hut;
+      const image = document.createElement("img");
+      image.id = c.id;
+      image.src = encodeURI(c.src);
+      image.alt = "";
+      image.draggable = false;
+      image.style.position = "absolute";
+      image.style.left = `${c.left}px`;
+      image.style.top = `${c.top}px`;
+      image.style.width = `${c.width}px`;
+      image.style.height = `${c.height}px`;
+      image.style.objectFit = "contain";
+      image.style.pointerEvents = "none";
+      image.style.userSelect = "none";
+      image.style.zIndex = String(c.zIndex);
+      image.style.display = MAP.id === "oedsbach" ? "" : "none";
+      image.addEventListener("load", () => prepareOedsbachRedneckHutMask(image), { once: true });
+      world.appendChild(image);
+      if (image.complete && image.naturalWidth > 0) prepareOedsbachRedneckHutMask(image);
+      oedsbachRedneckHutEl = image;
+    }
+
+    if (!oedsbachFredneckEl) {
+      const c = OEDSBACH_REDNECK.fredneck;
+      const image = document.createElement("img");
+      image.id = "oedsbach-fredneck";
+      image.src = encodeURI(c.src);
+      image.alt = "";
+      image.draggable = false;
+      image.style.position = "absolute";
+      image.style.left = `${c.x}px`;
+      image.style.top = `${c.y}px`;
+      image.style.width = `${c.width}px`;
+      image.style.height = `${c.height}px`;
+      image.style.transform = "translate(-50%, -100%)";
+      image.style.objectFit = "contain";
+      image.style.objectPosition = "50% 100%";
+      image.style.pointerEvents = "none";
+      image.style.userSelect = "none";
+      image.style.zIndex = String(c.zIndex);
+      image.style.display = MAP.id === "oedsbach" ? "" : "none";
+      world.appendChild(image);
+      oedsbachFredneckEl = image;
+    }
+  }
+
+  function updateOedsbachRedneckSceneVisibility() {
+    const visible = MAP.id === "oedsbach";
+    if (oedsbachRedneckHutEl) oedsbachRedneckHutEl.style.display = visible ? "" : "none";
+    if (oedsbachFredneckEl) oedsbachFredneckEl.style.display = visible ? "" : "none";
+  }
+
+  // ------------------------------------------------------------------
   // R98 ÖDSBACH — GUARANTEED SCREEN-SPACE FOG + CALIPH APPARITIONS
   // World coordinates remain authoritative; visuals render as GAME overlays
   // so they cannot disappear behind the world/map stacking context.
@@ -11692,6 +11842,9 @@
     // R97 MAP 6: three RED reference regions are hard-blocked.
     if (isOedsbachBlockedFootPoint(x, y)) return false;
 
+    // R165 MAP 6: REDNECK FREDNECK hut — alpha collision only on the middle body.
+    if (isOedsbachRedneckHutBlockedFootPoint(x, y)) return false;
+
     // R122 SAFE RAMSBACH COLLISION ISOLATION:
     // Ramsbach terrain/locked-footprint code must NEVER participate on another map.
     // If the new Ramsbach collision itself throws, keep the player-control frame alive
@@ -13416,6 +13569,14 @@
       } else {
         playerEl.style.zIndex = "100";
       }
+      return;
+    }
+
+    if (MAP.id === "oedsbach") {
+      updateOedsbachRedneckSceneVisibility();
+      // WHITE reference strip: player is behind the hut. Everywhere else,
+      // including the PURPLE lower strip, the player stays in foreground.
+      playerEl.style.zIndex = playerBehindOedsbachRedneckHut() ? "5" : "100";
       return;
     }
 
@@ -22704,6 +22865,7 @@
 
     installOedegardStyles();
   createOedegard();
+  createOedsbachRedneckScene();
   createOedsbachFog();
   createRamsbachFog();
   createHubackerFog();
