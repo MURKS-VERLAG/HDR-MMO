@@ -3,7 +3,7 @@
 
   // R121 DEPLOYMENT VERIFICATION — harmless build marker.
   // If this line appears in DevTools, the browser is definitely running R121.
-  console.info("HDR BUILD R156 - OPPENAU BURG SPLIT DEPTH + COLLISION");
+  console.info("HDR BUILD R157 - OPPENAU BURG VISIBILITY FIX");
 
   const MAPS = Object.freeze({
     oberkirch: Object.freeze({
@@ -8834,7 +8834,7 @@
   // ------------------------------------------------------------------
   const OPPENAU_CASTLE = Object.freeze({
     id: "oppenau-burg",
-    src: "assets/buildings/OPPENAU BURG.png",
+    src: "assets/buildings/OPPENAU_BURG.webp",
     left: 470,
     top: 90,
     width: 2920,
@@ -8867,7 +8867,21 @@
   }
 
   function createOppenauCastle() {
-    if (oppenauCastleBaseElement) return;
+    // R157: if a stale/half-created layer exists, rebuild the pair instead of
+    // silently returning with an invisible castle.
+    const existingBase = document.getElementById("oppenau-burg-base");
+    const existingFront = document.getElementById("oppenau-burg-upper-foreground");
+
+    if (existingBase && existingFront) {
+      oppenauCastleBaseElement = existingBase;
+      oppenauCastleForegroundElement = existingFront;
+      return;
+    }
+
+    if (existingBase) existingBase.remove();
+    if (existingFront) existingFront.remove();
+    oppenauCastleBaseElement = null;
+    oppenauCastleForegroundElement = null;
 
     const makeLayer = (id, zIndex, clipPath = "none") => {
       const image = document.createElement("img");
@@ -8885,18 +8899,27 @@
       image.style.maxHeight = "none";
       image.style.pointerEvents = "none";
       image.style.userSelect = "none";
+      image.style.webkitUserDrag = "none";
       image.style.transformOrigin = "50% 50%";
       image.style.transform = "scaleX(-1)";
       image.style.zIndex = String(zIndex);
       image.style.clipPath = clipPath;
+      image.style.opacity = "1";
+      image.style.visibility = MAP.id === "oppenau" ? "visible" : "hidden";
       image.style.display = MAP.id === "oppenau" ? "block" : "none";
+
+      image.addEventListener("error", () => {
+        console.error("OPPENAU BURG asset failed to load:", image.src);
+      });
+
       world.appendChild(image);
       return image;
     };
 
-    // Base is behind the player. It supplies the complete castle image.
+    // COMPLETE castle below the player.
     oppenauCastleBaseElement = makeLayer("oppenau-burg-base", 6);
-    // Same asset, but only its upper third is duplicated above the player.
+
+    // ONLY the upper third/tower above the player. This section has NO hitbox.
     oppenauCastleForegroundElement = makeLayer(
       "oppenau-burg-upper-foreground",
       110,
@@ -8905,17 +8928,25 @@
 
     oppenauCastleBaseElement.addEventListener("load", () => {
       prepareOppenauCastleAlphaMask(oppenauCastleBaseElement);
+      setOppenauCastleVisibility(MAP.id === "oppenau");
     }, { once: true });
+
     if (oppenauCastleBaseElement.complete && oppenauCastleBaseElement.naturalWidth > 0) {
       prepareOppenauCastleAlphaMask(oppenauCastleBaseElement);
     }
   }
 
   function setOppenauCastleVisibility(visible) {
+    // R157: visibility calls are allowed to heal a missing DOM layer.
+    if (!oppenauCastleBaseElement || !oppenauCastleForegroundElement) {
+      createOppenauCastle();
+    }
+
     for (const element of [oppenauCastleBaseElement, oppenauCastleForegroundElement]) {
       if (!element) continue;
       element.style.display = visible ? "block" : "none";
       element.style.visibility = visible ? "visible" : "hidden";
+      element.style.opacity = visible ? "1" : "0";
     }
   }
 
@@ -20302,6 +20333,12 @@
       `KAMERA X: ${Math.round(cameraX)} · Y: ${Math.round(cameraY)}`;
     playerLabel.textContent =
       `SPIELER X: ${Math.round(playerX)} · Y: ${Math.round(playerY)}`;
+
+    // R157: OPPENAU castle is a map-local world layer. Reassert visibility
+    // during render so a missed/late image load can never leave it hidden.
+    if (MAP.id === "oppenau") {
+      setOppenauCastleVisibility(true);
+    }
   }
 
   function setZoomLevel(nextLevel) {
