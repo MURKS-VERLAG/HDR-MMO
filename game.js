@@ -3,7 +3,7 @@
 
   // R121 DEPLOYMENT VERIFICATION — harmless build marker.
   // If this line appears in DevTools, the browser is definitely running R121.
-  console.info("HDR BUILD R173 - EXACT MORNING STADIUM RESTORE");
+  console.info("HDR BUILD R164 - OPPENAU SUPERBOCK EVENT STAGE 1");
 
   const MAPS = Object.freeze({
     oberkirch: Object.freeze({
