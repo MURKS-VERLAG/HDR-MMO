@@ -3,7 +3,7 @@
 
   // R121 DEPLOYMENT VERIFICATION — harmless build marker.
   // If this line appears in DevTools, the browser is definitely running R121.
-  console.info("HDR BUILD R170 - STADIUM TRIBUNE ENTRY HARD RESTORE");
+  console.info("HDR BUILD R171 - STADIUM CANONICAL TRIBUNE ENTRY");
 
   const MAPS = Object.freeze({
     oberkirch: Object.freeze({
@@ -16389,18 +16389,8 @@
       const choice = button.dataset.stadiumChoice;
 
       if (choice === "spectator") {
-        if (
-          stadiumState === "inactive" ||
-          stadiumState === "arrival-walk" ||
-          stadiumState === "entrance-menu"
-        ) {
-          // R170: one canonical entry into the EXISTING spectator/betting flow.
-          // Works from normal stadium free-roam as well as the legacy arrival walk.
-          stadiumMoveToSpectator();
-        } else {
-          // During countdown / arena intro / fight this remains only "back to view".
-          hideStadiumMenu();
-        }
+        // R171: one canonical entry point for the visible active button.
+        stadiumMoveToSpectator();
       } else if (choice === "oberkirch") {
         stadiumReturnToOberkirch();
       }
@@ -18186,12 +18176,8 @@
   }
 
   async function stadiumMoveToSpectator() {
-    if (!stadiumUI || MAP.id !== STADIUM.mapId) return;
-    if (
-      stadiumState !== "inactive" &&
-      stadiumState !== "arrival-walk" &&
-      stadiumState !== "entrance-menu"
-    ) return;
+    if (!stadiumUI || MAP.id !== STADIUM.mapId || mapTransitioning) return;
+    if (stadiumState === "spectator-transition") return;
 
     stadiumState = "spectator-transition";
     hideStadiumMenu();
