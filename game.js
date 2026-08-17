@@ -3,7 +3,7 @@
 
   // R121 DEPLOYMENT VERIFICATION — harmless build marker.
   // If this line appears in DevTools, the browser is definitely running R121.
-  console.info("HDR BUILD R167 - KUHBACH MAP TRANSITION");
+  console.info("HDR BUILD R168 - KUHBACH EXIT + REDNECK ISOLATION");
 
   const MAPS = Object.freeze({
     oberkirch: Object.freeze({
@@ -292,8 +292,9 @@
 
     // R167 MAP 8 OPPENAU -> MAP 9 KUHBACH: lower-right road leaves east.
     oppenauKuhbachEast: Object.freeze({
-      y1: 3900,
-      y2: 5050,
+      // R168: actual lower-right road / black-border lane from supplied screenshot.
+      y1: 4750,
+      y2: 5600,
       leaveX: 10258
     }),
     // Spawn on KUHBACH's lower-left incoming road.
@@ -11876,6 +11877,12 @@
       }
     }
 
+    // R168 OPPENAU -> KUHBACH: once the foot anchor is on the actual
+    // lower-right exit road, the decorative/terrain black border must not
+    // stop the player before the established east-edge transition threshold.
+    // This is isolated to OPPENAU and only to the final edge corridor.
+    if (inOppenauKuhbachEastExit && x >= 9450) return true;
+
     // Existing river/bridge collision remains unchanged.
     if (isRiverBlockedFootPoint(x, y)) return false;
 
@@ -20954,6 +20961,9 @@
     setWinterbachWorldVisibility(MAP.id === "winterbach-ranglehen");
     setLautenbachWorldVisibility(MAP.id === "lautenbach");
     setOedegardVisibility(MAP.id === "oedsbach");
+    // R168: REDNECK FREDNECK + hut are strictly ÖDSBACH-only.
+    // Sync on every map switch so they can never leak onto later maps.
+    updateOedsbachRedneckSceneVisibility();
     setOedsbachFogVisibility(MAP.id === "oedsbach");
     setOedsbachShadowVisibility(MAP.id === "oedsbach");
     setRamsbachWorldVisibility(MAP.id === "ramsbach");
