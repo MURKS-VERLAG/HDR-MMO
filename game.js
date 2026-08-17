@@ -3,7 +3,7 @@
 
   // R121 DEPLOYMENT VERIFICATION — harmless build marker.
   // If this line appears in DevTools, the browser is definitely running R121.
-  console.info("HDR BUILD R169 - EXACT R164 STADIUM RESTORE");
+  console.info("HDR BUILD R170 - STADIUM TRIBUNE ENTRY HARD RESTORE");
 
   const MAPS = Object.freeze({
     oberkirch: Object.freeze({
@@ -16389,11 +16389,16 @@
       const choice = button.dataset.stadiumChoice;
 
       if (choice === "spectator") {
-        if (stadiumState === "entrance-menu") {
+        if (
+          stadiumState === "inactive" ||
+          stadiumState === "arrival-walk" ||
+          stadiumState === "entrance-menu"
+        ) {
+          // R170: one canonical entry into the EXISTING spectator/betting flow.
+          // Works from normal stadium free-roam as well as the legacy arrival walk.
           stadiumMoveToSpectator();
         } else {
-          // R74: ESC menu may also be opened during countdown / arena intro / fight.
-          // Returning to the current stadium view simply closes the menu.
+          // During countdown / arena intro / fight this remains only "back to view".
           hideStadiumMenu();
         }
       } else if (choice === "oberkirch") {
@@ -18181,7 +18186,13 @@
   }
 
   async function stadiumMoveToSpectator() {
-    if (!stadiumUI || stadiumState !== "entrance-menu") return;
+    if (!stadiumUI || MAP.id !== STADIUM.mapId) return;
+    if (
+      stadiumState !== "inactive" &&
+      stadiumState !== "arrival-walk" &&
+      stadiumState !== "entrance-menu"
+    ) return;
+
     stadiumState = "spectator-transition";
     hideStadiumMenu();
     stadiumUI.curtain.classList.add("stadium-curtain--visible");
@@ -22326,6 +22337,20 @@
 
       // No gameplay key may leak into the campaign while either start screen is open.
       event.preventDefault();
+      return;
+    }
+
+    // R170: normal RENCHTALSTADION free-roam uses stadiumState "inactive".
+    // ESC must still open the old stadium choice menu there, but WASD must continue
+    // into the normal campaign controls below.
+    if (
+      MAP.id === STADIUM.mapId &&
+      stadiumState === "inactive" &&
+      event.code === "Escape"
+    ) {
+      event.preventDefault();
+      if (stadiumMenuOpen) hideStadiumMenu();
+      else showStadiumMenu();
       return;
     }
 
