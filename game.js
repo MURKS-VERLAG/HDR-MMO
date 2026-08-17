@@ -3,7 +3,7 @@
 
   // R121 DEPLOYMENT VERIFICATION — harmless build marker.
   // If this line appears in DevTools, the browser is definitely running R121.
-  console.info("HDR BUILD R164 - OPPENAU SUPERBOCK EVENT STAGE 1");
+  console.info("HDR BUILD R166 - DON FREDO DIRECT HOVER FIX");
 
   const MAPS = Object.freeze({
     oberkirch: Object.freeze({
@@ -15773,6 +15773,12 @@
         transition: filter 150ms ease, transform 150ms ease;
       }
 
+      /* R166: same proven direct-hover principle as the Oppenau goat. */
+      #stadiumBookmaker.stadium-bookmaker--interactive {
+        pointer-events: auto;
+        cursor: pointer;
+      }
+
       .stadium-bookmaker--hovered {
         transform: translate(-50%, -100%) scale(1.018);
         filter:
@@ -16840,22 +16846,36 @@
       prepareStadiumBookmakerAlphaMask(base);
     }
 
-    game.addEventListener("pointermove", updateStadiumBookmakerHoverFromPointer);
-    game.addEventListener("pointerleave", clearStadiumBookmakerHover);
-    game.addEventListener("click", (event) => {
-      // Re-test the exact click position so a stale pointermove state after
-      // a stadium/camera transition can never block Don Fredo.
-      const bookmakerClicked =
-        MAP.id === STADIUM.mapId &&
-        stadiumState === "spectator" &&
-        !stadiumMenuOpen &&
-        !stadiumBetOpen &&
-        !event.target.closest("#stadiumBetUI") &&
-        stadiumBookmakerOpaqueAtClientPoint(event.clientX, event.clientY);
+    // R166 — EXACTLY the same interaction architecture that works for the
+    // Oppenau goat: the actor itself receives pointerenter / pointerleave / click.
+    // No world-coordinate conversion and no alpha-mask gate can block the hover.
+    bookmaker.addEventListener("pointerenter", () => {
+      if (
+        MAP.id !== STADIUM.mapId ||
+        stadiumState !== "spectator" ||
+        stadiumMenuOpen ||
+        stadiumBetOpen
+      ) return;
+      stadiumBookmakerHovered = true;
+      bookmaker.classList.add("stadium-bookmaker--hovered");
+      game.classList.add("stadium-bookmaker-cursor");
+    });
 
-      if (bookmakerClicked) {
-        openStadiumBetUI();
-      }
+    bookmaker.addEventListener("pointerleave", () => {
+      clearStadiumBookmakerHover();
+    });
+
+    bookmaker.addEventListener("click", (event) => {
+      if (
+        MAP.id !== STADIUM.mapId ||
+        stadiumState !== "spectator" ||
+        stadiumMenuOpen ||
+        stadiumBetOpen
+      ) return;
+      event.preventDefault();
+      event.stopPropagation();
+      clearStadiumBookmakerHover();
+      openStadiumBetUI();
     });
   }
 
@@ -18094,8 +18114,18 @@
 
   function setStadiumBookmakerVisibility() {
     if (!stadiumBookmaker) return;
-    stadiumBookmaker.root.style.display = MAP.id === STADIUM.mapId ? "block" : "none";
-    if (MAP.id !== STADIUM.mapId) clearStadiumBookmakerHover();
+
+    const onStadium = MAP.id === STADIUM.mapId;
+    const interactive =
+      onStadium &&
+      stadiumState === "spectator" &&
+      !stadiumMenuOpen &&
+      !stadiumBetOpen;
+
+    stadiumBookmaker.root.style.display = onStadium ? "block" : "none";
+    stadiumBookmaker.root.classList.toggle("stadium-bookmaker--interactive", interactive);
+
+    if (!interactive) clearStadiumBookmakerHover();
   }
 
   function setStadiumGateVisibility() {
@@ -18224,6 +18254,7 @@
     await waitMs(90);
     stadiumUI.curtain.classList.remove("stadium-curtain--visible");
     stadiumState = "spectator";
+    setStadiumBookmakerVisibility();
   }
 
   async function stadiumReturnToOberkirch() {
