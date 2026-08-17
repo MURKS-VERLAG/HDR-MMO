@@ -3,7 +3,7 @@
 
   // R121 DEPLOYMENT VERIFICATION — harmless build marker.
   // If this line appears in DevTools, the browser is definitely running R121.
-  console.info("HDR BUILD R158 - OPPENAU COLLISION BRIDGES + ANIMALS");
+  console.info("HDR BUILD R159 - OPPENAU GATES ROCK + DEPTH PASSAGES");
 
   const MAPS = Object.freeze({
     oberkirch: Object.freeze({
@@ -276,10 +276,11 @@
       x2: 4500,
       leaveY: -18
     }),
-    // Spawn just inside OPPENAU on the matching south continuation.
+    // R159 RAMSBACH -> OPPENAU:
+    // exact yellow-circle arrival inside the lower gate opening.
     oppenauFromRamsbachSpawn: Object.freeze({
-      x: 3700,
-      y: 5635
+      x: 2615,
+      y: 5505
     })
   });
 
@@ -9077,6 +9078,297 @@
   }
 
   // ------------------------------------------------------------------
+  // R159 MAP 8 OPPENAU — TWO GATES + MOSS ROCK
+  // Reference mapping:
+  //   lower gate = supplied gate with tower, MIRRORED
+  //   upper gate = supplied simple gate, NOT mirrored
+  //   rock       = supplied moss rock
+  //
+  // Gates are hard collision on their visible silhouettes EXCEPT the central
+  // arch passage. While walking through the marked RED depth zone the player
+  // fades behind the gate, then returns to full foreground after leaving it.
+  // ------------------------------------------------------------------
+  const OPPENAU_DECOR = Object.freeze({
+    upperGate: Object.freeze({
+      id: "oppenau-upper-gate",
+      src: "assets/buildings/oppenau/OPPENAU_UPPER_GATE.webp",
+      left: 2575,
+      top: 1965,
+      width: 1510,
+      height: 1007,
+      mirrored: false,
+      zIndex: 92,
+
+      // Central arch is the ONLY walkable part of the gate silhouette.
+      passage: Object.freeze({
+        x1: 3010, y1: 2480,
+        x2: 3590, y2: 3125
+      }),
+
+      // RED rectangle from the user's reference: player goes behind/fades here.
+      depthZone: Object.freeze({
+        x1: 2575, y1: 1965,
+        x2: 4050, y2: 2635
+      })
+    }),
+
+    lowerGate: Object.freeze({
+      id: "oppenau-lower-gate",
+      src: "assets/buildings/oppenau/OPPENAU_LOWER_GATE.webp",
+      left: 1380,
+      top: 4290,
+      width: 2120,
+      height: 1491,
+      mirrored: true,
+      zIndex: 92,
+
+      // Yellow-circle / main arch passage. Spawn from RAMSBACH sits here.
+      passage: Object.freeze({
+        x1: 2390, y1: 5050,
+        x2: 2860, y2: 5760
+      }),
+
+      // Lower RED rectangle from the user's reference.
+      depthZone: Object.freeze({
+        x1: 1380, y1: 4285,
+        x2: 3500, y2: 5225
+      })
+    }),
+
+    rock: Object.freeze({
+      id: "oppenau-moss-rock",
+      src: "assets/buildings/oppenau/OPPENAU_MOSS_ROCK.webp",
+      left: 1340,
+      top: 1535,
+      width: 1210,
+      height: 807,
+      mirrored: false,
+      zIndex: 88
+    }),
+
+    gateFadeBand: 150
+  });
+
+  const oppenauDecorElements = new Map();
+  const oppenauDecorAlphaMasks = new Map();
+
+  function prepareOppenauDecorAlphaMask(id, image) {
+    if (!image || !image.naturalWidth || !image.naturalHeight) return;
+
+    try {
+      const canvas = document.createElement("canvas");
+      canvas.width = image.naturalWidth;
+      canvas.height = image.naturalHeight;
+
+      const ctx = canvas.getContext("2d", { willReadFrequently: true });
+      if (!ctx) return;
+
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(image, 0, 0);
+
+      const pixels = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+      const alpha = new Uint8Array(canvas.width * canvas.height);
+
+      for (let src = 3, dst = 0; src < pixels.length; src += 4, dst += 1) {
+        alpha[dst] = pixels[src];
+      }
+
+      oppenauDecorAlphaMasks.set(id, {
+        width: canvas.width,
+        height: canvas.height,
+        alpha
+      });
+    } catch (error) {
+      oppenauDecorAlphaMasks.delete(id);
+      console.warn(`OPPENAU decor alpha mask unavailable (${id}):`, error);
+    }
+  }
+
+  function createOppenauDecorObject(config) {
+    const existing = document.getElementById(config.id);
+    if (existing) {
+      oppenauDecorElements.set(config.id, existing);
+      return existing;
+    }
+
+    const image = document.createElement("img");
+    image.id = config.id;
+    image.src = encodeURI(config.src);
+    image.alt = "";
+    image.draggable = false;
+
+    image.style.position = "absolute";
+    image.style.left = `${config.left}px`;
+    image.style.top = `${config.top}px`;
+    image.style.width = `${config.width}px`;
+    image.style.height = `${config.height}px`;
+    image.style.objectFit = "fill";
+    image.style.maxWidth = "none";
+    image.style.maxHeight = "none";
+    image.style.pointerEvents = "none";
+    image.style.userSelect = "none";
+    image.style.webkitUserDrag = "none";
+    image.style.transformOrigin = "50% 50%";
+    image.style.transform = config.mirrored ? "scaleX(-1)" : "none";
+    image.style.zIndex = String(config.zIndex);
+    image.style.opacity = "1";
+    image.style.display = MAP.id === "oppenau" ? "block" : "none";
+    image.style.visibility = MAP.id === "oppenau" ? "visible" : "hidden";
+
+    image.addEventListener("load", () => {
+      prepareOppenauDecorAlphaMask(config.id, image);
+    }, { once: true });
+
+    image.addEventListener("error", () => {
+      console.error("OPPENAU decor asset failed to load:", image.src);
+    });
+
+    world.appendChild(image);
+    oppenauDecorElements.set(config.id, image);
+
+    if (image.complete && image.naturalWidth > 0) {
+      prepareOppenauDecorAlphaMask(config.id, image);
+    }
+
+    return image;
+  }
+
+  function createOppenauDecor() {
+    createOppenauDecorObject(OPPENAU_DECOR.upperGate);
+    createOppenauDecorObject(OPPENAU_DECOR.lowerGate);
+    createOppenauDecorObject(OPPENAU_DECOR.rock);
+  }
+
+  function setOppenauDecorVisibility(visible) {
+    if (oppenauDecorElements.size < 3) createOppenauDecor();
+
+    for (const element of oppenauDecorElements.values()) {
+      element.style.display = visible ? "block" : "none";
+      element.style.visibility = visible ? "visible" : "hidden";
+    }
+  }
+
+  function pointInOppenauRect(x, y, rect) {
+    return (
+      x >= rect.x1 && x <= rect.x2 &&
+      y >= rect.y1 && y <= rect.y2
+    );
+  }
+
+  function sampleOppenauDecorAlpha(config, x, y) {
+    if (
+      x < config.left || x > config.left + config.width ||
+      y < config.top || y > config.top + config.height
+    ) return false;
+
+    const mask = oppenauDecorAlphaMasks.get(config.id);
+
+    // Safe fallback during the first decode frame: treat the object bounds as
+    // solid. Gate passage exceptions are handled before this function.
+    if (!mask) return true;
+
+    let localX01 = (x - config.left) / config.width;
+    const localY01 = (y - config.top) / config.height;
+
+    if (config.mirrored) localX01 = 1 - localX01;
+
+    const px = Math.max(
+      0,
+      Math.min(
+        mask.width - 1,
+        Math.round(localX01 * (mask.width - 1))
+      )
+    );
+    const py = Math.max(
+      0,
+      Math.min(
+        mask.height - 1,
+        Math.round(localY01 * (mask.height - 1))
+      )
+    );
+
+    return mask.alpha[py * mask.width + px] >= 28;
+  }
+
+  function isOppenauGateBlockedFootPoint(config, x, y) {
+    // Central arch always remains walkable, including the RED behind-gate zone.
+    if (pointInOppenauRect(x, y, config.passage)) return false;
+    return sampleOppenauDecorAlpha(config, x, y);
+  }
+
+  function isOppenauDecorBlockedFootPoint(x, y) {
+    if (MAP.id !== "oppenau") return false;
+
+    if (isOppenauGateBlockedFootPoint(OPPENAU_DECOR.upperGate, x, y)) {
+      return true;
+    }
+    if (isOppenauGateBlockedFootPoint(OPPENAU_DECOR.lowerGate, x, y)) {
+      return true;
+    }
+
+    // Moss rock = complete fixed alpha-silhouette collision.
+    if (sampleOppenauDecorAlpha(OPPENAU_DECOR.rock, x, y)) {
+      return true;
+    }
+
+    return false;
+  }
+
+  function oppenauGateFadeOpacityFor(config) {
+    if (MAP.id !== "oppenau") return 1;
+
+    const z = config.depthZone;
+    if (!pointInOppenauRect(playerX, playerY, z)) return 1;
+
+    // The player can only physically enter this zone through the arch corridor.
+    if (!pointInOppenauRect(playerX, playerY, config.passage)) return 1;
+
+    // Smoothly fade from either edge of the RED zone, fully hidden in its body.
+    const edgeDistance = Math.min(
+      Math.abs(playerY - z.y1),
+      Math.abs(z.y2 - playerY)
+    );
+    const t = Math.max(
+      0,
+      Math.min(1, edgeDistance / OPPENAU_DECOR.gateFadeBand)
+    );
+
+    // smoothstep: 0 at edge -> 1 deeper inside; opacity is inverse.
+    const smooth = t * t * (3 - 2 * t);
+    return 1 - smooth;
+  }
+
+  function playerInOppenauGateDepthZone() {
+    if (MAP.id !== "oppenau") return false;
+    for (const config of [OPPENAU_DECOR.upperGate, OPPENAU_DECOR.lowerGate]) {
+      if (
+        pointInOppenauRect(playerX, playerY, config.depthZone) &&
+        pointInOppenauRect(playerX, playerY, config.passage)
+      ) return true;
+    }
+    return false;
+  }
+
+  function currentOppenauPlayerOpacity() {
+    if (MAP.id !== "oppenau") return 1;
+
+    // Covered wooden bridge only: disappear smoothly the instant the white
+    // snap line is engaged. Stone bridge remains completely unchanged.
+    if (
+      activeOppenauBridgeSnap &&
+      activeOppenauBridgeSnap.id === "oppenau-covered"
+    ) {
+      return 0;
+    }
+
+    return Math.min(
+      oppenauGateFadeOpacityFor(OPPENAU_DECOR.upperGate),
+      oppenauGateFadeOpacityFor(OPPENAU_DECOR.lowerGate)
+    );
+  }
+
+
+  // ------------------------------------------------------------------
   // R156 MAP 8 OPPENAU — BURG
   // Exact supplied transparent castle, mirrored to match the reference composite.
   // LOWER half = hard foot collision / player foreground.
@@ -10166,6 +10458,10 @@
     // R158 OPPENAU: every RED painted area is hard player-foot collision.
     if (isOppenauTerrainBlockedFootPoint(x, y)) return false;
 
+    // R159 OPPENAU: both inserted gates and the moss rock use precise
+    // visible-alpha foot collision. Only each central gate arch remains walkable.
+    if (isOppenauDecorBlockedFootPoint(x, y)) return false;
+
     // R158 OPPENAU: complete visible castle blocks feet except BLUE passage.
     if (isOppenauCastleBlockedFootPoint(x, y)) return false;
 
@@ -10631,7 +10927,17 @@
       playerEl.style.willChange = "opacity";
     }
 
-    playerEl.style.opacity = playerInsideCoveredBridgeInterior() ? "0" : "1";
+    let targetOpacity = playerInsideCoveredBridgeInterior() ? 0 : 1;
+
+    // R159 OPPENAU adds its gate/covered-bridge fade without touching the
+    // established OBERKIRCH covered-bridge behaviour.
+    if (MAP.id === "oppenau") {
+      targetOpacity = Math.min(targetOpacity, currentOppenauPlayerOpacity());
+    }
+
+    playerEl.style.opacity = String(
+      Math.max(0, Math.min(1, targetOpacity))
+    );
   }
 
 
@@ -11849,10 +12155,17 @@
     }
 
     if (MAP.id === "oppenau") {
-      // R158: player is foreground everywhere on OPPENAU except the BLUE
-      // castle corner, where the castle base (z=6) intentionally occludes him.
-      playerEl.style.zIndex =
-        playerInOppenauCastleBluePassage() ? "5" : "100";
+      // R159 depth priority:
+      // 1) BLUE castle corner -> behind castle.
+      // 2) RED gate passages -> behind gate while crossing.
+      // 3) everywhere else -> normal foreground.
+      if (playerInOppenauCastleBluePassage()) {
+        playerEl.style.zIndex = "5";
+      } else if (playerInOppenauGateDepthZone()) {
+        playerEl.style.zIndex = "80";
+      } else {
+        playerEl.style.zIndex = "100";
+      }
       return;
     }
 
@@ -19185,6 +19498,7 @@
     setOedsbachShadowVisibility(MAP.id === "oedsbach");
     setRamsbachWorldVisibility(MAP.id === "ramsbach");
     setOppenauCastleVisibility(MAP.id === "oppenau");
+    setOppenauDecorVisibility(MAP.id === "oppenau");
     setRamsbachFogVisibility(MAP.id === "ramsbach");
     setHubackerFogVisibility(MAP.id === "hubacker");
     setWinterbachSnowVisibility(MAP.id === "winterbach-ranglehen");
@@ -20633,6 +20947,7 @@
     // during render so a missed/late image load can never leave it hidden.
     if (MAP.id === "oppenau") {
       setOppenauCastleVisibility(true);
+      setOppenauDecorVisibility(true);
     }
   }
 
@@ -21154,6 +21469,7 @@
     createHubackerBuildings();
     createRamsbachCastle();
     createOppenauCastle();
+    createOppenauDecor();
     createTrunkenbold();
     createStadiumPhase1();
 
