@@ -3,7 +3,7 @@
 
   // R121 DEPLOYMENT VERIFICATION — harmless build marker.
   // If this line appears in DevTools, the browser is definitely running R121.
-  console.info("HDR BUILD R155 - OPPENAU MAP + RAMSBACH NORTH TRANSITION");
+  console.info("HDR BUILD R156 - OPPENAU BURG SPLIT DEPTH + COLLISION");
 
   const MAPS = Object.freeze({
     oberkirch: Object.freeze({
@@ -8826,6 +8826,118 @@
     );
   }
 
+  // ------------------------------------------------------------------
+  // R156 MAP 8 OPPENAU — BURG
+  // Exact supplied transparent castle, mirrored to match the reference composite.
+  // LOWER half = hard foot collision / player foreground.
+  // UPPER third = fully walkable / foreground overlay occludes the player.
+  // ------------------------------------------------------------------
+  const OPPENAU_CASTLE = Object.freeze({
+    id: "oppenau-burg",
+    src: "assets/buildings/OPPENAU BURG.png",
+    left: 470,
+    top: 90,
+    width: 2920,
+    height: 1947,
+    groundedFromY: 0.50,
+    occluderToY: 0.39
+  });
+
+  let oppenauCastleBaseElement = null;
+  let oppenauCastleForegroundElement = null;
+  let oppenauCastleAlphaMask = null;
+
+  function prepareOppenauCastleAlphaMask(image) {
+    if (!image || !image.naturalWidth || !image.naturalHeight) return;
+    try {
+      const canvas = document.createElement("canvas");
+      canvas.width = image.naturalWidth;
+      canvas.height = image.naturalHeight;
+      const ctx = canvas.getContext("2d", { willReadFrequently: true });
+      if (!ctx) return;
+      ctx.drawImage(image, 0, 0);
+      const pixels = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+      const alpha = new Uint8Array(canvas.width * canvas.height);
+      for (let i = 3, j = 0; i < pixels.length; i += 4, j += 1) alpha[j] = pixels[i];
+      oppenauCastleAlphaMask = { width: canvas.width, height: canvas.height, alpha };
+    } catch (error) {
+      oppenauCastleAlphaMask = null;
+      console.warn("OPPENAU BURG alpha collision unavailable:", error);
+    }
+  }
+
+  function createOppenauCastle() {
+    if (oppenauCastleBaseElement) return;
+
+    const makeLayer = (id, zIndex, clipPath = "none") => {
+      const image = document.createElement("img");
+      image.id = id;
+      image.src = encodeURI(OPPENAU_CASTLE.src);
+      image.alt = "";
+      image.draggable = false;
+      image.style.position = "absolute";
+      image.style.left = `${OPPENAU_CASTLE.left}px`;
+      image.style.top = `${OPPENAU_CASTLE.top}px`;
+      image.style.width = `${OPPENAU_CASTLE.width}px`;
+      image.style.height = `${OPPENAU_CASTLE.height}px`;
+      image.style.objectFit = "fill";
+      image.style.maxWidth = "none";
+      image.style.maxHeight = "none";
+      image.style.pointerEvents = "none";
+      image.style.userSelect = "none";
+      image.style.transformOrigin = "50% 50%";
+      image.style.transform = "scaleX(-1)";
+      image.style.zIndex = String(zIndex);
+      image.style.clipPath = clipPath;
+      image.style.display = MAP.id === "oppenau" ? "block" : "none";
+      world.appendChild(image);
+      return image;
+    };
+
+    // Base is behind the player. It supplies the complete castle image.
+    oppenauCastleBaseElement = makeLayer("oppenau-burg-base", 6);
+    // Same asset, but only its upper third is duplicated above the player.
+    oppenauCastleForegroundElement = makeLayer(
+      "oppenau-burg-upper-foreground",
+      110,
+      `inset(0 0 ${100 - OPPENAU_CASTLE.occluderToY * 100}% 0)`
+    );
+
+    oppenauCastleBaseElement.addEventListener("load", () => {
+      prepareOppenauCastleAlphaMask(oppenauCastleBaseElement);
+    }, { once: true });
+    if (oppenauCastleBaseElement.complete && oppenauCastleBaseElement.naturalWidth > 0) {
+      prepareOppenauCastleAlphaMask(oppenauCastleBaseElement);
+    }
+  }
+
+  function setOppenauCastleVisibility(visible) {
+    for (const element of [oppenauCastleBaseElement, oppenauCastleForegroundElement]) {
+      if (!element) continue;
+      element.style.display = visible ? "block" : "none";
+      element.style.visibility = visible ? "visible" : "hidden";
+    }
+  }
+
+  function isOppenauCastleBlockedFootPoint(x, y) {
+    if (MAP.id !== "oppenau") return false;
+    const c = OPPENAU_CASTLE;
+    if (x < c.left || x > c.left + c.width || y < c.top || y > c.top + c.height) return false;
+
+    const localX = (x - c.left) / c.width;
+    const localY = (y - c.top) / c.height;
+    // Upper castle is deliberately NO-HITBOX.
+    if (localY < c.groundedFromY) return false;
+    if (!oppenauCastleAlphaMask) return false;
+
+    // CSS mirrors the artwork, so alpha lookup mirrors X as well.
+    const px = Math.max(0, Math.min(oppenauCastleAlphaMask.width - 1,
+      Math.round((1 - localX) * (oppenauCastleAlphaMask.width - 1))));
+    const py = Math.max(0, Math.min(oppenauCastleAlphaMask.height - 1,
+      Math.round(localY * (oppenauCastleAlphaMask.height - 1))));
+    return oppenauCastleAlphaMask.alpha[py * oppenauCastleAlphaMask.width + px] >= 28;
+  }
+
   function ramsbachPathFor(id) {
     if (id === "bridge") return RAMSBACH_TERRAIN.bridgePath;
     return null;
@@ -9744,6 +9856,9 @@
       }
     }
 
+
+    // R156 OPPENAU: only the visible LOWER half of the mirrored castle blocks feet.
+    if (isOppenauCastleBlockedFootPoint(x, y)) return false;
 
     // New hard collision for church body + tavern.
     // Only the player's foot anchor participates.
@@ -11406,6 +11521,13 @@
       } else {
         playerEl.style.zIndex = "100";
       }
+      return;
+    }
+
+    if (MAP.id === "oppenau") {
+      // Base/lower castle stays behind the player; the duplicated upper third
+      // is z=110 and therefore naturally hides the character when he walks behind it.
+      playerEl.style.zIndex = "100";
       return;
     }
 
@@ -18736,6 +18858,7 @@
     setOedsbachFogVisibility(MAP.id === "oedsbach");
     setOedsbachShadowVisibility(MAP.id === "oedsbach");
     setRamsbachWorldVisibility(MAP.id === "ramsbach");
+    setOppenauCastleVisibility(MAP.id === "oppenau");
     setRamsbachFogVisibility(MAP.id === "ramsbach");
     setHubackerFogVisibility(MAP.id === "hubacker");
     setWinterbachSnowVisibility(MAP.id === "winterbach-ranglehen");
@@ -20698,6 +20821,7 @@
     createLautenbachBuildings();
     createHubackerBuildings();
     createRamsbachCastle();
+    createOppenauCastle();
     createTrunkenbold();
     createStadiumPhase1();
 
