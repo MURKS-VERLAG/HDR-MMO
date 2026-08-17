@@ -16843,13 +16843,17 @@
     game.addEventListener("pointermove", updateStadiumBookmakerHoverFromPointer);
     game.addEventListener("pointerleave", clearStadiumBookmakerHover);
     game.addEventListener("click", (event) => {
-      if (
-        stadiumBookmakerHovered &&
+      // Re-test the exact click position so a stale pointermove state after
+      // a stadium/camera transition can never block Don Fredo.
+      const bookmakerClicked =
+        MAP.id === STADIUM.mapId &&
         stadiumState === "spectator" &&
         !stadiumMenuOpen &&
         !stadiumBetOpen &&
-        !event.target.closest("#stadiumBetUI")
-      ) {
+        !event.target.closest("#stadiumBetUI") &&
+        stadiumBookmakerOpaqueAtClientPoint(event.clientX, event.clientY);
+
+      if (bookmakerClicked) {
         openStadiumBetUI();
       }
     });
@@ -16918,6 +16922,26 @@
     }
   }
 
+  // R165 RENCHTALSTADION BOOKMAKER HOVER FIX:
+  // Hit-test against the bookmaker's actually rendered screen rectangle.
+  // This stays correct through camera translation, zoom and stadium transitions.
+  // The existing alpha mask keeps the interaction pixel-precise.
+  function stadiumBookmakerOpaqueAtClientPoint(clientX, clientY) {
+    if (!stadiumBookmaker || !stadiumBookmakerAlphaMask) return false;
+
+    const rect = stadiumBookmaker.root.getBoundingClientRect();
+    if (!rect.width || !rect.height) return false;
+
+    const u = (clientX - rect.left) / rect.width;
+    const v = (clientY - rect.top) / rect.height;
+    if (u < 0 || u > 1 || v < 0 || v > 1) return false;
+
+    const mask = stadiumBookmakerAlphaMask;
+    const px = Math.max(0, Math.min(mask.width - 1, Math.round(u * (mask.width - 1))));
+    const py = Math.max(0, Math.min(mask.height - 1, Math.round(v * (mask.height - 1))));
+    return mask.alpha[py * mask.width + px] >= STADIUM.bookmakerHoverAlphaThreshold;
+  }
+
   function updateStadiumBookmakerHoverFromPointer(event) {
     if (
       MAP.id !== STADIUM.mapId ||
@@ -16931,8 +16955,7 @@
       return;
     }
 
-    const point = clientPointToStadiumWorld(event.clientX, event.clientY);
-    const hovered = !!point && stadiumBookmakerOpaqueAtWorldPoint(point.x, point.y);
+    const hovered = stadiumBookmakerOpaqueAtClientPoint(event.clientX, event.clientY);
 
     stadiumBookmakerHovered = hovered;
     game.classList.toggle("stadium-bookmaker-cursor", hovered);
