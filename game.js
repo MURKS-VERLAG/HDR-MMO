@@ -3,7 +3,7 @@
 
   // R121 DEPLOYMENT VERIFICATION — harmless build marker.
   // If this line appears in DevTools, the browser is definitely running R121.
-  console.info("HDR BUILD R164 - OPPENAU SUPERBOCK EVENT STAGE 1");
+  console.info("HDR BUILD R166 - OEDSBACH REDNECK POSITION + HUT ASSET FIX");
 
   const MAPS = Object.freeze({
     oberkirch: Object.freeze({
@@ -1525,7 +1525,7 @@
   const OEDSBACH_REDNECK = Object.freeze({
     hut: Object.freeze({
       id: "oedsbach-redneck-hut",
-      src: "assets/buildings/oedsbach/REDNECK FREDNECK HÜTTE.png",
+      src: "assets/buildings/oedsbach/REDNECK_FREDNECK_HUETTE.png",
       left: 6420,
       top: 1430,
       width: 2050,
@@ -1540,10 +1540,10 @@
     }),
     fredneck: Object.freeze({
       src: "assets/npcs/oedsbach/fredneck/REDNECK FREDNECK SLEEP.png",
-      x: 8506,
-      y: 1519,
-      width: 900,
-      height: 600,
+      x: 8705,
+      y: 1480,
+      width: 675,
+      height: 450,
       zIndex: 7
     })
   });
