@@ -3,7 +3,7 @@
 
   // R121 DEPLOYMENT VERIFICATION — harmless build marker.
   // If this line appears in DevTools, the browser is definitely running R121.
-  console.info("HDR BUILD R163 - OPPENAU GOAT VISIBILITY + GATE DEPTH + BRIDGE ACCESS");
+  console.info("HDR BUILD R164 - OPPENAU SUPERBOCK EVENT STAGE 1");
 
   const MAPS = Object.freeze({
     oberkirch: Object.freeze({
@@ -9434,17 +9434,20 @@
 
 
   // ------------------------------------------------------------------
-  // R162 OPPENAU — AMBIENT ZIEGE + MAID
-  // Building block for the later Unterrock/Ziegen event.
+  // R164 OPPENAU — ZIEGE + MAID / SUPERBOCK EVENT STAGE 1
   //
-  // Timing is deliberately tied to performance.now() instead of chained
-  // setTimeout calls. This keeps the animation correct after tab changes.
-  //
-  // First 10 seconds: both standard.
-  // Then every 10 seconds, synchronously:
-  //   0..3 s goat ALT + maid PHASE 1
-  //   3..6 s goat STANDARD + maid PHASE 2
-  //   6..10 s both STANDARD
+  // Existing ambient 10-second reactions remain intact while idle.
+  // NEW:
+  // - goat is mouse-selectable while idle
+  // - parchment cursor + subtle highlight on hover
+  // - click starts a fixed path following the user's red route
+  // - covered bridge uses the existing OPPENAU bridge snap line exactly
+  // - goat goes behind the upper gate and fades under the covered bridge
+  // - after arrival: 2 s goat meet + mirrored maid meet
+  // - then maid dance, 0.3 s later mirrored goat dance
+  // - final poses freeze until SUPERBOCK.mp3 ends
+  // - player remains fully controllable throughout
+  // - after song: both reset to exact starting positions / normal frames
   // ------------------------------------------------------------------
   const OPPENAU_AMBIENT_PAIR = Object.freeze({
     mapId: "oppenau",
@@ -9457,8 +9460,14 @@
       y: 2175,
       width: 390,
       height: 410,
+
       standard: "assets/npcs/oppenau/goat/OPPENAU GOAT NORMAL.webp",
-      alternate: "assets/npcs/oppenau/goat/OPPENAU GOAT ALT.webp"
+      alternate: "assets/npcs/oppenau/goat/OPPENAU GOAT ALT.webp",
+
+      walk1: "assets/npcs/oppenau/goat/event/OPPENAU GOAT WALK RIGHT 1.webp",
+      walk2: "assets/npcs/oppenau/goat/event/OPPENAU GOAT WALK RIGHT 2.webp",
+      meet: "assets/npcs/oppenau/goat/event/OPPENAU GOAT MEET.webp",
+      dance: "assets/npcs/oppenau/goat/event/OPPENAU GOAT DANCE.webp"
     }),
 
     maid: Object.freeze({
@@ -9466,15 +9475,59 @@
       y: 3865,
       width: 405,
       height: 555,
+
       standard: "assets/npcs/oppenau/maid/OPPENAU MAID NORMAL.webp",
       phase1: "assets/npcs/oppenau/maid/OPPENAU MAID LOOK UP.webp",
-      phase2: "assets/npcs/oppenau/maid/OPPENAU MAID HANDKERCHIEF.webp"
+      phase2: "assets/npcs/oppenau/maid/OPPENAU MAID HANDKERCHIEF.webp",
+
+      meet: "assets/npcs/oppenau/maid/event/OPPENAU MAID MEET.webp",
+      dance: "assets/npcs/oppenau/maid/event/OPPENAU MAID DANCE.webp"
     })
+  });
+
+  const OPPENAU_SUPERBOCK_EVENT = Object.freeze({
+    song: "assets/audio/events/oppenau/SUPERBOCK.mp3",
+    musicFadeMs: 1250,
+
+    walkSpeed: 300,
+    walkFrameMs: 225,
+
+    // Exact route reconstructed from the supplied RED line.
+    // Points 4 -> 5 are the already-established covered bridge snap line
+    // from R158: (3810,2675) -> (5230,3065).
+    route: Object.freeze([
+      Object.freeze({ x: 1990, y: 2175 }),
+      Object.freeze({ x: 2260, y: 2290 }),
+      Object.freeze({ x: 2860, y: 2320 }),
+      Object.freeze({ x: 3340, y: 2495 }),
+      Object.freeze({ x: 3810, y: 2675 }),
+      Object.freeze({ x: 5230, y: 3065 }),
+      Object.freeze({ x: 5410, y: 3290 }),
+      Object.freeze({ x: 5450, y: 3535 }),
+      Object.freeze({ x: 5370, y: 3825 })
+    ]),
+
+    bridgeStartIndex: 4,
+    bridgeEndIndex: 5,
+
+    meetDurationMs: 2000,
+    goatDanceDelayMs: 300
   });
 
   let oppenauAmbientPairStartAt = 0;
   let oppenauAmbientGoat = null;
   let oppenauAmbientMaid = null;
+
+  let oppenauGoatPartyState = "idle";
+  let oppenauGoatPartyRouteIndex = 1;
+  let oppenauGoatPartyNextWalkFrameAt = 0;
+  let oppenauGoatPartyWalkFrame = 0;
+  let oppenauGoatPartyPhaseEndAt = 0;
+  let oppenauGoatPartyHovered = false;
+
+  let oppenauGoatPartyAudio = null;
+  let oppenauGoatPartyMusicToken = 0;
+  let oppenauGoatPartyPreviousMapAudio = null;
 
   function installOppenauAmbientPairStyles() {
     if (document.getElementById("oppenauAmbientPairStyles")) return;
@@ -9488,10 +9541,11 @@
         transform-origin: 50% 100%;
         pointer-events: none;
         user-select: none;
-        /* R163: goat was present but hidden behind Oppenau decor at its
-           reference position. Ambient pair must render in the normal NPC
-           foreground layer. Timing/position/size stay unchanged. */
         z-index: 95;
+        transition:
+          opacity ${OPPENAU_AMBIENT_PAIR.crossfadeMs}ms ease,
+          filter 150ms ease;
+        will-change: left, top, opacity, filter;
       }
 
       .oppenau-ambient-pair__sprite {
@@ -9503,12 +9557,27 @@
         object-position: center bottom;
         opacity: 0;
         transition: opacity ${OPPENAU_AMBIENT_PAIR.crossfadeMs}ms ease;
-        will-change: opacity;
+        will-change: opacity, transform;
         pointer-events: none;
       }
 
       .oppenau-ambient-pair__sprite--visible {
         opacity: 1;
+      }
+
+      #oppenau-ambient-goat.oppenau-goat--interactive {
+        pointer-events: auto;
+      }
+
+      #oppenau-ambient-goat.oppenau-goat--hovered {
+        z-index: 102;
+        filter:
+          brightness(1.18)
+          drop-shadow(0 0 18px rgba(255, 236, 175, .72));
+      }
+
+      #game.oppenau-goat-parchment-cursor {
+        cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 32 32'%3E%3Cpath fill='%23e4d2a2' stroke='%235b4023' stroke-width='1.5' d='M8 5h17c2 0 3 1 3 3s-1 3-3 3H11v13c0 2-1 3-3 3s-3-1-3-3V8c0-2 1-3 3-3Z'/%3E%3Cpath fill='none' stroke='%2384663b' stroke-width='1.4' d='M11 13h12M11 17h10M11 21h8'/%3E%3C/svg%3E") 7 7, pointer;
       }
     `;
 
@@ -9519,9 +9588,16 @@
     const sources = [
       OPPENAU_AMBIENT_PAIR.goat.standard,
       OPPENAU_AMBIENT_PAIR.goat.alternate,
+      OPPENAU_AMBIENT_PAIR.goat.walk1,
+      OPPENAU_AMBIENT_PAIR.goat.walk2,
+      OPPENAU_AMBIENT_PAIR.goat.meet,
+      OPPENAU_AMBIENT_PAIR.goat.dance,
+
       OPPENAU_AMBIENT_PAIR.maid.standard,
       OPPENAU_AMBIENT_PAIR.maid.phase1,
-      OPPENAU_AMBIENT_PAIR.maid.phase2
+      OPPENAU_AMBIENT_PAIR.maid.phase2,
+      OPPENAU_AMBIENT_PAIR.maid.meet,
+      OPPENAU_AMBIENT_PAIR.maid.dance
     ];
 
     for (const src of sources) {
@@ -9560,7 +9636,9 @@
     return {
       root,
       images,
-      visibleIndex: 0
+      visibleIndex: 0,
+      x: config.x,
+      y: config.y
     };
   }
 
@@ -9577,19 +9655,399 @@
     actor.visibleIndex = index;
   }
 
+  function setOppenauAmbientActorPosition(actor, x, y) {
+    if (!actor) return;
+    actor.x = x;
+    actor.y = y;
+    actor.root.style.left = `${x}px`;
+    actor.root.style.top = `${y}px`;
+  }
+
+  function setOppenauGoatInteractionEnabled(enabled) {
+    if (!oppenauAmbientGoat) return;
+
+    oppenauAmbientGoat.root.classList.toggle(
+      "oppenau-goat--interactive",
+      Boolean(enabled)
+    );
+
+    if (!enabled) {
+      oppenauGoatPartyHovered = false;
+      oppenauAmbientGoat.root.classList.remove("oppenau-goat--hovered");
+      game.classList.remove("oppenau-goat-parchment-cursor");
+    }
+  }
+
+  function updateOppenauGoatHoverVisual(hovered) {
+    oppenauGoatPartyHovered = Boolean(hovered);
+
+    if (!oppenauAmbientGoat) return;
+
+    const active =
+      hovered &&
+      MAP.id === OPPENAU_AMBIENT_PAIR.mapId &&
+      oppenauGoatPartyState === "idle";
+
+    oppenauAmbientGoat.root.classList.toggle(
+      "oppenau-goat--hovered",
+      active
+    );
+    game.classList.toggle("oppenau-goat-parchment-cursor", active);
+  }
+
+  function ensureOppenauGoatPartyAudio() {
+    if (oppenauGoatPartyAudio) return oppenauGoatPartyAudio;
+
+    const audio = new Audio(encodeURI(OPPENAU_SUPERBOCK_EVENT.song));
+    audio.preload = "auto";
+    audio.loop = false;
+    audio.volume = 0;
+
+    audio.addEventListener("ended", () => {
+      finishOppenauGoatParty(performance.now(), true);
+    });
+
+    oppenauGoatPartyAudio = audio;
+    return audio;
+  }
+
+  function fadeAudioPair(outgoing, incoming, duration, token, onComplete = null) {
+    const outgoingStart =
+      outgoing && !outgoing.paused ? outgoing.volume : 0;
+    const incomingTarget = MAP_MUSIC_VOLUME;
+    const startedAt = performance.now();
+
+    function step(now) {
+      if (token !== oppenauGoatPartyMusicToken) return;
+
+      const t = Math.min(1, (now - startedAt) / duration);
+      const eased = t * t * (3 - 2 * t);
+
+      if (outgoing) {
+        outgoing.volume = Math.max(0, outgoingStart * (1 - eased));
+      }
+
+      if (incoming) {
+        incoming.volume = Math.min(
+          incomingTarget,
+          incomingTarget * eased
+        );
+      }
+
+      if (t < 1) {
+        requestAnimationFrame(step);
+        return;
+      }
+
+      if (outgoing) {
+        outgoing.pause();
+        outgoing.volume = 0;
+      }
+
+      if (incoming) incoming.volume = incomingTarget;
+      if (typeof onComplete === "function") onComplete();
+    }
+
+    requestAnimationFrame(step);
+  }
+
+  function startOppenauGoatPartyMusic() {
+    const song = ensureOppenauGoatPartyAudio();
+    const token = ++oppenauGoatPartyMusicToken;
+
+    oppenauGoatPartyPreviousMapAudio =
+      activeMapMusic && !activeMapMusic.paused
+        ? activeMapMusic
+        : getMapMusicPlayer("oppenau");
+
+    try { song.currentTime = 0; } catch (_) {}
+    song.volume = 0;
+
+    song.play()
+      .then(() => {
+        fadeAudioPair(
+          oppenauGoatPartyPreviousMapAudio,
+          song,
+          OPPENAU_SUPERBOCK_EVENT.musicFadeMs,
+          token
+        );
+      })
+      .catch(() => {
+        // A genuine click normally unlocks audio. If the browser still rejects
+        // playback, reset cleanly instead of leaving the event frozen forever.
+        finishOppenauGoatParty(performance.now(), false);
+      });
+  }
+
+  function restoreOppenauMapMusic() {
+    const song = oppenauGoatPartyAudio;
+    const token = ++oppenauGoatPartyMusicToken;
+
+    if (song) {
+      song.pause();
+      song.volume = 0;
+      try { song.currentTime = 0; } catch (_) {}
+    }
+
+    const mapId = desiredBackgroundMusicId();
+    const mapAudio =
+      MAP.id === "oppenau" && oppenauGoatPartyPreviousMapAudio
+        ? oppenauGoatPartyPreviousMapAudio
+        : getMapMusicPlayer(mapId);
+
+    activeMapMusicId = mapId;
+    activeMapMusic = mapAudio;
+    mapAudio.volume = 0;
+
+    mapAudio.play()
+      .then(() => {
+        musicUnlocked = true;
+        fadeAudioPair(
+          null,
+          mapAudio,
+          MAP_MUSIC_FADE_MS,
+          token,
+          () => stopAllMapMusicExcept(mapAudio)
+        );
+      })
+      .catch(() => {});
+
+    oppenauGoatPartyPreviousMapAudio = null;
+  }
+
+  function resetOppenauGoatPartyVisuals(now = performance.now()) {
+    setOppenauAmbientActorPosition(
+      oppenauAmbientGoat,
+      OPPENAU_AMBIENT_PAIR.goat.x,
+      OPPENAU_AMBIENT_PAIR.goat.y
+    );
+    setOppenauAmbientActorPosition(
+      oppenauAmbientMaid,
+      OPPENAU_AMBIENT_PAIR.maid.x,
+      OPPENAU_AMBIENT_PAIR.maid.y
+    );
+
+    if (oppenauAmbientGoat) {
+      oppenauAmbientGoat.root.style.opacity = "1";
+      oppenauAmbientGoat.root.style.zIndex = "95";
+    }
+    if (oppenauAmbientMaid) {
+      oppenauAmbientMaid.root.style.opacity = "1";
+      oppenauAmbientMaid.root.style.zIndex = "95";
+    }
+
+    setOppenauAmbientFrame(oppenauAmbientGoat, 0);
+    setOppenauAmbientFrame(oppenauAmbientMaid, 0);
+
+    oppenauAmbientPairStartAt = now;
+    oppenauGoatPartyRouteIndex = 1;
+    oppenauGoatPartyNextWalkFrameAt = 0;
+    oppenauGoatPartyWalkFrame = 0;
+    oppenauGoatPartyPhaseEndAt = 0;
+
+    setOppenauGoatInteractionEnabled(
+      MAP.id === OPPENAU_AMBIENT_PAIR.mapId
+    );
+  }
+
+  function finishOppenauGoatParty(now, restoreMusic = true) {
+    if (oppenauGoatPartyState === "idle") return;
+
+    oppenauGoatPartyState = "idle";
+    resetOppenauGoatPartyVisuals(now);
+
+    if (restoreMusic) restoreOppenauMapMusic();
+  }
+
+  function beginOppenauGoatParty() {
+    if (
+      MAP.id !== OPPENAU_AMBIENT_PAIR.mapId ||
+      oppenauGoatPartyState !== "idle" ||
+      !oppenauAmbientGoat ||
+      !oppenauAmbientMaid
+    ) {
+      return;
+    }
+
+    setOppenauGoatInteractionEnabled(false);
+
+    oppenauGoatPartyState = "walking";
+    oppenauGoatPartyRouteIndex = 1;
+    oppenauGoatPartyWalkFrame = 0;
+    oppenauGoatPartyNextWalkFrameAt = 0;
+
+    setOppenauAmbientFrame(oppenauAmbientGoat, 2);
+    setOppenauAmbientFrame(oppenauAmbientMaid, 0);
+  }
+
+  function updateOppenauGoatPartyDepth() {
+    if (!oppenauAmbientGoat) return;
+
+    const x = oppenauAmbientGoat.x;
+    const y = oppenauAmbientGoat.y;
+
+    // Same gate principle as player: route passes behind the upper gate body.
+    if (
+      pointInOppenauRect(x, y, OPPENAU_DECOR.upperGate.depthZone)
+    ) {
+      oppenauAmbientGoat.root.style.zIndex = "80";
+    } else {
+      oppenauAmbientGoat.root.style.zIndex = "95";
+    }
+
+    // Covered bridge only: same smooth invisibility principle as the player.
+    const onCoveredBridge =
+      oppenauGoatPartyState === "walking" &&
+      oppenauGoatPartyRouteIndex ===
+        OPPENAU_SUPERBOCK_EVENT.bridgeEndIndex;
+
+    oppenauAmbientGoat.root.style.opacity =
+      onCoveredBridge ? "0" : "1";
+  }
+
+  function updateOppenauGoatPartyWalking(deltaSeconds, now) {
+    const route = OPPENAU_SUPERBOCK_EVENT.route;
+    if (
+      !oppenauAmbientGoat ||
+      oppenauGoatPartyRouteIndex >= route.length
+    ) {
+      oppenauGoatPartyState = "meet";
+      oppenauGoatPartyPhaseEndAt =
+        now + OPPENAU_SUPERBOCK_EVENT.meetDurationMs;
+
+      // Goat = attachment 3.
+      setOppenauAmbientFrame(oppenauAmbientGoat, 4);
+
+      // Maid = attachment 4, pre-mirrored at creation.
+      setOppenauAmbientFrame(oppenauAmbientMaid, 3);
+
+      oppenauAmbientGoat.root.style.opacity = "1";
+      oppenauAmbientGoat.root.style.zIndex = "95";
+
+      startOppenauGoatPartyMusic();
+      return;
+    }
+
+    const target = route[oppenauGoatPartyRouteIndex];
+    const dx = target.x - oppenauAmbientGoat.x;
+    const dy = target.y - oppenauAmbientGoat.y;
+    const distance = Math.hypot(dx, dy);
+
+    if (distance <= 8) {
+      setOppenauAmbientActorPosition(
+        oppenauAmbientGoat,
+        target.x,
+        target.y
+      );
+      oppenauGoatPartyRouteIndex += 1;
+      updateOppenauGoatPartyDepth();
+      return;
+    }
+
+    const step = Math.min(
+      distance,
+      OPPENAU_SUPERBOCK_EVENT.walkSpeed * deltaSeconds
+    );
+
+    setOppenauAmbientActorPosition(
+      oppenauAmbientGoat,
+      oppenauAmbientGoat.x + (dx / distance) * step,
+      oppenauAmbientGoat.y + (dy / distance) * step
+    );
+
+    // Only RIGHT walking art is required by design.
+    if (now >= oppenauGoatPartyNextWalkFrameAt) {
+      oppenauGoatPartyWalkFrame =
+        1 - oppenauGoatPartyWalkFrame;
+
+      setOppenauAmbientFrame(
+        oppenauAmbientGoat,
+        oppenauGoatPartyWalkFrame === 0 ? 2 : 3
+      );
+
+      oppenauGoatPartyNextWalkFrameAt =
+        now + OPPENAU_SUPERBOCK_EVENT.walkFrameMs;
+    }
+
+    updateOppenauGoatPartyDepth();
+  }
+
+  function updateOppenauGoatParty(deltaSeconds, now) {
+    if (oppenauGoatPartyState === "idle") return;
+
+    if (MAP.id !== OPPENAU_AMBIENT_PAIR.mapId) {
+      // Safe cleanup if the player leaves OPPENAU mid-event.
+      finishOppenauGoatParty(now, true);
+      return;
+    }
+
+    if (oppenauGoatPartyState === "walking") {
+      updateOppenauGoatPartyWalking(deltaSeconds, now);
+      return;
+    }
+
+    if (
+      oppenauGoatPartyState === "meet" &&
+      now >= oppenauGoatPartyPhaseEndAt
+    ) {
+      // After the synchronized two-second reaction:
+      // maid changes first...
+      setOppenauAmbientFrame(oppenauAmbientMaid, 4);
+
+      oppenauGoatPartyState = "maid-dance";
+      oppenauGoatPartyPhaseEndAt =
+        now + OPPENAU_SUPERBOCK_EVENT.goatDanceDelayMs;
+      return;
+    }
+
+    if (
+      oppenauGoatPartyState === "maid-dance" &&
+      now >= oppenauGoatPartyPhaseEndAt
+    ) {
+      // ...goat follows exactly 0.3 seconds later, mirrored.
+      setOppenauAmbientFrame(oppenauAmbientGoat, 5);
+      oppenauGoatPartyState = "freeze";
+      return;
+    }
+
+    // "freeze" intentionally does nothing:
+    // both final images remain until the song's native 'ended' event fires.
+  }
+
   function createOppenauAmbientPair() {
     installOppenauAmbientPairStyles();
     preloadOppenauAmbientPairSprites();
+    ensureOppenauGoatPartyAudio();
 
     if (!oppenauAmbientGoat) {
       oppenauAmbientGoat = createOppenauAmbientActor(
         "oppenau-ambient-goat",
         OPPENAU_AMBIENT_PAIR.goat,
         [
-          OPPENAU_AMBIENT_PAIR.goat.standard,
-          OPPENAU_AMBIENT_PAIR.goat.alternate
+          OPPENAU_AMBIENT_PAIR.goat.standard,  // 0
+          OPPENAU_AMBIENT_PAIR.goat.alternate, // 1
+          OPPENAU_AMBIENT_PAIR.goat.walk1,     // 2
+          OPPENAU_AMBIENT_PAIR.goat.walk2,     // 3
+          OPPENAU_AMBIENT_PAIR.goat.meet,      // 4
+          OPPENAU_AMBIENT_PAIR.goat.dance      // 5
         ]
       );
+
+      oppenauAmbientGoat.root.addEventListener("pointerenter", () => {
+        updateOppenauGoatHoverVisual(true);
+      });
+
+      oppenauAmbientGoat.root.addEventListener("pointerleave", () => {
+        updateOppenauGoatHoverVisual(false);
+      });
+
+      oppenauAmbientGoat.root.addEventListener("click", (event) => {
+        if (oppenauGoatPartyState !== "idle") return;
+        event.preventDefault();
+        event.stopPropagation();
+        updateOppenauGoatHoverVisual(false);
+        beginOppenauGoatParty();
+      });
     }
 
     if (!oppenauAmbientMaid) {
@@ -9597,30 +10055,52 @@
         "oppenau-ambient-maid",
         OPPENAU_AMBIENT_PAIR.maid,
         [
-          OPPENAU_AMBIENT_PAIR.maid.standard,
-          OPPENAU_AMBIENT_PAIR.maid.phase1,
-          OPPENAU_AMBIENT_PAIR.maid.phase2
+          OPPENAU_AMBIENT_PAIR.maid.standard, // 0
+          OPPENAU_AMBIENT_PAIR.maid.phase1,   // 1
+          OPPENAU_AMBIENT_PAIR.maid.phase2,   // 2
+          OPPENAU_AMBIENT_PAIR.maid.meet,     // 3
+          OPPENAU_AMBIENT_PAIR.maid.dance     // 4
         ]
       );
+
+      // Requested mirrored reaction frame.
+      oppenauAmbientMaid.images[3].style.transform = "scaleX(-1)";
     }
+
+    // Requested mirrored final goat pose.
+    oppenauAmbientGoat.images[5].style.transform = "scaleX(-1)";
 
     if (!oppenauAmbientPairStartAt) {
       oppenauAmbientPairStartAt = performance.now();
     }
+
+    setOppenauGoatInteractionEnabled(
+      MAP.id === OPPENAU_AMBIENT_PAIR.mapId
+    );
   }
 
-  function updateOppenauAmbientPair(now) {
+  function updateOppenauAmbientPair(deltaSeconds, now) {
     if (!oppenauAmbientGoat || !oppenauAmbientMaid) return;
 
     const visible = MAP.id === OPPENAU_AMBIENT_PAIR.mapId;
     oppenauAmbientGoat.root.style.display = visible ? "" : "none";
     oppenauAmbientMaid.root.style.display = visible ? "" : "none";
 
-    if (!visible) return;
+    if (!visible) {
+      updateOppenauGoatHoverVisual(false);
+      return;
+    }
+
+    // Event owns all frames/positions while running.
+    if (oppenauGoatPartyState !== "idle") {
+      updateOppenauGoatParty(deltaSeconds, now);
+      return;
+    }
+
+    setOppenauGoatInteractionEnabled(true);
 
     const elapsed = now - oppenauAmbientPairStartAt;
 
-    // Explicitly preserve the standard reference pose for the first ten seconds.
     if (elapsed < OPPENAU_AMBIENT_PAIR.initialDelayMs) {
       setOppenauAmbientFrame(oppenauAmbientGoat, 0);
       setOppenauAmbientFrame(oppenauAmbientMaid, 0);
@@ -9632,15 +10112,12 @@
       OPPENAU_AMBIENT_PAIR.cycleMs;
 
     if (phase < 3000) {
-      // Synchronous 3-second first reaction.
       setOppenauAmbientFrame(oppenauAmbientGoat, 1);
       setOppenauAmbientFrame(oppenauAmbientMaid, 1);
     } else if (phase < 6000) {
-      // Goat returns to standard; maid continues with her second 3-second pose.
       setOppenauAmbientFrame(oppenauAmbientGoat, 0);
       setOppenauAmbientFrame(oppenauAmbientMaid, 2);
     } else {
-      // Rest of the ten-second cycle is the standard pair.
       setOppenauAmbientFrame(oppenauAmbientGoat, 0);
       setOppenauAmbientFrame(oppenauAmbientMaid, 0);
     }
@@ -21786,7 +22263,7 @@
         updateGoat(deltaSeconds, now);
         updateBoars(deltaSeconds, now);
         updateMoosmaennle(deltaSeconds, now);
-        updateOppenauAmbientPair(now);
+        updateOppenauAmbientPair(deltaSeconds, now);
 
         // R120: current five-bear system remains, but is completely isolated
         // from core player controls and is executed ONLY on RAMSBACH.
