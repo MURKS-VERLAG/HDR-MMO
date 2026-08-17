@@ -3,7 +3,7 @@
 
   // R121 DEPLOYMENT VERIFICATION — harmless build marker.
   // If this line appears in DevTools, the browser is definitely running R121.
-  console.info("HDR BUILD R167 - DON FREDO OLD STADIUM FLOW RESTORED");
+  console.info("HDR BUILD R168 - STADIUM SPECTATOR FLOW RESTORED");
 
   const MAPS = Object.freeze({
     oberkirch: Object.freeze({
@@ -16395,11 +16395,14 @@
       const choice = button.dataset.stadiumChoice;
 
       if (choice === "spectator") {
-        if (stadiumState === "entrance-menu") {
+        if (stadiumState === "inactive" || stadiumState === "entrance-menu") {
+          // Restore the original stadium entry flow:
+          // ESC -> AUF TRIBÜNE PLATZNEHMEN -> old curtain/teleport ->
+          // spectator state -> Don Fredo hover/click -> existing bet/fight flow.
+          stadiumState = "entrance-menu";
           stadiumMoveToSpectator();
         } else {
-          // R74: ESC menu may also be opened during countdown / arena intro / fight.
-          // Returning to the current stadium view simply closes the menu.
+          // During countdown / arena intro / fight, this remains only "back to view".
           hideStadiumMenu();
         }
       } else if (choice === "oberkirch") {
@@ -16868,11 +16871,8 @@
       event.stopPropagation();
       clearStadiumBookmakerHover();
 
-      // Reconnect to the original R72+ stadium pipeline.
-      // From here onward NOTHING is reinvented:
-      // openStadiumBetUI -> Wette abschließen -> beginStadiumFightIntro
-      // -> horn/music -> fighters -> countdown -> PRÜGEL -> brawl/result.
-      stadiumState = "spectator";
+      // Don Fredo is already in the proper spectator state here.
+      // Continue into the untouched existing betting/fight pipeline.
       keys.clear();
       cancelAttackImmediately();
       moving = false;
@@ -16948,11 +16948,9 @@
     if (!stadiumBookmaker || stadiumMenuOpen || stadiumBetOpen || stadiumResultOpen) return false;
     if (stadiumFightStarted) return false;
 
-    return (
-      stadiumState === "inactive" ||
-      stadiumState === "entrance-menu" ||
-      stadiumState === "spectator"
-    );
+    // ORIGINAL STADIUM RULE:
+    // Don Fredo is interactive only after "AUF TRIBÜNE PLATZNEHMEN".
+    return stadiumState === "spectator";
   }
 
   function clearStadiumBookmakerHover() {
@@ -17003,15 +17001,6 @@
   function openStadiumBetUI() {
     if (!stadiumBetUI || MAP.id !== STADIUM.mapId || stadiumMenuOpen) return;
     if (stadiumFightStarted || stadiumResultOpen) return;
-
-    // Any direct Fredo interaction enters the ORIGINAL spectator/betting state.
-    if (
-      stadiumState === "inactive" ||
-      stadiumState === "entrance-menu"
-    ) {
-      stadiumState = "spectator";
-    }
-
     if (stadiumState !== "spectator") return;
 
     stadiumBetOpen = true;
