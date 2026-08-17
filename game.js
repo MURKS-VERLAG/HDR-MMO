@@ -3,7 +3,7 @@
 
   // R121 DEPLOYMENT VERIFICATION — harmless build marker.
   // If this line appears in DevTools, the browser is definitely running R121.
-  console.info("HDR BUILD R160 - OPPENAU GATE PASSAGE + DEPTH FIX");
+  console.info("HDR BUILD R161 - OPPENAU MOOSMAENNLE ROUTES");
 
   const MAPS = Object.freeze({
     oberkirch: Object.freeze({
@@ -9398,6 +9398,492 @@
     );
   }
 
+
+
+  // ------------------------------------------------------------------
+  // R161 OPPENAU — MOOSMÄNNLE
+  // Two peaceful route walkers following the user's WHITE dotted paths.
+  // They spawn beyond the map edge, traverse the marked paths, perform a
+  // playful turn/wobble at every GREEN point, then disappear beyond an edge
+  // for 0..60 seconds before the next traversal.
+  // ------------------------------------------------------------------
+  const MOOSMAENNLE_CONFIG = Object.freeze({
+    mapId: "oppenau",
+    count: 2,
+    maxHp: 500,
+
+    // Exactly half player character height (PLAYER.height = 630).
+    visualHeight: 315,
+    canvasWidth: 480,
+    canvasHeight: 340,
+
+    speed: 205,
+    frameDuration: 235,
+    frameFadeMs: 90,
+
+    greenPauseMin: 2400,
+    greenPauseMax: 4300,
+    greenTurnStepMs: 270,
+
+    awayMin: 0,
+    awayMax: 60000,
+    deathFadeMs: 420,
+
+    sprites: Object.freeze({
+      side: Object.freeze([
+        "assets/animals/moosmaennle/MOOSMAENNLE SIDE 1.webp",
+        "assets/animals/moosmaennle/MOOSMAENNLE SIDE 2.webp"
+      ]),
+      down: Object.freeze([
+        "assets/animals/moosmaennle/MOOSMAENNLE DOWN 1.webp",
+        "assets/animals/moosmaennle/MOOSMAENNLE DOWN 2.webp"
+      ]),
+      up: Object.freeze([
+        "assets/animals/moosmaennle/MOOSMAENNLE UP 1.webp",
+        "assets/animals/moosmaennle/MOOSMAENNLE UP 2.webp"
+      ])
+    }),
+
+    // WHITE central path. It enters from above the map, visits all three
+    // GREEN circles, turns around at the lower-left GREEN circle and retraces
+    // the exact same path until it disappears above the map again.
+    routeA: Object.freeze([
+      Object.freeze({ x: 4916, y: -520, green: false }),
+      Object.freeze({ x: 4916, y:  372, green: true  }),
+      Object.freeze({ x: 4763, y:  952, green: false }),
+      Object.freeze({ x: 4878, y: 1262, green: false }),
+      Object.freeze({ x: 5185, y: 1572, green: false }),
+      Object.freeze({ x: 5300, y: 1882, green: false }),
+      Object.freeze({ x: 5415, y: 2269, green: false }),
+      Object.freeze({ x: 5454, y: 2578, green: false }),
+      Object.freeze({ x: 5915, y: 2779, green: true  }),
+      Object.freeze({ x: 5877, y: 3275, green: false }),
+      Object.freeze({ x: 5608, y: 3391, green: false }),
+      Object.freeze({ x: 5339, y: 3585, green: false }),
+      Object.freeze({ x: 5147, y: 3778, green: true  })
+    ]),
+
+    // WHITE right-hand route. Both ends are outside the map. After each trip
+    // the next traversal may begin from either end, giving natural variation.
+    routeB: Object.freeze([
+      Object.freeze({ x: 10410, y: -300, green: false }),
+      Object.freeze({ x: 10025, y:  178, green: false }),
+      Object.freeze({ x:  9795, y:  565, green: false }),
+      Object.freeze({ x:  9564, y:  875, green: false }),
+      Object.freeze({ x:  9256, y: 1185, green: false }),
+      Object.freeze({ x:  8872, y: 1417, green: false }),
+      Object.freeze({ x:  8527, y: 1711, green: true  }),
+      Object.freeze({ x:  8335, y: 1882, green: false }),
+      Object.freeze({ x:  8181, y: 2269, green: false }),
+      Object.freeze({ x:  7989, y: 2578, green: false }),
+      Object.freeze({ x:  7797, y: 2810, green: false }),
+      Object.freeze({ x:  7605, y: 3042, green: false }),
+      Object.freeze({ x:  7451, y: 3275, green: false }),
+      Object.freeze({ x:  7336, y: 3468, green: false }),
+      Object.freeze({ x:  7413, y: 3662, green: false }),
+      Object.freeze({ x:  7720, y: 3894, green: false }),
+      Object.freeze({ x:  8104, y: 4126, green: false }),
+      Object.freeze({ x:  8527, y: 4552, green: true  }),
+      Object.freeze({ x:  8872, y: 4591, green: false }),
+      Object.freeze({ x:  9372, y: 4901, green: false }),
+      Object.freeze({ x:  9872, y: 5210, green: false }),
+      Object.freeze({ x: 10520, y: 5900, green: false })
+    ])
+  });
+
+  let moosmaennleActors = [];
+
+  function installMoosmaennleStyles() {
+    if (document.getElementById("moosmaennleStyles")) return;
+
+    const style = document.createElement("style");
+    style.id = "moosmaennleStyles";
+    style.textContent = `
+      .moosmaennle {
+        position: absolute;
+        width: ${MOOSMAENNLE_CONFIG.canvasWidth}px;
+        height: ${MOOSMAENNLE_CONFIG.canvasHeight}px;
+        transform: translate(-50%, -100%);
+        transform-origin: 50% 100%;
+        pointer-events: none;
+        user-select: none;
+        z-index: 5;
+        will-change: left, top, transform, opacity;
+      }
+
+      .moosmaennle__sprite {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+        object-position: center bottom;
+        opacity: 0;
+        transition: opacity ${MOOSMAENNLE_CONFIG.frameFadeMs}ms linear;
+        will-change: opacity, transform;
+        pointer-events: none;
+      }
+
+      .moosmaennle__sprite--visible {
+        opacity: 1;
+      }
+
+      .moosmaennle--wobble {
+        animation: moosmaennle-wobble 540ms ease-in-out infinite alternate;
+      }
+
+      .moosmaennle--dead {
+        opacity: 0;
+        transition: opacity ${MOOSMAENNLE_CONFIG.deathFadeMs}ms ease;
+      }
+
+      @keyframes moosmaennle-wobble {
+        0%   { margin-left: -18px; rotate: -4deg; }
+        50%  { margin-left:   8px; rotate:  2deg; }
+        100% { margin-left:  18px; rotate:  4deg; }
+      }
+    `;
+    document.head.appendChild(style);
+  }
+
+  function preloadMoosmaennleSprites() {
+    const sources = [
+      ...MOOSMAENNLE_CONFIG.sprites.side,
+      ...MOOSMAENNLE_CONFIG.sprites.down,
+      ...MOOSMAENNLE_CONFIG.sprites.up
+    ];
+    for (const src of sources) {
+      const image = new Image();
+      image.decoding = "async";
+      image.src = encodeURI(src);
+    }
+  }
+
+  function moosRouteExpandedA() {
+    const outward = MOOSMAENNLE_CONFIG.routeA;
+    const back = outward.slice(0, -1).reverse();
+    return [...outward, ...back];
+  }
+
+  function moosActorRoute(actor) {
+    if (actor.routeId === "A") return moosRouteExpandedA();
+    const route = MOOSMAENNLE_CONFIG.routeB;
+    return actor.reverseRoute ? [...route].reverse() : route;
+  }
+
+  function moosSetLayerSprite(actor, src, mirrored) {
+    const nextLayer = 1 - actor.visibleLayer;
+    const nextImage = actor.images[nextLayer];
+    const oldImage = actor.images[actor.visibleLayer];
+
+    nextImage.src = encodeURI(src);
+    nextImage.style.transform = mirrored ? "scaleX(-1)" : "scaleX(1)";
+    nextImage.classList.add("moosmaennle__sprite--visible");
+    oldImage.classList.remove("moosmaennle__sprite--visible");
+    actor.visibleLayer = nextLayer;
+  }
+
+  function moosFamilyForVelocity(dx, dy) {
+    // The user's diagonal rule: meaningful vertical travel uses DOWN/UP artwork.
+    if (Math.abs(dy) >= Math.abs(dx) * 0.38) {
+      return dy >= 0 ? "down" : "up";
+    }
+    return "side";
+  }
+
+  function moosSetMovementFrame(actor, dx, dy, now, force = false) {
+    const family = moosFamilyForVelocity(dx, dy);
+    const mirrored = family === "side" && dx < 0;
+
+    if (!force && now < actor.nextFrameAt && actor.family === family && actor.mirrored === mirrored) {
+      return;
+    }
+
+    if (actor.family !== family || actor.mirrored !== mirrored) {
+      actor.frameIndex = 0;
+    } else {
+      actor.frameIndex = (actor.frameIndex + 1) % 2;
+    }
+
+    actor.family = family;
+    actor.mirrored = mirrored;
+    actor.nextFrameAt = now + MOOSMAENNLE_CONFIG.frameDuration;
+
+    const src = MOOSMAENNLE_CONFIG.sprites[family][actor.frameIndex];
+    moosSetLayerSprite(actor, src, mirrored);
+  }
+
+  function moosSetTurnFrame(actor, now) {
+    // Rotate through right -> down -> left -> up, including the requested
+    // mirror variants, while the root smoothly wobbles.
+    const sequence = [
+      { family: "side", mirrored: false },
+      { family: "down", mirrored: false },
+      { family: "side", mirrored: true },
+      { family: "up", mirrored: false }
+    ];
+
+    const pose = sequence[actor.turnPoseIndex % sequence.length];
+    actor.turnPoseIndex = (actor.turnPoseIndex + 1) % sequence.length;
+    actor.frameIndex = (actor.frameIndex + 1) % 2;
+    actor.family = pose.family;
+    actor.mirrored = pose.mirrored;
+    actor.nextTurnFrameAt = now + MOOSMAENNLE_CONFIG.greenTurnStepMs;
+
+    moosSetLayerSprite(
+      actor,
+      MOOSMAENNLE_CONFIG.sprites[pose.family][actor.frameIndex],
+      pose.mirrored
+    );
+  }
+
+  function createMoosmaennleActor(index, routeId) {
+    const root = document.createElement("div");
+    root.className = "moosmaennle";
+    root.dataset.moosmaennle = String(index);
+
+    const imgA = document.createElement("img");
+    const imgB = document.createElement("img");
+    for (const img of [imgA, imgB]) {
+      img.className = "moosmaennle__sprite";
+      img.alt = "";
+      img.draggable = false;
+    }
+
+    root.append(imgA, imgB);
+    world.appendChild(root);
+
+    const actor = {
+      index,
+      routeId,
+      reverseRoute: false,
+      route: null,
+      routeIndex: 1,
+
+      x: 0,
+      y: 0,
+      hp: MOOSMAENNLE_CONFIG.maxHp,
+      dead: false,
+      away: true,
+      ready: true,
+
+      root,
+      element: root,
+      images: [imgA, imgB],
+      visibleLayer: 0,
+
+      family: "down",
+      mirrored: false,
+      frameIndex: 0,
+      nextFrameAt: 0,
+
+      turning: false,
+      turnUntil: 0,
+      nextTurnFrameAt: 0,
+      turnPoseIndex: 0,
+
+      returnAt: performance.now() + Math.random() * 2500
+    };
+
+    imgA.src = encodeURI(MOOSMAENNLE_CONFIG.sprites.down[0]);
+    imgA.classList.add("moosmaennle__sprite--visible");
+
+    root.style.display = "none";
+    return actor;
+  }
+
+  function moosBeginTraversal(actor, now) {
+    actor.reverseRoute =
+      actor.routeId === "B" ? Math.random() < 0.5 : false;
+
+    actor.route = moosActorRoute(actor);
+    actor.routeIndex = 1;
+
+    actor.x = actor.route[0].x;
+    actor.y = actor.route[0].y;
+    actor.hp = MOOSMAENNLE_CONFIG.maxHp;
+    actor.dead = false;
+    actor.away = false;
+    actor.turning = false;
+    actor.turnUntil = 0;
+    actor.turnPoseIndex = 0;
+    actor.frameIndex = 0;
+    actor.nextFrameAt = 0;
+
+    actor.root.classList.remove("moosmaennle--dead", "moosmaennle--wobble");
+    actor.root.style.opacity = "1";
+    actor.root.style.left = `${actor.x}px`;
+    actor.root.style.top = `${actor.y}px`;
+    actor.root.style.display = MAP.id === MOOSMAENNLE_CONFIG.mapId ? "" : "none";
+
+    const target = actor.route[1];
+    moosSetMovementFrame(
+      actor,
+      target.x - actor.x,
+      target.y - actor.y,
+      now,
+      true
+    );
+  }
+
+  function moosGoAway(actor, now) {
+    actor.away = true;
+    actor.turning = false;
+    actor.root.classList.remove("moosmaennle--wobble");
+    actor.root.style.display = "none";
+    actor.returnAt =
+      now +
+      MOOSMAENNLE_CONFIG.awayMin +
+      Math.random() *
+        (MOOSMAENNLE_CONFIG.awayMax - MOOSMAENNLE_CONFIG.awayMin);
+  }
+
+  function moosStartGreenTurn(actor, now) {
+    actor.turning = true;
+    actor.turnUntil =
+      now +
+      MOOSMAENNLE_CONFIG.greenPauseMin +
+      Math.random() *
+        (MOOSMAENNLE_CONFIG.greenPauseMax - MOOSMAENNLE_CONFIG.greenPauseMin);
+    actor.nextTurnFrameAt = now;
+    actor.turnPoseIndex = Math.floor(Math.random() * 4);
+    actor.root.classList.add("moosmaennle--wobble");
+    moosSetTurnFrame(actor, now);
+  }
+
+  function killMoosmaennle(actor, now) {
+    if (!actor || actor.dead || actor.away) return;
+    actor.dead = true;
+    actor.hp = 0;
+    actor.turning = false;
+    actor.root.classList.remove("moosmaennle--wobble");
+    actor.root.classList.add("moosmaennle--dead");
+
+    // No invented loot/EXP/death artwork: the supplied live frame simply fades.
+    window.setTimeout(() => {
+      if (!actor.dead) return;
+      moosGoAway(actor, performance.now());
+    }, MOOSMAENNLE_CONFIG.deathFadeMs);
+  }
+
+  function damageMoosmaennle(actor, amount, critical, direction, now, saustark = false) {
+    if (!actor || actor.dead || actor.away || MAP.id !== MOOSMAENNLE_CONFIG.mapId) return;
+
+    actor.hp = Math.max(0, actor.hp - amount);
+    createRabbitDamageText(actor, amount, critical, saustark);
+
+    if (actor.hp <= 0) {
+      killMoosmaennle(actor, now);
+    }
+  }
+
+  function resolveMoosmaennleAttackFrame(frame) {
+    if (!frame || !frame.hit || MAP.id !== MOOSMAENNLE_CONFIG.mapId) return;
+
+    const direction = rabbitAttackDirection();
+    const now = performance.now();
+
+    for (const actor of moosmaennleActors) {
+      if (!actor || actor.dead || actor.away || !actor.ready) continue;
+      if (!rabbitInsideAttackHitbox(actor, direction)) continue;
+
+      damageMoosmaennle(
+        actor,
+        frame.damage || 20,
+        Boolean(frame.critical),
+        direction,
+        now,
+        Boolean(frame.saustark)
+      );
+    }
+  }
+
+  function createMoosmaennleSystem() {
+    installMoosmaennleStyles();
+    preloadMoosmaennleSprites();
+
+    if (moosmaennleActors.length) return;
+    moosmaennleActors = [
+      createMoosmaennleActor(0, "A"),
+      createMoosmaennleActor(1, "B")
+    ];
+  }
+
+  function updateMoosmaennle(deltaSeconds, now) {
+    for (const actor of moosmaennleActors) {
+      actor.root.style.display =
+        MAP.id === MOOSMAENNLE_CONFIG.mapId && !actor.away
+          ? ""
+          : "none";
+
+      if (MAP.id !== MOOSMAENNLE_CONFIG.mapId) continue;
+      if (actor.dead) continue;
+
+      if (actor.away) {
+        if (now >= actor.returnAt) moosBeginTraversal(actor, now);
+        continue;
+      }
+
+      if (!actor.route || actor.routeIndex >= actor.route.length) {
+        moosGoAway(actor, now);
+        continue;
+      }
+
+      if (actor.turning) {
+        if (now >= actor.nextTurnFrameAt) moosSetTurnFrame(actor, now);
+
+        if (now >= actor.turnUntil) {
+          actor.turning = false;
+          actor.root.classList.remove("moosmaennle--wobble");
+          actor.nextFrameAt = 0;
+        } else {
+          continue;
+        }
+      }
+
+      const target = actor.route[actor.routeIndex];
+      const dx = target.x - actor.x;
+      const dy = target.y - actor.y;
+      const distance = Math.hypot(dx, dy);
+
+      if (distance <= 8) {
+        actor.x = target.x;
+        actor.y = target.y;
+        actor.root.style.left = `${actor.x}px`;
+        actor.root.style.top = `${actor.y}px`;
+
+        const reachedGreen = Boolean(target.green);
+        actor.routeIndex += 1;
+
+        if (actor.routeIndex >= actor.route.length) {
+          moosGoAway(actor, now);
+          continue;
+        }
+
+        if (reachedGreen) {
+          moosStartGreenTurn(actor, now);
+          continue;
+        }
+      }
+
+      const next = actor.route[actor.routeIndex];
+      const vx = next.x - actor.x;
+      const vy = next.y - actor.y;
+      const len = Math.hypot(vx, vy) || 1;
+      const step = Math.min(
+        len,
+        MOOSMAENNLE_CONFIG.speed * deltaSeconds
+      );
+
+      actor.x += (vx / len) * step;
+      actor.y += (vy / len) * step;
+
+      actor.root.style.left = `${actor.x}px`;
+      actor.root.style.top = `${actor.y}px`;
+
+      moosSetMovementFrame(actor, vx, vy, now);
+    }
+  }
 
   // ------------------------------------------------------------------
   // R156 MAP 8 OPPENAU — BURG
@@ -20771,6 +21257,7 @@
     resolveRabbitAttackFrame(resolvedFrame);
     resolveWolfAttackFrame(resolvedFrame);
     resolveBoarAttackFrame(resolvedFrame);
+    resolveMoosmaennleAttackFrame(resolvedFrame);
     resolveRamsbachBearAttackFrame(resolvedFrame);
     resolveTierbannsteinAttackFrame(resolvedFrame);
     resolveMoleAttackFrame(resolvedFrame);
@@ -21051,6 +21538,7 @@
         updateWolves(deltaSeconds, now);
         updateGoat(deltaSeconds, now);
         updateBoars(deltaSeconds, now);
+        updateMoosmaennle(deltaSeconds, now);
 
         // R120: current five-bear system remains, but is completely isolated
         // from core player controls and is executed ONLY on RAMSBACH.
@@ -21490,6 +21978,7 @@
     createWolves();
     createGoat();
     createBoars();
+    createMoosmaennleSystem();
     createRamsbachBears();
     createTierbannsteinSystem();
     createMoleSystem();
