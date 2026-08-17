@@ -3,7 +3,7 @@
 
   // R121 DEPLOYMENT VERIFICATION — harmless build marker.
   // If this line appears in DevTools, the browser is definitely running R121.
-  console.info("HDR BUILD R168 - KUHBACH EXIT + REDNECK ISOLATION");
+  console.info("HDR BUILD R169 - KUHBACH FLORIANUS + HUT");
 
   const MAPS = Object.freeze({
     oberkirch: Object.freeze({
@@ -1696,6 +1696,116 @@
     const visible = MAP.id === "oedsbach";
     if (oedsbachRedneckHutEl) oedsbachRedneckHutEl.style.display = visible ? "" : "none";
     if (oedsbachFredneckEl) oedsbachFredneckEl.style.display = visible ? "" : "none";
+  }
+
+
+  // ------------------------------------------------------------------
+  // R169 KUHBACH — FLORIANUS HALTERUS + VIEHHALTERHÜTTE
+  // Placement/scale follows the supplied KUHBACH reference screenshot.
+  // The complete hut/corral artwork is mirrored exactly as in the reference.
+  // Only the actual hut building has a hard PLAYER foot hitbox.
+  // ------------------------------------------------------------------
+  const KUHBACH_FLORIANUS = Object.freeze({
+    hut: Object.freeze({
+      id: "kuhbach-florianus-hut",
+      src: "assets/buildings/kuhbach/FLORIANUS_HALTERUS_HUETTE.png",
+      left: 5600,
+      top: 110,
+      width: 3400,
+      height: 2267,
+      mirrored: true,
+      zIndex: 6,
+
+      // Fixed building footprint only. The surrounding paddock remains usable
+      // for later quest/event logic instead of making the entire PNG one giant wall.
+      collision: Object.freeze({
+        x1: 0.56,
+        y1: 0.05,
+        x2: 0.96,
+        y2: 0.61
+      })
+    }),
+    florianus: Object.freeze({
+      id: "kuhbach-florianus-halterus",
+      src: "assets/npcs/kuhbach/FLORIANUS_HALTERUS.png",
+      x: 6850,
+      y: 1630,
+      width: 600,
+      height: 900,
+      zIndex: 8
+    })
+  });
+
+  let kuhbachFlorianusHutEl = null;
+  let kuhbachFlorianusEl = null;
+
+  function createKuhbachFlorianusScene() {
+    if (!kuhbachFlorianusHutEl) {
+      const c = KUHBACH_FLORIANUS.hut;
+      const image = document.createElement("img");
+      image.id = c.id;
+      image.src = encodeURI(c.src);
+      image.alt = "";
+      image.draggable = false;
+      image.style.position = "absolute";
+      image.style.left = `${c.left}px`;
+      image.style.top = `${c.top}px`;
+      image.style.width = `${c.width}px`;
+      image.style.height = `${c.height}px`;
+      image.style.objectFit = "contain";
+      image.style.transformOrigin = "50% 50%";
+      image.style.transform = c.mirrored ? "scaleX(-1)" : "";
+      image.style.pointerEvents = "none";
+      image.style.userSelect = "none";
+      image.style.zIndex = String(c.zIndex);
+      image.style.display = MAP.id === "kuhbach" ? "" : "none";
+      world.appendChild(image);
+      kuhbachFlorianusHutEl = image;
+    }
+
+    if (!kuhbachFlorianusEl) {
+      const c = KUHBACH_FLORIANUS.florianus;
+      const image = document.createElement("img");
+      image.id = c.id;
+      image.src = encodeURI(c.src);
+      image.alt = "";
+      image.draggable = false;
+      image.style.position = "absolute";
+      image.style.left = `${c.x}px`;
+      image.style.top = `${c.y}px`;
+      image.style.width = `${c.width}px`;
+      image.style.height = `${c.height}px`;
+      image.style.transform = "translate(-50%, -100%)";
+      image.style.transformOrigin = "50% 100%";
+      image.style.objectFit = "contain";
+      image.style.objectPosition = "50% 100%";
+      image.style.pointerEvents = "none";
+      image.style.userSelect = "none";
+      image.style.zIndex = String(c.zIndex);
+      image.style.display = MAP.id === "kuhbach" ? "" : "none";
+      world.appendChild(image);
+      kuhbachFlorianusEl = image;
+    }
+  }
+
+  function updateKuhbachFlorianusSceneVisibility() {
+    const visible = MAP.id === "kuhbach";
+    if (kuhbachFlorianusHutEl) kuhbachFlorianusHutEl.style.display = visible ? "" : "none";
+    if (kuhbachFlorianusEl) kuhbachFlorianusEl.style.display = visible ? "" : "none";
+  }
+
+  function isKuhbachFlorianusHutBlockedFootPoint(x, y) {
+    if (MAP.id !== "kuhbach") return false;
+    const c = KUHBACH_FLORIANUS.hut;
+    const r = c.collision;
+    const localX = (x - c.left) / c.width;
+    const localY = (y - c.top) / c.height;
+    return (
+      localX >= r.x1 &&
+      localX <= r.x2 &&
+      localY >= r.y1 &&
+      localY <= r.y2
+    );
   }
 
   // ------------------------------------------------------------------
@@ -11901,6 +12011,9 @@
     // R165 MAP 6: REDNECK FREDNECK hut — alpha collision only on the middle body.
     if (isOedsbachRedneckHutBlockedFootPoint(x, y)) return false;
 
+    // R169 KUHBACH: fixed foot hitbox for Florianus' hut building only.
+    if (isKuhbachFlorianusHutBlockedFootPoint(x, y)) return false;
+
     // R122 SAFE RAMSBACH COLLISION ISOLATION:
     // Ramsbach terrain/locked-footprint code must NEVER participate on another map.
     // If the new Ramsbach collision itself throws, keep the player-control frame alive
@@ -13633,6 +13746,12 @@
       // WHITE reference strip: player is behind the hut. Everywhere else,
       // including the PURPLE lower strip, the player stays in foreground.
       playerEl.style.zIndex = playerBehindOedsbachRedneckHut() ? "5" : "100";
+      return;
+    }
+
+    if (MAP.id === "kuhbach") {
+      updateKuhbachFlorianusSceneVisibility();
+      playerEl.style.zIndex = "100";
       return;
     }
 
@@ -20964,6 +21083,8 @@
     // R168: REDNECK FREDNECK + hut are strictly ÖDSBACH-only.
     // Sync on every map switch so they can never leak onto later maps.
     updateOedsbachRedneckSceneVisibility();
+    // R169: Florianus + hut are strictly KUHBACH-only.
+    updateKuhbachFlorianusSceneVisibility();
     setOedsbachFogVisibility(MAP.id === "oedsbach");
     setOedsbachShadowVisibility(MAP.id === "oedsbach");
     setRamsbachWorldVisibility(MAP.id === "ramsbach");
@@ -22977,6 +23098,7 @@
     installOedegardStyles();
   createOedegard();
   createOedsbachRedneckScene();
+  createKuhbachFlorianusScene();
   createOedsbachFog();
   createRamsbachFog();
   createHubackerFog();
