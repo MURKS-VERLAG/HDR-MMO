@@ -3,7 +3,7 @@
 
   // R121 DEPLOYMENT VERIFICATION — harmless build marker.
   // If this line appears in DevTools, the browser is definitely running R121.
-  console.info("HDR BUILD R171 - STADIUM CANONICAL TRIBUNE ENTRY");
+  console.info("HDR BUILD R172 - STADIUM TRIBUNE + DON FREDO HARD RESTORE");
 
   const MAPS = Object.freeze({
     oberkirch: Object.freeze({
@@ -16385,11 +16385,18 @@
 
     root.addEventListener("click", (event) => {
       const button = event.target.closest("[data-stadium-choice]");
-      if (!button || !stadiumMenuOpen || MAP.id !== STADIUM.mapId) return;
+      // R172: the DOM visibility/pointer-events of the menu is the click authority.
+      // Do not discard a genuine visible-button click because stadiumMenuOpen became stale.
+      if (!button || MAP.id !== STADIUM.mapId || mapTransitioning) return;
       const choice = button.dataset.stadiumChoice;
 
       if (choice === "spectator") {
-        // R171: one canonical entry point for the visible active button.
+        // Never tear down an already running derby/fight state. From all non-fight
+        // stadium states, however, this button is one canonical entry to the stand.
+        if (stadiumFightStarted && stadiumState !== "spectator") {
+          hideStadiumMenu();
+          return;
+        }
         stadiumMoveToSpectator();
       } else if (choice === "oberkirch") {
         stadiumReturnToOberkirch();
@@ -18178,6 +18185,14 @@
   async function stadiumMoveToSpectator() {
     if (!stadiumUI || MAP.id !== STADIUM.mapId || mapTransitioning) return;
     if (stadiumState === "spectator-transition") return;
+    if (stadiumFightStarted && stadiumState !== "spectator") return;
+
+    // Already on the stand: the menu action simply returns to the spectator view.
+    if (stadiumState === "spectator") {
+      hideStadiumMenu();
+      setStadiumBookmakerVisibility();
+      return;
+    }
 
     stadiumState = "spectator-transition";
     hideStadiumMenu();
@@ -18237,10 +18252,8 @@
   }
 
   function updateStadiumPhase1(deltaSeconds, now) {
-    setStadiumBookmakerVisibility();
-    setStadiumGateVisibility();
-    updateStadiumBookmaker(now);
-
+    // R172: Don Fredo + gate are maintained centrally by the main frame for EVERY
+    // stadium state, including normal free-roam. Keep this function state-specific.
     if (stadiumState === "arrival-walk") {
       updateStadiumArrival(deltaSeconds);
       return;
@@ -22245,6 +22258,15 @@
 
       if (gameplayUnlocked() && !mapTransitioning) {
         if (!inventoryState.open) {
+          // R172: stadium world actors must be maintained even during normal free-roam
+          // (stadiumState === "inactive"). R170 made inactive use normal player controls,
+          // which accidentally skipped Don Fredo / gate maintenance entirely.
+          if (MAP.id === STADIUM.mapId) {
+            setStadiumBookmakerVisibility();
+            setStadiumGateVisibility();
+            updateStadiumBookmaker(now);
+          }
+
           if (stadiumActive()) {
             updateStadiumPhase1(deltaSeconds, now);
           } else {
