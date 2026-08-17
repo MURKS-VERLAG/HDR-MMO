@@ -21820,6 +21820,14 @@
     playerSprite.src = encodeURI(src);
   }
 
+  // R165 STADIUM / FORCED SPRITE RESTORE:
+  // Some scripted states must re-apply a sprite even when activeSprite still
+  // caches the same source. Several existing systems already call forceSprite().
+  function forceSprite(src) {
+    activeSprite = "";
+    setSprite(src);
+  }
+
   function setIdleSprite() {
     if (equippedKitItem) {
       // R147 exact requested rest poses:
