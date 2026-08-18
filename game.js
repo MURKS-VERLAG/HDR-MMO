@@ -3,7 +3,7 @@
 
   // R121 DEPLOYMENT VERIFICATION — harmless build marker.
   // If this line appears in DevTools, the browser is definitely running R121.
-  console.info("HDR BUILD R170 - INVENTAR TELEPORTER");
+  console.info("HDR BUILD R171 - KUHBACH FLORIANUS ASSETS + HALTERUS MUSIC");
 
   const MAPS = Object.freeze({
     oberkirch: Object.freeze({
@@ -827,7 +827,7 @@
     // R155 dedicated OPPENAU track supplied by the user.
     "oppenau": "assets/audio/maps/OPPENAU - DIE GROSSE REISE.mp3",
     // R167 KUHBACH currently continues the OPPENAU journey theme.
-    "kuhbach": "assets/audio/maps/OPPENAU - DIE GROSSE REISE.mp3"
+    "kuhbach": "assets/audio/maps/KUHBACH - HALTERUS.mp3"
   });
 
   const MAP_MUSIC_VOLUME = 1.0;
