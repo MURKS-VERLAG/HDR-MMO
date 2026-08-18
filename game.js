@@ -3,7 +3,7 @@
 
   // R121 DEPLOYMENT VERIFICATION — harmless build marker.
   // If this line appears in DevTools, the browser is definitely running R121.
-  console.info("HDR BUILD R199 - HILSEN MAP INTEGRATION");
+  console.info("HDR BUILD R200 - HILSEN WEST EXIT FIX");
 
   const MAPS = Object.freeze({
     oberkirch: Object.freeze({
@@ -13505,10 +13505,20 @@
       y >= MAP_EXIT_CONFIG.kuhbachOppenauWest.y1 &&
       y <= MAP_EXIT_CONFIG.kuhbachOppenauWest.y2;
 
+    // R200 OBERKIRCH -> HILSEN: canMoveFootTo must open the west map edge too.
+    // R199 already opened clampPlayer/checkMapExit, but movement itself was still
+    // rejected at x < PLAYER.width / 2, so the transition threshold was unreachable.
+    const inOberkirchHilsenWestExit =
+      MAP.id === "oberkirch-zentrum" &&
+      y >= MAP_EXIT_CONFIG.oberkirchHilsenWest.y1 &&
+      y <= MAP_EXIT_CONFIG.oberkirchHilsenWest.y2;
+
     if (x < halfW) {
       const westExitAllowed =
-        inKuhbachOppenauWestExit &&
-        x >= MAP_EXIT_CONFIG.kuhbachOppenauWest.leaveX - 80;
+        (inKuhbachOppenauWestExit &&
+          x >= MAP_EXIT_CONFIG.kuhbachOppenauWest.leaveX - 80) ||
+        (inOberkirchHilsenWestExit &&
+          x >= MAP_EXIT_CONFIG.oberkirchHilsenWest.leaveX - 80);
       if (!westExitAllowed) return false;
     }
     if (x > MAP.width - halfW) {
