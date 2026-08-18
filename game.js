@@ -3,7 +3,7 @@
 
   // R121 DEPLOYMENT VERIFICATION — harmless build marker.
   // If this line appears in DevTools, the browser is definitely running R121.
-  console.info("HDR BUILD R176 - FLORIANUS BLACK FLICKER FIX");
+  console.info("HDR BUILD R177 - KUHBACH PRECISION TERRAIN + HARD FLICKER FIX");
 
   const MAPS = Object.freeze({
     oberkirch: Object.freeze({
@@ -1761,22 +1761,17 @@
 
   function setKuhbachFlorianusDanceFrame(immediate = false) {
     if (!kuhbachFlorianusEl) return;
-    const image = kuhbachFlorianusEl.querySelector(".kuhbach-florianus-dance-frame");
-    if (!image) return;
+    const layers = kuhbachFlorianusEl.querySelectorAll(".kuhbach-florianus-dance-frame");
+    if (!layers.length) return;
 
     const nextIndex = randomDifferentIndex(
       KUHBACH_FLORIANUS_DANCE_VARIANTS.length,
       kuhbachFlorianusDanceIndex
     );
-    const variant = KUHBACH_FLORIANUS_DANCE_VARIANTS[nextIndex];
 
-    // R176: ONE sprite layer only. The old 2-layer opacity crossfade lasted
-    // 280ms while frames changed every 250ms, so the browser was permanently
-    // compositing two large transparent images during zoom. Keep the exact
-    // 250ms rhythm, but swap the frame directly and safely.
-    image.src = encodeURI(variant.src);
-    image.style.transform = variant.mirrored ? "scaleX(-1)" : "scaleX(1)";
-    image.style.opacity = "1";
+    for (let i = 0; i < layers.length; i += 1) {
+      layers[i].style.visibility = i === nextIndex ? "visible" : "hidden";
+    }
 
     kuhbachFlorianusDanceIndex = nextIndex;
   }
@@ -1799,108 +1794,60 @@
   }
 
   function scheduleKuhbachFlorianusDiscoLight() {
+    // R177 HARD FLICKER FIX:
+    // dynamic disco repaint is disabled. The prior R176 simplification proved
+    // mix-blend was not the only cause; we now remove the remaining gradient repaint entirely.
     clearTimeout(kuhbachFlorianusLightTimer);
-    if (MAP.id !== "kuhbach") {
-      kuhbachFlorianusLightTimer = 0;
-      return;
-    }
-
+    kuhbachFlorianusLightTimer = 0;
     const light =
       kuhbachFlorianusEl &&
       kuhbachFlorianusEl.querySelector(".kuhbach-florianus-disco-light");
-    if (!light) return;
-
-    const palette = [
-      [255, 30, 45],
-      [30, 110, 255],
-      [35, 255, 105],
-      [255, 35, 220],
-      [40, 235, 255],
-      [255, 190, 35]
-    ];
-    const rgb = palette[Math.floor(Math.random() * palette.length)];
-    const fast = Math.random() < 0.62;
-    const hold = fast ? 160 + Math.random() * 260 : 700 + Math.random() * 900;
-    const x = 32 + Math.random() * 36;
-    const y = 28 + Math.random() * 36;
-    const opacity = 0.18 + Math.random() * 0.24;
-
-    // R176: NO mix-blend-mode and NO animated background interpolation.
-    // Those create separate GPU compositing surfaces and were the strongest
-    // match for the black rectangle/vertical flicker at high zoom.
-    light.style.transitionDuration = `${fast ? 70 : 180}ms`;
-    light.style.opacity = String(opacity);
-    light.style.background =
-      `radial-gradient(ellipse at ${x}% ${y}%, ` +
-      `rgba(${rgb[0]},${rgb[1]},${rgb[2]},.62) 0%, ` +
-      `rgba(${rgb[0]},${rgb[1]},${rgb[2]},.22) 38%, ` +
-      `rgba(${rgb[0]},${rgb[1]},${rgb[2]},0) 72%)`;
-
-    kuhbachFlorianusLightTimer =
-      window.setTimeout(scheduleKuhbachFlorianusDiscoLight, hold);
+    if (light) {
+      light.style.display = "none";
+      light.style.opacity = "0";
+    }
   }
 
   function createKuhbachFlorianusScene() {
     if (!kuhbachFlorianusHutEl) {
       const c = KUHBACH_FLORIANUS.hut;
-      const image = document.createElement("img");
-      image.id = c.id;
-      image.src = encodeURI(c.src);
-      image.alt = "";
-      image.draggable = false;
-      image.style.position = "absolute";
-      image.style.left = `${c.left}px`;
-      image.style.top = `${c.top}px`;
-      image.style.width = `${c.width}px`;
-      image.style.height = `${c.height}px`;
-      image.style.objectFit = "contain";
-      image.style.transformOrigin = "50% 50%";
-      image.style.transform = c.mirrored ? "scaleX(-1)" : "";
-      image.style.pointerEvents = "none";
-      image.style.userSelect = "none";
-      image.style.zIndex = String(c.zIndex);
-      image.style.display = MAP.id === "kuhbach" ? "" : "none";
-      world.appendChild(image);
-      kuhbachFlorianusHutEl = image;
-    }
+      // R177: all 8 dance variants are resident from the start.
+      // No img.src swapping while zoomed -> no giant transformed-world texture invalidation.
+      for (let i = 0; i < KUHBACH_FLORIANUS_DANCE_VARIANTS.length; i += 1) {
+        const variant = KUHBACH_FLORIANUS_DANCE_VARIANTS[i];
+        const image = document.createElement("img");
+        image.className = "kuhbach-florianus-dance-frame";
+        image.alt = "";
+        image.draggable = false;
+        image.src = encodeURI(variant.src);
+        image.style.position = "absolute";
+        image.style.inset = "0";
+        image.style.width = "100%";
+        image.style.height = "100%";
+        image.style.objectFit = "contain";
+        image.style.objectPosition = "50% 100%";
+        image.style.transformOrigin = "50% 100%";
+        image.style.transform = variant.mirrored ? "scaleX(-1)" : "scaleX(1)";
+        image.style.visibility = "hidden";
+        image.style.opacity = "1";
+        image.style.pointerEvents = "none";
+        image.style.backfaceVisibility = "hidden";
+        image.style.webkitBackfaceVisibility = "hidden";
+        root.appendChild(image);
+        if (typeof image.decode === "function") image.decode().catch(() => {});
+      }
 
-    if (!kuhbachFlorianusEl) {
-      const c = KUHBACH_FLORIANUS.florianus;
-      const root = document.createElement("div");
-      root.id = c.id;
-      root.style.position = "absolute";
-      root.style.left = `${c.x}px`;
-      root.style.top = `${c.y}px`;
-      root.style.width = `${c.width}px`;
-      root.style.height = `${c.height}px`;
-      root.style.transform = "translate(-50%, -100%)";
-      root.style.transformOrigin = "50% 100%";
-      root.style.pointerEvents = "none";
-      root.style.userSelect = "none";
-      root.style.zIndex = String(c.zIndex);
-      root.style.display = MAP.id === "kuhbach" ? "" : "none";
-
-      const image = document.createElement("img");
-      image.className = "kuhbach-florianus-dance-frame";
-      image.alt = "";
-      image.draggable = false;
-      image.style.position = "absolute";
-      image.style.inset = "0";
-      image.style.width = "100%";
-      image.style.height = "100%";
-      image.style.objectFit = "contain";
-      image.style.objectPosition = "50% 100%";
-      image.style.transformOrigin = "50% 100%";
-      image.style.opacity = "1";
-      image.style.filter = "drop-shadow(0 8px 5px rgba(0,0,0,.28))";
-      root.appendChild(image);
+      // Localize all Halterus repaints to his own 420x630 box.
+      root.style.contain = "layout paint style";
+      root.style.overflow = "hidden";
 
       const light = document.createElement("div");
       light.className = "kuhbach-florianus-disco-light";
       light.style.position = "absolute";
-      light.style.inset = "-18% -24% -10% -24%";
+      light.style.inset = "0";
       light.style.pointerEvents = "none";
       light.style.opacity = "0";
+      light.style.display = "none";
       light.style.transitionProperty = "opacity";
       light.style.transitionTimingFunction = "ease-in-out";
       light.style.borderRadius = "45%";
@@ -1911,7 +1858,6 @@
       setKuhbachFlorianusDanceFrame(true);
       if (MAP.id === "kuhbach") {
         scheduleKuhbachFlorianusDance();
-        scheduleKuhbachFlorianusDiscoLight();
       }
     }
   }
@@ -1927,7 +1873,6 @@
 
     if (visible) {
       if (!kuhbachFlorianusDanceTimer) scheduleKuhbachFlorianusDance();
-      if (!kuhbachFlorianusLightTimer) scheduleKuhbachFlorianusDiscoLight();
     } else {
       clearTimeout(kuhbachFlorianusDanceTimer);
       clearTimeout(kuhbachFlorianusLightTimer);
@@ -1967,17 +1912,53 @@
     // Screenshot reference mapped to the 10000 x 5998 KUHBACH world.
     blockedPolygons: Object.freeze([
       Object.freeze([
-        { x: 8044, y:   0 }, { x: 10000, y:   0 }, { x: 10000, y: 2335 },
-        { x: 9305, y: 2805 }, { x: 8445, y: 2545 }, { x: 8045, y: 1905 },
-        { x: 7195, y: 1185 }, { x: 7425, y:  585 }
+        { x: 9850, y:    0 },
+        { x: 8400, y:    0 },
+        { x: 8041, y:    0 },
+        { x: 8033, y:  214 },
+        { x: 7865, y:  343 },
+        { x: 7598, y:  412 },
+        { x: 7110, y:  946 },
+        { x: 7133, y: 1107 },
+        { x: 7850, y: 1236 },
+        { x: 7965, y: 1313 },
+        { x: 8155, y: 1244 },
+        { x: 8285, y: 1282 },
+        { x: 8575, y: 1572 },
+        { x: 8674, y: 1465 },
+        { x: 8590, y: 1122 },
+        { x: 8812, y: 1045 },
+        { x: 8896, y:  939 },
+        { x: 9117, y: 1168 },
+        { x: 8980, y: 1335 },
+        { x: 9117, y: 1442 },
+        { x: 9002, y: 1671 },
+        { x: 9292, y: 1900 },
+        { x: 8804, y: 2068 },
+        { x: 8613, y: 2404 },
+        { x: 7865, y: 2686 },
+        { x: 7644, y: 2915 },
+        { x: 7751, y: 3152 },
+        { x: 8033, y: 3449 },
+        { x: 8819, y: 3106 },
+        { x: 8957, y: 2923 },
+        { x: 8957, y: 2678 },
+        { x: 9048, y: 2556 },
+        { x: 9521, y: 2419 },
+        { x: 9811, y: 2244 }
       ]),
       Object.freeze([
-        { x: 7605, y: 2815 }, { x: 8510, y: 2460 }, { x: 9210, y: 2675 },
-        { x: 8835, y: 3375 }, { x: 7955, y: 3575 }, { x: 7625, y: 3205 }
-      ]),
-      Object.freeze([
-        { x: 8295, y: 3780 }, { x: 9815, y: 3050 }, { x: 9815, y: 4940 },
-        { x: 9055, y: 5300 }, { x: 8395, y: 5140 }
+        { x: 9758, y: 2946 },
+        { x: 9285, y: 3068 },
+        { x: 8339, y: 3983 },
+        { x: 8369, y: 4197 },
+        { x: 8278, y: 4380 },
+        { x: 8621, y: 4647 },
+        { x: 8468, y: 4708 },
+        { x: 8400, y: 4891 },
+        { x: 8682, y: 5036 },
+        { x: 8842, y: 5021 },
+        { x: 9712, y: 4350 }
       ])
     ]),
 
@@ -2000,33 +1981,86 @@
     fenceRadius: 62,
 
     hillPolygon: Object.freeze([
-      { x: 3415, y:    0 },
-      { x:  180, y:    0 },
-      { x:    0, y: 5440 },
-      { x: 1565, y: 3820 },
-      { x: 1950, y: 2990 },
-      { x: 2100, y: 2110 },
-      { x: 2980, y:  945 }
+      { x: 3508, y:   23 },
+      { x:  341, y:    0 },
+      { x:  173, y:    8 },
+      { x:  158, y: 5212 },
+      { x: 1707, y: 3678 },
+      { x: 2073, y: 2915 },
+      { x: 2066, y: 2244 },
+      { x: 2226, y: 1717 },
+      { x: 2798, y: 1366 },
+      { x: 3287, y:  870 },
+      { x: 3470, y:  473 }
     ]),
     hillSlopeBias: 0.58,
 
     creekPath: Object.freeze([
-      { x: 6400, y:    0 },
-      { x: 5760, y:  210 },
-      { x: 5480, y:  605 },
-      { x: 5650, y: 1010 },
-      { x: 5500, y: 1395 },
-      { x: 4580, y: 1905 },
-      { x: 4340, y: 2420 },
-      { x: 3560, y: 2770 },
-      { x: 2940, y: 3070 },
-      { x: 2810, y: 3525 },
-      { x: 2460, y: 3980 },
-      { x: 2020, y: 4350 },
-      { x: 1640, y: 4625 },
-      { x: 1010, y: 4845 },
-      { x:  300, y: 5360 },
-      { x:    0, y: 5900 }
+      { x: 6367, y:    0 },
+      { x: 6286, y:   50 },
+      { x: 6133, y:  145 },
+      { x: 5927, y:  237 },
+      { x: 5782, y:  328 },
+      { x: 5714, y:  420 },
+      { x: 5584, y:  504 },
+      { x: 5507, y:  595 },
+      { x: 5500, y:  687 },
+      { x: 5530, y:  778 },
+      { x: 5569, y:  878 },
+      { x: 5622, y:  965 },
+      { x: 5675, y: 1053 },
+      { x: 5698, y: 1145 },
+      { x: 5675, y: 1244 },
+      { x: 5546, y: 1335 },
+      { x: 5332, y: 1419 },
+      { x: 5164, y: 1511 },
+      { x: 5034, y: 1606 },
+      { x: 4916, y: 1698 },
+      { x: 4790, y: 1786 },
+      { x: 4645, y: 1885 },
+      { x: 4531, y: 1954 },
+      { x: 4496, y: 2064 },
+      { x: 4477, y: 2152 },
+      { x: 4454, y: 2251 },
+      { x: 4409, y: 2335 },
+      { x: 4294, y: 2434 },
+      { x: 4111, y: 2526 },
+      { x: 3913, y: 2610 },
+      { x: 3737, y: 2705 },
+      { x: 3584, y: 2801 },
+      { x: 3378, y: 2900 },
+      { x: 3149, y: 2961 },
+      { x: 3104, y: 3071 },
+      { x: 3088, y: 3167 },
+      { x: 3058, y: 3258 },
+      { x: 3027, y: 3346 },
+      { x: 3004, y: 3434 },
+      { x: 2974, y: 3529 },
+      { x: 2936, y: 3625 },
+      { x: 2875, y: 3716 },
+      { x: 2776, y: 3808 },
+      { x: 2661, y: 3899 },
+      { x: 2531, y: 3983 },
+      { x: 2409, y: 4083 },
+      { x: 2310, y: 4174 },
+      { x: 2196, y: 4266 },
+      { x: 2035, y: 4357 },
+      { x: 1806, y: 4449 },
+      { x: 1516, y: 4533 },
+      { x: 1265, y: 4624 },
+      { x: 1104, y: 4720 },
+      { x:  967, y: 4808 },
+      { x:  845, y: 4899 },
+      { x:  730, y: 4998 },
+      { x:  646, y: 5082 },
+      { x:  563, y: 5181 },
+      { x:  463, y: 5265 },
+      { x:  364, y: 5357 },
+      { x:  288, y: 5452 },
+      { x:  212, y: 5548 },
+      { x:  120, y: 5636 },
+      { x:   13, y: 5716 },
+      { x:    0, y: 5998 }
     ])
   });
 
@@ -2072,23 +2106,13 @@
   }
 
   function smoothSvgPath(points) {
+    // R177: exact reference tracing. We deliberately use dense straight segments
+    // with rounded SVG joins instead of cubic interpolation, because the old
+    // Catmull-Rom control points overshot the painted creek in two bends.
     if (!points.length) return "";
-    if (points.length === 1) return `M ${points[0].x} ${points[0].y}`;
-
-    let d = `M ${points[0].x} ${points[0].y}`;
-    for (let i = 0; i < points.length - 1; i += 1) {
-      const p0 = points[Math.max(0, i - 1)];
-      const p1 = points[i];
-      const p2 = points[i + 1];
-      const p3 = points[Math.min(points.length - 1, i + 2)];
-
-      const c1x = p1.x + (p2.x - p0.x) / 6;
-      const c1y = p1.y + (p2.y - p0.y) / 6;
-      const c2x = p2.x - (p3.x - p1.x) / 6;
-      const c2y = p2.y - (p3.y - p1.y) / 6;
-      d += ` C ${c1x} ${c1y}, ${c2x} ${c2y}, ${p2.x} ${p2.y}`;
-    }
-    return d;
+    return points
+      .map((p, index) => `${index === 0 ? "M" : "L"} ${p.x} ${p.y}`)
+      .join(" ");
   }
 
   function createKuhbachCreekEffect() {
