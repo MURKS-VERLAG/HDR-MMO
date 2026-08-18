@@ -3,7 +3,7 @@
 
   // R121 DEPLOYMENT VERIFICATION — harmless build marker.
   // If this line appears in DevTools, the browser is definitely running R121.
-  console.info("HDR BUILD R172 - KUHBACH FLORIANUS DANCE + DISCO");
+  console.info("HDR BUILD R173 - FLORIANUS DANCE 250MS");
 
   const MAPS = Object.freeze({
     oberkirch: Object.freeze({
@@ -1703,7 +1703,7 @@
   // R172 KUHBACH — FLORIANUS DANCE LOOP + DISCO LIGHTS
   // Hut placement/collision stays untouched. Florianus now uses the exact
   // PLAYER canvas size (420x630), cycles all supplied poses + mirrors, and
-  // crossfades smoothly once per second with an irregular RGB spotlight.
+  // crossfades smoothly every 0.25 seconds with an irregular RGB spotlight.
   // ------------------------------------------------------------------
   const KUHBACH_FLORIANUS = Object.freeze({
     hut: Object.freeze({
@@ -1724,7 +1724,7 @@
       width: PLAYER.width,
       height: PLAYER.height,
       zIndex: 8,
-      frameMs: 1000,
+      frameMs: 250,
       fadeMs: 280,
       poses: Object.freeze([
         "assets/npcs/kuhbach/FLORIANUS_HALTERUS.png",
