@@ -3,7 +3,7 @@
 
   // R121 DEPLOYMENT VERIFICATION — harmless build marker.
   // If this line appears in DevTools, the browser is definitely running R121.
-  console.info("HDR BUILD R193 - LIERBACH WIRTSCHAFT + MAP MUSIC + BRIDGE PRECISION");
+  console.info("HDR BUILD R194 - LIERBACH WIRTSCHAFT ALPHA + ALLERHEILIGEN AUTO ZIGZAG");
 
   const MAPS = Object.freeze({
     oberkirch: Object.freeze({
@@ -2486,6 +2486,35 @@
   });
 
   let lierbachWirtschaftEl = null;
+  let lierbachWirtschaftMask = null;
+
+  function prepareLierbachWirtschaftMask(image) {
+    if (!image || !image.complete || !image.naturalWidth || !image.naturalHeight) return;
+
+    try {
+      const canvas = document.createElement("canvas");
+      canvas.width = image.naturalWidth;
+      canvas.height = image.naturalHeight;
+      const ctx = canvas.getContext("2d", { willReadFrequently: true });
+      if (!ctx) return;
+
+      ctx.drawImage(image, 0, 0);
+      const pixels = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+      const alpha = new Uint8Array(canvas.width * canvas.height);
+
+      for (let src = 3, dst = 0; src < pixels.length; src += 4, dst += 1) {
+        alpha[dst] = pixels[src];
+      }
+
+      lierbachWirtschaftMask = {
+        width: canvas.width,
+        height: canvas.height,
+        alpha
+      };
+    } catch (error) {
+      console.warn("LIERBACH WIRTSCHAFT alpha mask unavailable:", error);
+    }
+  }
 
   function createLierbachWirtschaft() {
     if (lierbachWirtschaftEl) return;
@@ -2508,8 +2537,16 @@
     image.style.zIndex = String(c.zIndex);
     image.style.display = MAP.id === "lierbach" ? "" : "none";
 
+    image.addEventListener("load", () => {
+      prepareLierbachWirtschaftMask(image);
+    }, { once: true });
+
     world.appendChild(image);
     lierbachWirtschaftEl = image;
+
+    if (image.complete && image.naturalWidth > 0) {
+      prepareLierbachWirtschaftMask(image);
+    }
   }
 
   function updateLierbachWirtschaftVisibility() {
@@ -2519,15 +2556,34 @@
 
   function isLierbachWirtschaftBlockedFootPoint(x, y) {
     if (MAP.id !== "lierbach") return false;
-    const c = LIERBACH_WIRTSCHAFT;
 
-    // Requested COMPLETE hitbox: the full placed Wirtschaft footprint is solid.
-    return (
-      x >= c.left &&
-      x <= c.left + c.width &&
-      y >= c.top &&
-      y <= c.top + c.height
+    const c = LIERBACH_WIRTSCHAFT;
+    if (
+      x < c.left ||
+      x > c.left + c.width ||
+      y < c.top ||
+      y > c.top + c.height
+    ) {
+      return false;
+    }
+
+    // R194: transparent ground in front of the PNG is walkable.
+    // Only actual visible Wirtschaft pixels remain solid.
+    const mask = lierbachWirtschaftMask;
+    if (!mask) return false;
+
+    const localX = (x - c.left) / c.width;
+    const localY = (y - c.top) / c.height;
+    const px = Math.max(
+      0,
+      Math.min(mask.width - 1, Math.round(localX * (mask.width - 1)))
     );
+    const py = Math.max(
+      0,
+      Math.min(mask.height - 1, Math.round(localY * (mask.height - 1)))
+    );
+
+    return mask.alpha[py * mask.width + px] >= 28;
   }
 
 
@@ -2565,6 +2621,7 @@
       Object.freeze([2910,2305])
     ]),
     zigzagEngageDistance: 230,
+    zigzagAutoSpeedMultiplier: 1.30,
     rightGreen: Object.freeze([
       Object.freeze([7970,2705]), Object.freeze([7970,3860])
     ]),
@@ -2589,6 +2646,7 @@
 
   let allerheiligenZigzagActive = false;
   let allerheiligenZigzagDistance = 0;
+  let allerheiligenZigzagMode = null; // "up" | "down" | null
   let allerheiligenRightSnap = null; // "green" | "purple"
   let allerheiligenRightDistance = 0;
   let allerheiligenRightSnapping = false;
@@ -2597,6 +2655,7 @@
   function resetAllerheiligenRouteState() {
     allerheiligenZigzagActive = false;
     allerheiligenZigzagDistance = 0;
+    allerheiligenZigzagMode = null;
     allerheiligenRightSnap = null;
     allerheiligenRightDistance = 0;
     allerheiligenRightSnapping = false;
@@ -2609,38 +2668,134 @@
     return ALLERHEILIGEN_ROUTE.walkable.some(poly => worldPointInPolygon(x, y, poly));
   }
 
-  function engageAllerheiligenSpawnZigzagIfNeeded() {
-    if (MAP.id !== "allerheiligen" || allerheiligenZigzagActive) return;
-    const c = closestPointOnBridgePath(playerX, playerY, ALLERHEILIGEN_ROUTE.zigzag);
-    if (c && c.distance <= ALLERHEILIGEN_ROUTE.zigzagEngageDistance && c.progress <= .08) {
-      allerheiligenZigzagActive = true;
-      allerheiligenZigzagDistance = c.pathDistance;
-      playerX = c.x; playerY = c.y;
+  function allerheiligenZigzagSegmentAtDistance(distance) {
+    const path = ALLERHEILIGEN_ROUTE.zigzag;
+    let acc = 0;
+
+    for (let i = 0; i < path.length - 1; i += 1) {
+      const len = Math.hypot(
+        path[i + 1][0] - path[i][0],
+        path[i + 1][1] - path[i][1]
+      );
+
+      if (distance <= acc + len + 0.001) return i;
+      acc += len;
     }
+
+    return path.length - 2;
   }
 
-  function moveAlongAllerheiligenZigzag(dx, dy, deltaSeconds) {
-    if (!allerheiligenZigzagActive || MAP.id !== "allerheiligen") return false;
+  function allerheiligenZigzagAutoAnimationVector() {
+    if (!allerheiligenZigzagActive || MAP.id !== "allerheiligen") {
+      return null;
+    }
+
+    // Downward return deliberately uses the normal S/down walking artwork.
+    if (allerheiligenZigzagMode === "down") {
+      return { dx: 0, dy: 1 };
+    }
+
+    // Automatic ascent preserves the previous W+A / W+D visual motif:
+    // left-going segments use LEFT walk art, right-going segments RIGHT walk art.
+    const path = ALLERHEILIGEN_ROUTE.zigzag;
+    const seg = allerheiligenZigzagSegmentAtDistance(
+      allerheiligenZigzagDistance
+    );
+    const goesLeft = path[seg + 1][0] < path[seg][0];
+
+    return {
+      dx: goesLeft ? -1 : 1,
+      dy: -1
+    };
+  }
+
+  function tryEngageAllerheiligenZigzagDescent(dx, dy) {
+    if (
+      MAP.id !== "allerheiligen" ||
+      allerheiligenZigzagActive ||
+      performance.now() < allerheiligenSnapReleaseUntil
+    ) {
+      return false;
+    }
+
+    // User request: after reaching the top freely, walking LEFT back onto
+    // the green zigzag catches the route and starts the automatic descent.
+    if (dx >= 0) return false;
+
+    const c = closestPointOnBridgePath(
+      playerX,
+      playerY,
+      ALLERHEILIGEN_ROUTE.zigzag
+    );
+
+    if (
+      !c ||
+      c.distance > ALLERHEILIGEN_ROUTE.zigzagEngageDistance ||
+      c.progress < 0.82
+    ) {
+      return false;
+    }
+
+    allerheiligenZigzagActive = true;
+    allerheiligenZigzagMode = "down";
+    allerheiligenZigzagDistance = c.pathDistance;
+    playerX = c.x;
+    playerY = c.y;
+    return true;
+  }
+
+  function moveAlongAllerheiligenZigzag(deltaSeconds) {
+    if (
+      !allerheiligenZigzagActive ||
+      MAP.id !== "allerheiligen" ||
+      !allerheiligenZigzagMode
+    ) {
+      return false;
+    }
+
     const path = ALLERHEILIGEN_ROUTE.zigzag;
     const metrics = getPathMetrics(path);
-    const p = pointAtBridgeDistance(path, allerheiligenZigzagDistance);
-    // Find current segment. Forward movement is ONLY W+A on up-left segments
-    // and ONLY W+D on up-right segments, exactly as marked.
-    let seg = 0, acc = 0;
-    for (let i=0;i<path.length-1;i++) {
-      const len=Math.hypot(path[i+1][0]-path[i][0],path[i+1][1]-path[i][1]);
-      if (allerheiligenZigzagDistance <= acc+len+0.001) { seg=i; break; }
-      acc += len; seg=i;
+    const direction = allerheiligenZigzagMode === "down" ? -1 : 1;
+    const speed =
+      currentPlayerMoveSpeed() *
+      ALLERHEILIGEN_ROUTE.zigzagAutoSpeedMultiplier;
+
+    allerheiligenZigzagDistance = Math.max(
+      0,
+      Math.min(
+        metrics.total,
+        allerheiligenZigzagDistance +
+          direction * speed * deltaSeconds
+      )
+    );
+
+    const q = pointAtBridgeDistance(
+      path,
+      allerheiligenZigzagDistance
+    );
+    playerX = q.x;
+    playerY = q.y;
+
+    // UP uses the existing W+A/W+D side motifs via the synthetic input vector.
+    // DOWN always uses the S/down walking animation.
+    if (allerheiligenZigzagMode === "down") {
+      facing = "down";
     }
-    const wantsLeft = path[seg+1][0] < path[seg][0];
-    const correct = dy < 0 && (wantsLeft ? dx < 0 : dx > 0);
-    if (correct) {
-      allerheiligenZigzagDistance = Math.min(metrics.total, allerheiligenZigzagDistance + currentPlayerMoveSpeed()*deltaSeconds);
+
+    const atTop =
+      direction > 0 &&
+      allerheiligenZigzagDistance >= metrics.total - 0.001;
+    const atBottom =
+      direction < 0 &&
+      allerheiligenZigzagDistance <= 0.001;
+
+    if (atTop || atBottom) {
+      // Endpoint is immediately free again. No extra key press required.
+      allerheiligenZigzagActive = false;
+      allerheiligenZigzagMode = null;
+      allerheiligenSnapReleaseUntil = performance.now() + 350;
     }
-    const q=pointAtBridgeDistance(path, allerheiligenZigzagDistance);
-    playerX=q.x; playerY=q.y; facing="up";
-    // R192: remain snapped at the top until the player's NEXT movement input
-    // explicitly chooses: S/S-combo = descend, anything else = leave the line.
+
     return true;
   }
 
@@ -13700,43 +13855,27 @@
       neuensteinSnapping = false;
     }
 
-    // R192 ALLERHEILIGEN MINIFIX:
-    // At the very top of the spawn zigzag, S / S-combinations stay snapped and go back down.
-    // Any other movement key releases the zigzag immediately and that same input continues freely.
+    // R194 ALLERHEILIGEN AUTO-ZIGZAG:
+    // Spawn ascent runs automatically. At the top the route releases immediately.
+    // Walking LEFT back onto the top of the zigzag starts automatic S/down descent.
     if (MAP.id === "allerheiligen") {
-      engageAllerheiligenSpawnZigzagIfNeeded();
-
-      if (allerheiligenZigzagActive) {
-        const zigMetrics = getPathMetrics(ALLERHEILIGEN_ROUTE.zigzag);
-        const atZigzagTop = allerheiligenZigzagDistance >= zigMetrics.total - 1;
-
-        if (atZigzagTop && (dx !== 0 || dy !== 0) && dy >= 0) {
-          if (dy > 0) {
-            allerheiligenZigzagDistance = Math.max(
-              0,
-              allerheiligenZigzagDistance - currentPlayerMoveSpeed() * deltaSeconds
-            );
-            const q = pointAtBridgeDistance(
-              ALLERHEILIGEN_ROUTE.zigzag,
-              allerheiligenZigzagDistance
-            );
-            playerX = q.x;
-            playerY = q.y;
-            facing = "down";
-            clampPlayer();
-            return;
-          }
-
-          allerheiligenZigzagActive = false;
-          allerheiligenSnapReleaseUntil = performance.now() + 300;
-        } else {
-          moveAlongAllerheiligenZigzag(dx, dy, deltaSeconds);
-          clampPlayer();
-          return;
-        }
+      if (
+        allerheiligenZigzagActive ||
+        tryEngageAllerheiligenZigzagDescent(dx, dy)
+      ) {
+        moveAlongAllerheiligenZigzag(deltaSeconds);
+        clampPlayer();
+        return;
       }
 
-      if (allerheiligenRightSnap || tryEngageAllerheiligenRightSnap(dx,dy)) { moveAlongAllerheiligenRightSnap(dx,dy,deltaSeconds); clampPlayer(); return; }
+      if (
+        allerheiligenRightSnap ||
+        tryEngageAllerheiligenRightSnap(dx, dy)
+      ) {
+        moveAlongAllerheiligenRightSnap(dx, dy, deltaSeconds);
+        clampPlayer();
+        return;
+      }
     }
 
     // R189 LIERBACH -> ALLERHEILIGEN purple ascent.
@@ -22651,6 +22790,7 @@
         playerY = ALLERHEILIGEN_ROUTE.spawn.y;
         allerheiligenZigzagActive = true;
         allerheiligenZigzagDistance = 0;
+        allerheiligenZigzagMode = "up";
       }
       if (nextMap.id !== STADIUM.mapId) {
         stadiumState = "inactive";
@@ -24200,6 +24340,17 @@
     if (keys.has("KeyS") || keys.has("ArrowDown")) dy += 1;
     if (keys.has("KeyA") || keys.has("ArrowLeft")) dx -= 1;
     if (keys.has("KeyD") || keys.has("ArrowRight")) dx += 1;
+
+    // R194: Allerheiligen zigzag movement is automatic.
+    // Synthetic input is ONLY for the already-existing walk animation selector:
+    // ascent alternates W+A / W+D visual motifs, descent uses S artwork.
+    const allerheiligenAutoVector =
+      allerheiligenZigzagAutoAnimationVector();
+
+    if (allerheiligenAutoVector) {
+      dx = allerheiligenAutoVector.dx;
+      dy = allerheiligenAutoVector.dy;
+    }
 
     const hasInput = dx !== 0 || dy !== 0;
     const onIce = isWinterbachIceFootPoint(playerX, playerY);
