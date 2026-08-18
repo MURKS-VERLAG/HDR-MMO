@@ -3,7 +3,7 @@
 
   // R121 DEPLOYMENT VERIFICATION — harmless build marker.
   // If this line appears in DevTools, the browser is definitely running R121.
-  console.info("HDR BUILD R177 - KUHBACH PRECISION TERRAIN + HARD FLICKER FIX");
+  console.info("HDR BUILD R178 - KUHBACH RGB REMOVAL + MAP GUARD + CREEK LOWER TRACE");
 
   const MAPS = Object.freeze({
     oberkirch: Object.freeze({
@@ -1719,8 +1719,8 @@
     }),
     florianus: Object.freeze({
       id: "kuhbach-florianus-halterus",
-      x: 6850,
-      y: 1630,
+      x: 6840,
+      y: 1515,
       width: PLAYER.width,
       height: PLAYER.height,
       zIndex: 8,
@@ -1851,8 +1851,7 @@
       root.style.userSelect = "none";
       root.style.zIndex = String(c.zIndex);
       root.style.display = MAP.id === "kuhbach" ? "" : "none";
-      root.style.contain = "layout paint style";
-      root.style.overflow = "hidden";
+      root.style.overflow = "visible";
 
       // Keep the R177 no-src-swap approach: all 8 variants stay resident and
       // only visibility changes every 250 ms. This preserves the flicker fix.
@@ -1879,16 +1878,6 @@
         root.appendChild(image);
         if (typeof image.decode === "function") image.decode().catch(() => {});
       }
-
-      const light = document.createElement("div");
-      light.className = "kuhbach-florianus-disco-light";
-      light.style.position = "absolute";
-      light.style.inset = "0";
-      light.style.pointerEvents = "none";
-      light.style.opacity = "0";
-      light.style.display = "none";
-      light.style.borderRadius = "45%";
-      root.appendChild(light);
 
       world.appendChild(root);
       kuhbachFlorianusEl = root;
@@ -2077,25 +2066,26 @@
       { x: 2661, y: 3899 },
       { x: 2531, y: 3983 },
       { x: 2409, y: 4083 },
-      { x: 2310, y: 4174 },
-      { x: 2196, y: 4266 },
-      { x: 2035, y: 4357 },
-      { x: 1806, y: 4449 },
-      { x: 1516, y: 4533 },
-      { x: 1265, y: 4624 },
-      { x: 1104, y: 4720 },
-      { x:  967, y: 4808 },
-      { x:  845, y: 4899 },
-      { x:  730, y: 4998 },
-      { x:  646, y: 5082 },
-      { x:  563, y: 5181 },
-      { x:  463, y: 5265 },
-      { x:  364, y: 5357 },
-      { x:  288, y: 5452 },
-      { x:  212, y: 5548 },
-      { x:  120, y: 5636 },
-      { x:   13, y: 5716 },
-      { x:    0, y: 5998 }
+      { x: 2305, y: 4170 },
+      { x: 2190, y: 4260 },
+      { x: 2035, y: 4350 },
+      { x: 1845, y: 4440 },
+      { x: 1615, y: 4530 },
+      { x: 1390, y: 4620 },
+      { x: 1170, y: 4710 },
+      { x:  985, y: 4800 },
+      { x:  835, y: 4890 },
+      { x:  710, y: 4985 },
+      { x:  610, y: 5080 },
+      { x:  515, y: 5180 },
+      { x:  425, y: 5280 },
+      { x:  345, y: 5380 },
+      { x:  275, y: 5480 },
+      { x:  215, y: 5580 },
+      { x:  160, y: 5680 },
+      { x:  110, y: 5780 },
+      { x:   65, y: 5880 },
+      { x:   25, y: 5998 }
     ])
   });
 
@@ -23114,6 +23104,12 @@
       tx = (viewportWidth - mapScreenWidth) / 2;
       ty = (viewportHeight - mapScreenHeight) / 2;
     }
+
+    // R178 hard map-local guard: KUHBACH-only DOM can never leak to OBERKIRCH/other maps.
+    const kuhbachVisibleNow = MAP.id === "kuhbach";
+    if (kuhbachFlorianusHutEl) kuhbachFlorianusHutEl.style.display = kuhbachVisibleNow ? "" : "none";
+    if (kuhbachFlorianusEl) kuhbachFlorianusEl.style.display = kuhbachVisibleNow ? "" : "none";
+    if (kuhbachCreekEffectEl) kuhbachCreekEffectEl.style.display = kuhbachVisibleNow ? "" : "none";
 
     world.style.transform =
       `translate3d(${tx}px, ${ty}px, 0) scale(${displayScale})`;
