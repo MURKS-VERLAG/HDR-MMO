@@ -3,7 +3,7 @@
 
   // R121 DEPLOYMENT VERIFICATION — harmless build marker.
   // If this line appears in DevTools, the browser is definitely running R121.
-  console.info("HDR BUILD R190 - LIERBACH PATCH ACTIVATION + MOLE LOCK");
+  console.info("HDR BUILD R191 - LIERBACH BRIDGE + ALLERHEILIGEN ROUTES");
 
   const MAPS = Object.freeze({
     oberkirch: Object.freeze({
@@ -1403,6 +1403,11 @@
       id: "lierbach-oppenau", mapId: "lierbach", text: "OPPENAU",
       x: 3150, y: 6250, direction: "down", glow: "#ffffff",
       trigger: { x1: 2350, y1: 5550, x2: 4000, y2: 6827 }
+    },
+    {
+      id: "allerheiligen-studentenfelsen", mapId: "allerheiligen", text: "STUDENTENFELSEN",
+      x: 7040, y: 6220, direction: "down", glow: "#ffffff",
+      trigger: { x1: 6350, y1: 5600, x2: 7850, y2: 6825 }
     }
   ]);
 
@@ -2452,8 +2457,9 @@
     // R187 WHITE bridge snap: aligned with the ACTUAL wooden deck in screenshot 1.
     // World Y grows downward, therefore the bridge correctly slopes DOWN toward the right.
     bridgePath: Object.freeze([
-      Object.freeze([4200, 3940]),
-      Object.freeze([5680, 4285])
+      // R191: exact deck centreline from reference Z2, LEFT endpoint -> RIGHT endpoint.
+      Object.freeze([3900, 4215]),
+      Object.freeze([5485, 4215])
     ]),
     bridgeEngageDistance: 175,
     bridgeRiverClearance: 145,
@@ -2479,6 +2485,148 @@
   let lierbachAscentActive = false;
   let lierbachAscentDistance = 0;
   let lierbachAscentSwitching = false;
+
+  // ------------------------------------------------------------------
+  // R191 ALLERHEILIGEN — routes/collision traced from supplied Z1 markup.
+  // Spawn is already locked to the lower end of the LEFT green zig-zag.
+  // ------------------------------------------------------------------
+  const ALLERHEILIGEN_ROUTE = Object.freeze({
+    spawn: Object.freeze({ x: 2890, y: 5925 }),
+    zigzag: Object.freeze([
+      Object.freeze([2890,5925]), Object.freeze([2295,5685]),
+      Object.freeze([2910,5330]), Object.freeze([2290,5070]),
+      Object.freeze([2915,4720]), Object.freeze([2295,4450]),
+      Object.freeze([2915,4100]), Object.freeze([2300,3815]),
+      Object.freeze([2910,3470]), Object.freeze([2295,3190]),
+      Object.freeze([2915,2860]), Object.freeze([2480,2610]),
+      Object.freeze([2910,2305])
+    ]),
+    zigzagEngageDistance: 230,
+    rightGreen: Object.freeze([
+      Object.freeze([7970,2705]), Object.freeze([7970,3860])
+    ]),
+    rightPurple: Object.freeze([
+      Object.freeze([7970,3860]), Object.freeze([7515,4300])
+    ]),
+    rightEngageDistance: 210,
+    // Union-like yellow interior. The outer contour follows the user's yellow boundary;
+    // keeping the entire contour hard-clipped guarantees no escape into cliffs/forest.
+    walkable: Object.freeze([
+      Object.freeze([
+        [2950,2240],[3500,2010],[4550,1880],[6300,1990],[7750,2110],[8280,2550],
+        [8280,3320],[7970,3860],[7750,4310],[8150,4740],[7700,5160],[8150,5650],
+        [7420,6100],[8050,6825],[6350,6825],[6460,6260],[5900,5830],[6200,5480],
+        [5800,4970],[5150,4810],[5100,4430],[5550,4050],[4900,3970],[4550,3650],
+        [4700,3390],[6200,3490],[7200,3400],[7900,3500],[7900,2850],[6900,2800],
+        [5900,3000],[4900,2880],[3900,2750],[3000,2600]
+      ])
+    ]),
+    studentenfelsen: Object.freeze({ x: 7040, y: 6280 })
+  });
+
+  let allerheiligenZigzagActive = false;
+  let allerheiligenZigzagDistance = 0;
+  let allerheiligenRightSnap = null; // "green" | "purple"
+  let allerheiligenRightDistance = 0;
+  let allerheiligenRightSnapping = false;
+  let allerheiligenSnapReleaseUntil = 0;
+
+  function resetAllerheiligenRouteState() {
+    allerheiligenZigzagActive = false;
+    allerheiligenZigzagDistance = 0;
+    allerheiligenRightSnap = null;
+    allerheiligenRightDistance = 0;
+    allerheiligenRightSnapping = false;
+    allerheiligenSnapReleaseUntil = 0;
+  }
+
+  function isAllerheiligenWalkableFootPoint(x, y) {
+    if (MAP.id !== "allerheiligen") return true;
+    if (allerheiligenZigzagActive || allerheiligenRightSnap) return true;
+    return ALLERHEILIGEN_ROUTE.walkable.some(poly => worldPointInPolygon(x, y, poly));
+  }
+
+  function engageAllerheiligenSpawnZigzagIfNeeded() {
+    if (MAP.id !== "allerheiligen" || allerheiligenZigzagActive) return;
+    const c = closestPointOnBridgePath(playerX, playerY, ALLERHEILIGEN_ROUTE.zigzag);
+    if (c && c.distance <= ALLERHEILIGEN_ROUTE.zigzagEngageDistance && c.progress <= .08) {
+      allerheiligenZigzagActive = true;
+      allerheiligenZigzagDistance = c.pathDistance;
+      playerX = c.x; playerY = c.y;
+    }
+  }
+
+  function moveAlongAllerheiligenZigzag(dx, dy, deltaSeconds) {
+    if (!allerheiligenZigzagActive || MAP.id !== "allerheiligen") return false;
+    const path = ALLERHEILIGEN_ROUTE.zigzag;
+    const metrics = getPathMetrics(path);
+    const p = pointAtBridgeDistance(path, allerheiligenZigzagDistance);
+    // Find current segment. Forward movement is ONLY W+A on up-left segments
+    // and ONLY W+D on up-right segments, exactly as marked.
+    let seg = 0, acc = 0;
+    for (let i=0;i<path.length-1;i++) {
+      const len=Math.hypot(path[i+1][0]-path[i][0],path[i+1][1]-path[i][1]);
+      if (allerheiligenZigzagDistance <= acc+len+0.001) { seg=i; break; }
+      acc += len; seg=i;
+    }
+    const wantsLeft = path[seg+1][0] < path[seg][0];
+    const correct = dy < 0 && (wantsLeft ? dx < 0 : dx > 0);
+    if (correct) {
+      allerheiligenZigzagDistance = Math.min(metrics.total, allerheiligenZigzagDistance + currentPlayerMoveSpeed()*deltaSeconds);
+    }
+    const q=pointAtBridgeDistance(path, allerheiligenZigzagDistance);
+    playerX=q.x; playerY=q.y; facing="up";
+    if (allerheiligenZigzagDistance >= metrics.total-1) {
+      allerheiligenZigzagActive=false;
+      allerheiligenSnapReleaseUntil=performance.now()+250;
+    }
+    return true;
+  }
+
+  function allerheiligenRightPath(kind) {
+    return kind === "green" ? ALLERHEILIGEN_ROUTE.rightGreen : ALLERHEILIGEN_ROUTE.rightPurple;
+  }
+
+  function tryEngageAllerheiligenRightSnap(dx, dy) {
+    if (MAP.id !== "allerheiligen" || performance.now() < allerheiligenSnapReleaseUntil) return false;
+    const vertical = dy < 0 ? -1 : dy > 0 ? 1 : 0;
+    if (!vertical) return false;
+    let best=null;
+    for (const kind of ["green","purple"]) {
+      const c=closestPointOnBridgePath(playerX,playerY,allerheiligenRightPath(kind));
+      if (c && c.distance <= ALLERHEILIGEN_ROUTE.rightEngageDistance && (!best || c.distance<best.c.distance)) best={kind,c};
+    }
+    if (!best) return false;
+    // Green is W/S. Purple continues downward with S or A+S; W also permits return upward.
+    if (best.kind==="purple" && vertical>0 && !(dy>0)) return false;
+    allerheiligenRightSnap=best.kind; allerheiligenRightDistance=best.c.pathDistance; allerheiligenRightSnapping=true;
+    return true;
+  }
+
+  function moveAlongAllerheiligenRightSnap(dx,dy,deltaSeconds) {
+    if (!allerheiligenRightSnap) return false;
+    const path=allerheiligenRightPath(allerheiligenRightSnap);
+    const metrics=getPathMetrics(path);
+    const anchor=pointAtBridgeDistance(path,allerheiligenRightDistance);
+    if (allerheiligenRightSnapping) {
+      const pull=Math.min(1,10*deltaSeconds); playerX+=(anchor.x-playerX)*pull; playerY+=(anchor.y-playerY)*pull;
+      if (Math.hypot(anchor.x-playerX,anchor.y-playerY)<=7) { playerX=anchor.x;playerY=anchor.y;allerheiligenRightSnapping=false; }
+      return true;
+    }
+    let dir=dy>0?1:dy<0?-1:0;
+    if (!dir) return true;
+    allerheiligenRightDistance=Math.max(0,Math.min(metrics.total,allerheiligenRightDistance+dir*currentPlayerMoveSpeed()*deltaSeconds));
+    const q=pointAtBridgeDistance(path,allerheiligenRightDistance); playerX=q.x;playerY=q.y; facing=dir>0?"down":"up";
+    const atStart=allerheiligenRightDistance<=.001&&dir<0, atEnd=allerheiligenRightDistance>=metrics.total-.001&&dir>0;
+    if (atEnd && allerheiligenRightSnap==="green" && dy>0) {
+      // Continuing S at the green endpoint enters the purple continuation seamlessly.
+      allerheiligenRightSnap="purple"; allerheiligenRightDistance=0; allerheiligenRightSnapping=false;
+      const r=ALLERHEILIGEN_ROUTE.rightPurple[0]; playerX=r[0];playerY=r[1];
+      return true;
+    }
+    if (atStart || atEnd) { allerheiligenRightSnap=null; allerheiligenSnapReleaseUntil=performance.now()+300; }
+    return true;
+  }
 
   function resetLierbachAscentVisuals() {
     lierbachAscentActive = false;
@@ -13041,6 +13189,9 @@
     // This is isolated to OPPENAU and only to the final edge corridor.
     if (inOppenauKuhbachEastExit && x >= 9450) return true;
 
+    // R191 ALLERHEILIGEN: player may never leave the yellow-marked interior.
+    if (!isAllerheiligenWalkableFootPoint(x, y)) return false;
+
     // Existing river/bridge collision remains unchanged.
     if (isRiverBlockedFootPoint(x, y)) return false;
 
@@ -13483,6 +13634,13 @@
     if (MAP.id !== "hubacker" && activeNeuensteinSnap) {
       activeNeuensteinSnap = null;
       neuensteinSnapping = false;
+    }
+
+    // R191 ALLERHEILIGEN forced route ownership.
+    if (MAP.id === "allerheiligen") {
+      engageAllerheiligenSpawnZigzagIfNeeded();
+      if (allerheiligenZigzagActive) { moveAlongAllerheiligenZigzag(dx,dy,deltaSeconds); clampPlayer(); return; }
+      if (allerheiligenRightSnap || tryEngageAllerheiligenRightSnap(dx,dy)) { moveAlongAllerheiligenRightSnap(dx,dy,deltaSeconds); clampPlayer(); return; }
     }
 
     // R189 LIERBACH -> ALLERHEILIGEN purple ascent.
@@ -22335,6 +22493,7 @@
     // R189: the Lierbach ascent has already faded the player out.
     // Reset scale/opacity only after the transition curtain is opaque.
     resetLierbachAscentVisuals();
+    resetAllerheiligenRouteState();
 
     activeLautenbachHillPath = false;
     lautenbachHillSnapping = false;
@@ -22385,6 +22544,12 @@
     } else {
       playerX = spawn.x;
       playerY = spawn.y;
+      if (nextMap.id === "allerheiligen") {
+        playerX = ALLERHEILIGEN_ROUTE.spawn.x;
+        playerY = ALLERHEILIGEN_ROUTE.spawn.y;
+        allerheiligenZigzagActive = true;
+        allerheiligenZigzagDistance = 0;
+      }
       if (nextMap.id !== STADIUM.mapId) {
         stadiumState = "inactive";
         stadiumArrivalFromOberkirch = false;
