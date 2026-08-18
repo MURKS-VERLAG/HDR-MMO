@@ -3,7 +3,7 @@
 
   // R121 DEPLOYMENT VERIFICATION — harmless build marker.
   // If this line appears in DevTools, the browser is definitely running R121.
-  console.info("HDR BUILD R188 - LIERBACH RIVER GEOMETRY SYNC");
+  console.info("HDR BUILD R189 - ALLERHEILIGEN + LIERBACH ASCENT");
 
   const MAPS = Object.freeze({
     oberkirch: Object.freeze({
@@ -75,6 +75,13 @@
       image: "assets/maps/MAP 10 LIERBACH.jpg",
       width: 10240,
       height: 6827
+    }),
+    allerheiligen: Object.freeze({
+      id: "allerheiligen",
+      name: "ALLERHEILIGEN",
+      image: "assets/maps/MAP 11 ALLERHEILIGEN.jpg",
+      width: 10240,
+      height: 6825
     })
   });
 
@@ -358,6 +365,13 @@
     oppenauFromLierbachSpawn: Object.freeze({
       x: 2450,
       y: 190
+    }),
+
+    // R189 LIERBACH -> ALLERHEILIGEN:
+    // after the purple forced ascent/fade, arrive at the lower stair approach.
+    allerheiligenFromLierbachSpawn: Object.freeze({
+      x: 2050,
+      y: 6100
     })
   });
 
@@ -876,7 +890,9 @@
     // R167 KUHBACH currently continues the OPPENAU journey theme.
     "kuhbach": "assets/audio/maps/KUHBACH - HALTERUS.mp3",
     // R182: LIERBACH temporarily continues OPPENAU's journey theme; no new audio asset required.
-    "lierbach": "assets/audio/maps/OPPENAU - DIE GROSSE REISE.mp3"
+    "lierbach": "assets/audio/maps/OPPENAU - DIE GROSSE REISE.mp3",
+    // R189: ALLERHEILIGEN continues the same journey theme until a dedicated track is supplied.
+    "allerheiligen": "assets/audio/maps/OPPENAU - DIE GROSSE REISE.mp3"
   });
 
   const MAP_MUSIC_VOLUME = 1.0;
@@ -2377,74 +2393,60 @@
       Object.freeze([1832, 2056])
     ]),
 
-    // Exact river silhouette, traced clockwise along the two visible banks.
-    // The broad lower reach is intentionally much wider than the upper reach.
-    riverPolygon: Object.freeze([
-      Object.freeze([1715,  120]),
-      Object.freeze([2050,  260]),
-      Object.freeze([2160,  470]),
-      Object.freeze([1860,  650]),
-      Object.freeze([1860,  880]),
-      Object.freeze([2180, 1080]),
-      Object.freeze([2320, 1320]),
-      Object.freeze([2260, 1600]),
-      Object.freeze([2510, 1800]),
-      Object.freeze([2670, 2010]),
-      Object.freeze([2680, 2240]),
-      Object.freeze([2850, 2450]),
-      Object.freeze([3170, 2580]),
-      Object.freeze([3180, 2780]),
-      Object.freeze([3370, 3030]),
-      Object.freeze([3570, 3290]),
-      Object.freeze([3760, 3350]),
-      Object.freeze([3820, 3600]),
-      Object.freeze([4060, 3820]),
-      Object.freeze([4300, 3990]),
-      Object.freeze([4520, 4140]),
-      Object.freeze([4860, 4210]),
-      Object.freeze([5230, 4140]),
-      Object.freeze([5500, 4200]),
-      Object.freeze([5740, 4430]),
-      Object.freeze([6000, 4700]),
-      Object.freeze([6400, 4940]),
-      Object.freeze([6810, 5210]),
-      Object.freeze([7250, 5480]),
-      Object.freeze([7660, 5780]),
-      Object.freeze([8080, 6110]),
-      Object.freeze([8520, 6440]),
-      Object.freeze([8920, 6827]),
-      Object.freeze([7800, 6827]),
-      Object.freeze([7420, 6530]),
-      Object.freeze([7040, 6270]),
-      Object.freeze([6660, 6020]),
-      Object.freeze([6260, 5760]),
-      Object.freeze([5890, 5520]),
-      Object.freeze([5530, 5290]),
-      Object.freeze([5180, 5050]),
-      Object.freeze([4910, 4800]),
-      Object.freeze([4690, 4550]),
-      Object.freeze([4480, 4380]),
-      Object.freeze([4210, 4300]),
-      Object.freeze([3940, 4230]),
-      Object.freeze([3720, 4090]),
-      Object.freeze([3540, 3890]),
-      Object.freeze([3370, 3650]),
-      Object.freeze([3300, 3440]),
-      Object.freeze([3120, 3330]),
-      Object.freeze([2930, 3070]),
-      Object.freeze([2800, 2830]),
-      Object.freeze([2650, 2690]),
-      Object.freeze([2510, 2470]),
-      Object.freeze([2440, 2210]),
-      Object.freeze([2290, 2020]),
-      Object.freeze([2150, 1810]),
-      Object.freeze([2100, 1580]),
-      Object.freeze([1980, 1360]),
-      Object.freeze([1960, 1130]),
-      Object.freeze([1740,  930]),
-      Object.freeze([1700,  720]),
-      Object.freeze([1830,  520]),
-      Object.freeze([1600,  300])
+    // R189 EXACT BLUE WATER HITBOXES from the user's current markup.
+    // Two separate polygons because the physical wooden bridge splits the painted blue area.
+    riverPolygons: Object.freeze([
+      Object.freeze([
+        Object.freeze([3186, 2106]),
+        Object.freeze([3431, 2360]),
+        Object.freeze([3495, 2678]),
+        Object.freeze([3658, 2969]),
+        Object.freeze([3840, 3050]),
+        Object.freeze([4022, 3359]),
+        Object.freeze([4230, 3368]),
+        Object.freeze([4258, 3395]),
+        Object.freeze([4330, 3586]),
+        Object.freeze([4348, 3722]),
+        Object.freeze([4621, 3985]),
+        Object.freeze([4938, 3885]),
+        Object.freeze([4893, 3804]),
+        Object.freeze([4893, 3631]),
+        Object.freeze([4693, 3513]),
+        Object.freeze([4539, 3268]),
+        Object.freeze([4094, 3041]),
+        Object.freeze([3867, 2696]),
+        Object.freeze([3740, 2605]),
+        Object.freeze([3731, 2424]),
+        Object.freeze([3495, 2197]),
+        Object.freeze([3477, 2106])
+      ]),
+      Object.freeze([
+        Object.freeze([4902, 4357]),
+        Object.freeze([5020, 4475]),
+        Object.freeze([5174, 4793]),
+        Object.freeze([5438, 4966]),
+        Object.freeze([5819, 5147]),
+        Object.freeze([5873, 5311]),
+        Object.freeze([6073, 5456]),
+        Object.freeze([6100, 5574]),
+        Object.freeze([6091, 5701]),
+        Object.freeze([6500, 6082]),
+        Object.freeze([6799, 6228]),
+        Object.freeze([6799, 6436]),
+        Object.freeze([6854, 6572]),
+        Object.freeze([7090, 6827]),
+        Object.freeze([8842, 6827]),
+        Object.freeze([8197, 6436]),
+        Object.freeze([7862, 6119]),
+        Object.freeze([7508, 5955]),
+        Object.freeze([7308, 5647]),
+        Object.freeze([7099, 5447]),
+        Object.freeze([6563, 5165]),
+        Object.freeze([5883, 4675]),
+        Object.freeze([5574, 4539]),
+        Object.freeze([5392, 4376]),
+        Object.freeze([5174, 4285])
+      ])
     ]),
 
     // R187 WHITE bridge snap: aligned with the ACTUAL wooden deck in screenshot 1.
@@ -2456,50 +2458,136 @@
     bridgeEngageDistance: 175,
     bridgeRiverClearance: 145,
 
-    // R188: one authoritative river geometry.
-    // The visual centreline is densely derived from the existing river silhouette,
-    // and the moving water is clipped to that same silhouette. Visuals and hard
-    // collision therefore cannot diverge or cut across the banks anymore.
-    riverCenterPath: Object.freeze([
-      Object.freeze([1835,  300]),
-      Object.freeze([1914,  400]),
-      Object.freeze([1861,  600]),
-      Object.freeze([1788,  800]),
-      Object.freeze([1934, 1000]),
-      Object.freeze([2108, 1200]),
-      Object.freeze([2152, 1400]),
-      Object.freeze([2182, 1600]),
-      Object.freeze([2329, 1800]),
-      Object.freeze([2470, 2000]),
-      Object.freeze([2544, 2200]),
-      Object.freeze([2664, 2400]),
-      Object.freeze([2873, 2600]),
-      Object.freeze([2988, 2800]),
-      Object.freeze([3170, 3000]),
-      Object.freeze([3351, 3200]),
-      Object.freeze([3471, 3400]),
-      Object.freeze([3587, 3600]),
-      Object.freeze([3757, 3800]),
-      Object.freeze([3977, 4000]),
-      Object.freeze([4537, 4200]),
-      Object.freeze([5107, 4400]),
-      Object.freeze([5319, 4600]),
-      Object.freeze([5482, 4800]),
-      Object.freeze([5742, 5000]),
-      Object.freeze([6073, 5200]),
-      Object.freeze([6382, 5400]),
-      Object.freeze([6695, 5600]),
-      Object.freeze([6987, 5800]),
-      Object.freeze([7278, 6000]),
-      Object.freeze([7567, 6200]),
-      Object.freeze([7848, 6400]),
-      Object.freeze([8097, 6600]),
-      Object.freeze([8329, 6800]),
-      Object.freeze([8360, 6827])
-    ])
   });
 
   let lierbachRiverEffectEl = null;
+
+  // R189 LIERBACH upper yellow-arrow exit:
+  // exact purple reference line, lower endpoint -> upper endpoint.
+  const LIERBACH_ALLERHEILIGEN_ASCENT = Object.freeze({
+    path: Object.freeze([
+      Object.freeze([2832, 2079]),
+      Object.freeze([2079, 962])
+    ]),
+    engageDistance: 250,
+    travelSpeed: 650,
+    shrinkStart: 0.18,
+    fadeStart: 0.42,
+    minimumScale: 0.16
+  });
+
+  let lierbachAscentActive = false;
+  let lierbachAscentDistance = 0;
+  let lierbachAscentSwitching = false;
+
+  function resetLierbachAscentVisuals() {
+    lierbachAscentActive = false;
+    lierbachAscentDistance = 0;
+    lierbachAscentSwitching = false;
+    if (playerEl) {
+      playerEl.style.opacity = "";
+      playerEl.style.scale = "";
+      playerEl.style.transformOrigin = "";
+    }
+  }
+
+  function updateLierbachAscentVisual(progress) {
+    const cfg = LIERBACH_ALLERHEILIGEN_ASCENT;
+    const p = Math.max(0, Math.min(1, progress));
+
+    const shrinkT = Math.max(
+      0,
+      Math.min(1, (p - cfg.shrinkStart) / (1 - cfg.shrinkStart))
+    );
+    const scale = 1 - (1 - cfg.minimumScale) * shrinkT;
+
+    const fadeT = Math.max(
+      0,
+      Math.min(1, (p - cfg.fadeStart) / (1 - cfg.fadeStart))
+    );
+
+    playerEl.style.transformOrigin = "50% 100%";
+    playerEl.style.scale = String(scale);
+    playerEl.style.opacity = String(1 - fadeT);
+  }
+
+  function tryEngageLierbachAscent(dx, dy) {
+    if (MAP.id !== "lierbach" || mapTransitioning || lierbachAscentSwitching) {
+      return false;
+    }
+
+    // W / ArrowUp is the authoritative ascent input.
+    if (!(dy < 0)) return false;
+
+    const closest = closestPointOnBridgePath(
+      playerX,
+      playerY,
+      LIERBACH_ALLERHEILIGEN_ASCENT.path
+    );
+
+    if (
+      !closest ||
+      closest.distance > LIERBACH_ALLERHEILIGEN_ASCENT.engageDistance ||
+      closest.progress > 0.28
+    ) {
+      return false;
+    }
+
+    lierbachAscentActive = true;
+    lierbachAscentDistance = closest.pathDistance;
+    facing = "up";
+    return true;
+  }
+
+  function moveAlongLierbachAscent(dx, dy, deltaSeconds) {
+    if (!lierbachAscentActive || MAP.id !== "lierbach") return false;
+
+    const metrics = getPathMetrics(LIERBACH_ALLERHEILIGEN_ASCENT.path);
+    if (!metrics || !Number.isFinite(metrics.total) || metrics.total <= 0) {
+      resetLierbachAscentVisuals();
+      return false;
+    }
+
+    // Stay snapped to the purple path. Holding W advances upward automatically.
+    if (dy < 0) {
+      lierbachAscentDistance = Math.min(
+        metrics.total,
+        lierbachAscentDistance +
+          LIERBACH_ALLERHEILIGEN_ASCENT.travelSpeed * deltaSeconds
+      );
+    }
+
+    const point = pointAtBridgeDistance(
+      LIERBACH_ALLERHEILIGEN_ASCENT.path,
+      lierbachAscentDistance
+    );
+
+    playerX = point.x;
+    playerY = point.y;
+    facing = "up";
+
+    const progress = lierbachAscentDistance / metrics.total;
+    updateLierbachAscentVisual(progress);
+
+    if (
+      lierbachAscentDistance >= metrics.total - 1 &&
+      !lierbachAscentSwitching
+    ) {
+      lierbachAscentSwitching = true;
+      // Fully vanish before the established black/iris map transition begins.
+      playerEl.style.opacity = "0";
+      playerEl.style.scale =
+        String(LIERBACH_ALLERHEILIGEN_ASCENT.minimumScale);
+
+      void switchMap(
+        MAPS.allerheiligen,
+        MAP_EXIT_CONFIG.allerheiligenFromLierbachSpawn,
+        true
+      );
+    }
+
+    return true;
+  }
 
   function isLierbachOuterTerrainBlockedFootPoint(x, y) {
     if (MAP.id !== "lierbach") return false;
@@ -2521,9 +2609,12 @@
 
   function isLierbachRiverBlockedFootPoint(x, y) {
     if (MAP.id !== "lierbach") return false;
-    if (!worldPointInPolygon(x, y, LIERBACH_TERRAIN.riverPolygon)) return false;
-    // River may ONLY be crossed on the physical bridge corridor.
-    return !lierbachPointInsideBridgeCorridor(x, y);
+
+    // R189: ONLY the two exact BLUE areas from the supplied reference are water.
+    // The bridge opening is not part of either polygon, so it stays crossable.
+    return LIERBACH_TERRAIN.riverPolygons.some((polygon) =>
+      worldPointInPolygon(x, y, polygon)
+    );
   }
 
   function lierbachSvgPolygonPoints(points) {
@@ -2536,104 +2627,18 @@
   }
 
   function createLierbachRiverEffect() {
-    if (lierbachRiverEffectEl) return;
-
-    const ns = "http://www.w3.org/2000/svg";
-    const svg = document.createElementNS(ns, "svg");
-    svg.id = "lierbach-river-effect";
-    svg.setAttribute("viewBox", `0 0 ${MAPS.lierbach.width} ${MAPS.lierbach.height}`);
-    svg.style.position = "absolute";
-    svg.style.left = "0";
-    svg.style.top = "0";
-    svg.style.width = `${MAPS.lierbach.width}px`;
-    svg.style.height = `${MAPS.lierbach.height}px`;
-    svg.style.pointerEvents = "none";
-    svg.style.overflow = "hidden";
-    svg.style.zIndex = "5";
-    svg.style.display = MAP.id === "lierbach" ? "" : "none";
-    svg.style.mixBlendMode = "screen";
-
-    const pathD = lierbachSvgPath(LIERBACH_TERRAIN.riverCenterPath);
-
-    // R188: hard invariant — every LIERBACH water pixel is clipped by the exact
-    // same riverPolygon used by isLierbachRiverBlockedFootPoint().
-    const defs = document.createElementNS(ns, "defs");
-    const clipPath = document.createElementNS(ns, "clipPath");
-    clipPath.id = "lierbach-river-clip";
-    clipPath.setAttribute("clipPathUnits", "userSpaceOnUse");
-    const clipPolygon = document.createElementNS(ns, "polygon");
-    clipPolygon.setAttribute(
-      "points",
-      lierbachSvgPolygonPoints(LIERBACH_TERRAIN.riverPolygon)
-    );
-    clipPath.appendChild(clipPolygon);
-    defs.appendChild(clipPath);
-    svg.appendChild(defs);
-
-    const waterGroup = document.createElementNS(ns, "g");
-    waterGroup.setAttribute("clip-path", "url(#lierbach-river-clip)");
-    svg.appendChild(waterGroup);
-
-    // R187: NO broad blue fill. The map already contains the real river.
-    // Only narrow, translucent moving reflections are added on top of that water.
-    const soft = document.createElementNS(ns, "path");
-    soft.setAttribute("d", pathD);
-    soft.setAttribute("fill", "none");
-    soft.setAttribute("stroke", "rgba(120,205,235,.12)");
-    soft.setAttribute("stroke-width", "92");
-    soft.setAttribute("stroke-linecap", "round");
-    soft.setAttribute("stroke-linejoin", "round");
-    waterGroup.appendChild(soft);
-
-    const current = document.createElementNS(ns, "path");
-    current.setAttribute("d", pathD);
-    current.setAttribute("fill", "none");
-    current.setAttribute("stroke", "rgba(195,238,250,.30)");
-    current.setAttribute("stroke-width", "34");
-    current.setAttribute("stroke-linecap", "round");
-    current.setAttribute("stroke-linejoin", "round");
-    current.setAttribute("pathLength", "1000");
-    current.style.strokeDasharray = "22 34 8 46";
-    current.style.animation = "lierbachRiverFlow 4.8s linear infinite";
-    waterGroup.appendChild(current);
-
-    const sparkle = document.createElementNS(ns, "path");
-    sparkle.setAttribute("d", pathD);
-    sparkle.setAttribute("fill", "none");
-    sparkle.setAttribute("stroke", "rgba(255,255,255,.48)");
-    sparkle.setAttribute("stroke-width", "11");
-    sparkle.setAttribute("stroke-linecap", "round");
-    sparkle.setAttribute("stroke-linejoin", "round");
-    sparkle.setAttribute("pathLength", "1000");
-    sparkle.style.strokeDasharray = "5 58 3 82";
-    sparkle.style.animation = "lierbachRiverSparkle 3.1s linear infinite";
-    waterGroup.appendChild(sparkle);
-
-    if (!document.getElementById("lierbach-river-style")) {
-      const style = document.createElement("style");
-      style.id = "lierbach-river-style";
-      style.textContent = `
-        @keyframes lierbachRiverFlow {
-          from { stroke-dashoffset: 0; opacity: .55; }
-          50%  { opacity: .88; }
-          to   { stroke-dashoffset: -150; opacity: .55; }
-        }
-        @keyframes lierbachRiverSparkle {
-          from { stroke-dashoffset: 0; opacity: .30; }
-          45%  { opacity: .68; }
-          to   { stroke-dashoffset: -220; opacity: .30; }
-        }
-      `;
-      document.head.appendChild(style);
+    // R189: intentionally disabled. The painted map water is the only water visual.
+    if (lierbachRiverEffectEl) {
+      lierbachRiverEffectEl.remove();
+      lierbachRiverEffectEl = null;
     }
-
-    world.appendChild(svg);
-    lierbachRiverEffectEl = svg;
   }
 
   function updateLierbachRiverEffectVisibility() {
+    // R189: no LIERBACH water overlay exists.
     if (lierbachRiverEffectEl) {
-      lierbachRiverEffectEl.style.display = MAP.id === "lierbach" ? "" : "none";
+      lierbachRiverEffectEl.remove();
+      lierbachRiverEffectEl = null;
     }
   }
 
@@ -3114,6 +3119,104 @@
   function setHubackerFogVisibility(visible) {
     if (!hubackerFogRoot) return;
     hubackerFogRoot.style.display = visible ? "block" : "none";
+  }
+
+  // ------------------------------------------------------------------
+  // R189 LIERBACH — drifting fog hangs on the LEFT/RIGHT slopes only.
+  // The bright centre / river corridor deliberately stays clear.
+  // ------------------------------------------------------------------
+  let lierbachFogRoot = null;
+
+  function installLierbachFogStyles() {
+    if (document.getElementById("lierbachFogStyles")) return;
+
+    const style = document.createElement("style");
+    style.id = "lierbachFogStyles";
+    style.textContent = `
+      .lierbach-slope-fog {
+        position:absolute;
+        inset:0;
+        z-index:4200;
+        overflow:hidden;
+        pointer-events:none;
+        display:none;
+      }
+      .lierbach-slope-fog__side {
+        position:absolute;
+        top:0;
+        bottom:0;
+        width:46%;
+        overflow:hidden;
+        opacity:.36;
+      }
+      .lierbach-slope-fog__side--left {
+        left:0;
+        -webkit-mask-image:linear-gradient(90deg,#000 0%,#000 48%,rgba(0,0,0,.55) 72%,transparent 100%);
+        mask-image:linear-gradient(90deg,#000 0%,#000 48%,rgba(0,0,0,.55) 72%,transparent 100%);
+      }
+      .lierbach-slope-fog__side--right {
+        right:0;
+        -webkit-mask-image:linear-gradient(270deg,#000 0%,#000 48%,rgba(0,0,0,.55) 72%,transparent 100%);
+        mask-image:linear-gradient(270deg,#000 0%,#000 48%,rgba(0,0,0,.55) 72%,transparent 100%);
+      }
+      .lierbach-slope-fog__veil {
+        position:absolute;
+        width:82%;
+        height:25%;
+        border-radius:50%;
+        filter:blur(32px);
+        background:
+          radial-gradient(ellipse at 50% 50%,
+            rgba(232,237,235,.70) 0%,
+            rgba(211,219,216,.48) 38%,
+            rgba(187,198,194,.24) 65%,
+            rgba(187,198,194,0) 84%);
+        will-change:transform,opacity;
+        animation:lierbachSlopeFogDrift 22s ease-in-out infinite alternate;
+      }
+      .lierbach-slope-fog__side--left .lierbach-slope-fog__veil { left:-18%; }
+      .lierbach-slope-fog__side--right .lierbach-slope-fog__veil { right:-18%; }
+      .lierbach-slope-fog__veil:nth-child(1){top:8%; animation-duration:24s; opacity:.50}
+      .lierbach-slope-fog__veil:nth-child(2){top:39%; animation-duration:31s; animation-delay:-12s; opacity:.42}
+      .lierbach-slope-fog__veil:nth-child(3){top:70%; animation-duration:27s; animation-delay:-19s; opacity:.46}
+      @keyframes lierbachSlopeFogDrift {
+        from { transform:translate3d(-3%,0,0) scaleX(1); }
+        to   { transform:translate3d(12%,1.5%,0) scaleX(1.13); }
+      }
+      .lierbach-slope-fog__side--right .lierbach-slope-fog__veil {
+        animation-direction:alternate-reverse;
+      }
+    `;
+    document.head.appendChild(style);
+  }
+
+  function createLierbachFog() {
+    if (lierbachFogRoot) return;
+    installLierbachFogStyles();
+
+    const root = document.createElement("div");
+    root.className = "lierbach-slope-fog";
+    root.style.display = MAP.id === "lierbach" ? "block" : "none";
+
+    for (const sideName of ["left", "right"]) {
+      const side = document.createElement("div");
+      side.className =
+        `lierbach-slope-fog__side lierbach-slope-fog__side--${sideName}`;
+      for (let i = 0; i < 3; i += 1) {
+        const veil = document.createElement("div");
+        veil.className = "lierbach-slope-fog__veil";
+        side.appendChild(veil);
+      }
+      root.appendChild(side);
+    }
+
+    game.appendChild(root);
+    lierbachFogRoot = root;
+  }
+
+  function setLierbachFogVisibility(visible) {
+    if (!lierbachFogRoot) return;
+    lierbachFogRoot.style.display = visible ? "block" : "none";
   }
 
   // ------------------------------------------------------------------
@@ -8339,7 +8442,7 @@
   // ------------------------------------------------------------------
   const MOLE_CONFIG = Object.freeze({
     checkInterval: 30000,
-    spawnChance: 0.33,
+    spawnChance: 0,
     maxHp: 100,
     digDuration: 8673,
     exposedDuration: 5000,
@@ -8454,7 +8557,8 @@
     Object.freeze({ key: "ramsbach", label: "RAMSBACH", spawn: MAP_EXIT_CONFIG.ramsbachFromHubackerSpawn }),
     Object.freeze({ key: "oppenau", label: "OPPENAU", spawn: MAP_EXIT_CONFIG.oppenauFromRamsbachSpawn }),
     Object.freeze({ key: "kuhbach", label: "KUHBACH", spawn: MAP_EXIT_CONFIG.kuhbachFromOppenauSpawn }),
-    Object.freeze({ key: "lierbach", label: "LIERBACH", spawn: MAP_EXIT_CONFIG.lierbachFromOppenauSpawn })
+    Object.freeze({ key: "lierbach", label: "LIERBACH", spawn: MAP_EXIT_CONFIG.lierbachFromOppenauSpawn }),
+    Object.freeze({ key: "allerheiligen", label: "ALLERHEILIGEN", spawn: MAP_EXIT_CONFIG.allerheiligenFromLierbachSpawn })
   ]);
 
   let teleporterUI = null;
@@ -13377,6 +13481,20 @@
     if (MAP.id !== "hubacker" && activeNeuensteinSnap) {
       activeNeuensteinSnap = null;
       neuensteinSnapping = false;
+    }
+
+    // R189 LIERBACH -> ALLERHEILIGEN purple ascent.
+    // Once caught near the upper yellow arrow, W follows the forced path exactly.
+    if (
+      MAP.id === "lierbach" &&
+      (
+        lierbachAscentActive ||
+        tryEngageLierbachAscent(dx, dy)
+      )
+    ) {
+      moveAlongLierbachAscent(dx, dy, deltaSeconds);
+      clampPlayer();
+      return;
     }
 
     // R184 LIERBACH WHITE bridge: A/D, W+D and A+S all snap to the same deck line.
@@ -22211,6 +22329,11 @@
     await waitMs(200);
 
     MAP = nextMap;
+
+    // R189: the Lierbach ascent has already faded the player out.
+    // Reset scale/opacity only after the transition curtain is opaque.
+    resetLierbachAscentVisuals();
+
     activeLautenbachHillPath = false;
     lautenbachHillSnapping = false;
     clearIceVelocity();
@@ -22293,6 +22416,7 @@
     setOppenauDecorVisibility(MAP.id === "oppenau");
     setRamsbachFogVisibility(MAP.id === "ramsbach");
     setHubackerFogVisibility(MAP.id === "hubacker");
+    setLierbachFogVisibility(MAP.id === "lierbach");
     setWinterbachSnowVisibility(MAP.id === "winterbach-ranglehen");
     setRamsbachBearVisibility(MAP.id === RAMSBACH_BEAR_CONFIG.mapId);
     updatePlayerHudVisibility();
@@ -24415,6 +24539,7 @@
   createOedsbachFog();
   createRamsbachFog();
   createHubackerFog();
+  createLierbachFog();
   createWinterbachSnow();
   createOedsbachShadowSystem();
 
