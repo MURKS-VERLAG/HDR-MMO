@@ -3,7 +3,7 @@
 
   // R121 DEPLOYMENT VERIFICATION — harmless build marker.
   // If this line appears in DevTools, the browser is definitely running R121.
-  console.info("HDR BUILD R179 - KUHBACH RGB RESTORED + ZOOM LOCK");
+  console.info("HDR BUILD R180 - KUHBACH HARD ZOOM LOCK + HALTERUS RGB");
 
   const MAPS = Object.freeze({
     oberkirch: Object.freeze({
@@ -1770,7 +1770,20 @@
     );
 
     for (let i = 0; i < layers.length; i += 1) {
-      layers[i].style.visibility = i === nextIndex ? "visible" : "hidden";
+      const active = i === nextIndex;
+      layers[i].style.visibility = active ? "visible" : "hidden";
+      // R180: RGB is applied DIRECTLY to the currently visible Halterus frame.
+      // This cannot disappear behind the sprite like an overlay can.
+      if (active) {
+        const rgbFilters = [
+          "drop-shadow(0 0 18px rgba(255,35,35,.98)) drop-shadow(0 0 34px rgba(255,35,35,.72))",
+          "drop-shadow(0 0 18px rgba(35,255,90,.98)) drop-shadow(0 0 34px rgba(35,255,90,.72))",
+          "drop-shadow(0 0 18px rgba(35,110,255,.98)) drop-shadow(0 0 34px rgba(35,110,255,.72))"
+        ];
+        layers[i].style.filter = rgbFilters[Math.floor(Math.random() * rgbFilters.length)];
+      } else {
+        layers[i].style.filter = "none";
+      }
     }
 
     kuhbachFlorianusDanceIndex = nextIndex;
@@ -22532,6 +22545,9 @@
   }
 
   function scaleForLevel(level) {
+    // R180 HARD LOCK: KUHBACH physically has only the furthest-out scale.
+    // Even a stray caller passing level 1/2/3 cannot zoom this map.
+    if (MAP.id === "kuhbach") return fitScale * ZOOM_MULTIPLIERS[0];
     return fitScale * ZOOM_MULTIPLIERS[level];
   }
 
@@ -23172,9 +23188,15 @@
   }
 
   function setZoomLevel(nextLevel) {
-    // R179 KUHBACH: one fixed zoom only — always the furthest-out level.
-    // This bypasses the Chromium/GPU flicker that only appears while KUHBACH is zoomed in.
-    if (MAP.id === "kuhbach") nextLevel = 0;
+    // R180 HARD LOCK: ignore every zoom request on KUHBACH.
+    if (MAP.id === "kuhbach") {
+      zoomLevel = 0;
+      displayScale = fitScale * ZOOM_MULTIPLIERS[0];
+      targetScale = displayScale;
+      zoomAnimating = false;
+      renderWorld();
+      return;
+    }
     nextLevel = Math.max(0, Math.min(ZOOM_MULTIPLIERS.length - 1, nextLevel));
     if (nextLevel === zoomLevel) return;
 
@@ -23225,6 +23247,13 @@
         : 0;
       lastFrame = now;
 
+      // R180 final failsafe: KUHBACH can NEVER retain/inherit a zoomed state.
+      if (MAP.id === "kuhbach") {
+        zoomLevel = 0;
+        displayScale = fitScale * ZOOM_MULTIPLIERS[0];
+        targetScale = displayScale;
+        zoomAnimating = false;
+      }
       updateZoom(now);
 
       if (gameplayUnlocked() && !mapTransitioning) {
@@ -23413,11 +23442,13 @@
     }
 
     if (event.code === "Equal" || event.code === "NumpadAdd") {
+      if (MAP.id === "kuhbach") return;
       setZoomLevel(zoomLevel + 1);
       return;
     }
 
     if (event.code === "Minus" || event.code === "NumpadSubtract") {
+      if (MAP.id === "kuhbach") return;
       setZoomLevel(zoomLevel - 1);
       return;
     }
@@ -23607,6 +23638,8 @@
     event.preventDefault();
 
     if (!gameplayUnlocked()) return;
+    // R180: mouse wheel has no zoom action at all on KUHBACH.
+    if (MAP.id === "kuhbach") return;
 
     if (event.deltaY < 0) {
       setZoomLevel(zoomLevel + 1);
