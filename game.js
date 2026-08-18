@@ -3,7 +3,7 @@
 
   // R121 DEPLOYMENT VERIFICATION — harmless build marker.
   // If this line appears in DevTools, the browser is definitely running R121.
-  console.info("HDR BUILD R187 - LIERBACH RIVER + BRIDGE PRECISION");
+  console.info("HDR BUILD R188 - LIERBACH RIVER GEOMETRY SYNC");
 
   const MAPS = Object.freeze({
     oberkirch: Object.freeze({
@@ -2456,22 +2456,46 @@
     bridgeEngageDistance: 175,
     bridgeRiverClearance: 145,
 
-    // R187: visual centreline retraced from the ACTUAL painted LIERBACH stream.
-    // It is intentionally independent from the old blue markup polygon: the effect
-    // now follows the water already present in MAP 10 instead of repainting the valley.
+    // R188: one authoritative river geometry.
+    // The visual centreline is densely derived from the existing river silhouette,
+    // and the moving water is clipped to that same silhouette. Visuals and hard
+    // collision therefore cannot diverge or cut across the banks anymore.
     riverCenterPath: Object.freeze([
-      Object.freeze([1978,  200]),
-      Object.freeze([2354,  862]),
-      Object.freeze([2629, 1469]),
-      Object.freeze([3041, 2140]),
-      Object.freeze([3600, 2803]),
-      Object.freeze([4177, 3441]),
-      Object.freeze([4964, 3976]),
-      Object.freeze([5926, 4495]),
-      Object.freeze([7126, 5102]),
-      Object.freeze([8271, 5805]),
-      Object.freeze([9370, 6444]),
-      Object.freeze([9840, 6827])
+      Object.freeze([1835,  300]),
+      Object.freeze([1914,  400]),
+      Object.freeze([1861,  600]),
+      Object.freeze([1788,  800]),
+      Object.freeze([1934, 1000]),
+      Object.freeze([2108, 1200]),
+      Object.freeze([2152, 1400]),
+      Object.freeze([2182, 1600]),
+      Object.freeze([2329, 1800]),
+      Object.freeze([2470, 2000]),
+      Object.freeze([2544, 2200]),
+      Object.freeze([2664, 2400]),
+      Object.freeze([2873, 2600]),
+      Object.freeze([2988, 2800]),
+      Object.freeze([3170, 3000]),
+      Object.freeze([3351, 3200]),
+      Object.freeze([3471, 3400]),
+      Object.freeze([3587, 3600]),
+      Object.freeze([3757, 3800]),
+      Object.freeze([3977, 4000]),
+      Object.freeze([4537, 4200]),
+      Object.freeze([5107, 4400]),
+      Object.freeze([5319, 4600]),
+      Object.freeze([5482, 4800]),
+      Object.freeze([5742, 5000]),
+      Object.freeze([6073, 5200]),
+      Object.freeze([6382, 5400]),
+      Object.freeze([6695, 5600]),
+      Object.freeze([6987, 5800]),
+      Object.freeze([7278, 6000]),
+      Object.freeze([7567, 6200]),
+      Object.freeze([7848, 6400]),
+      Object.freeze([8097, 6600]),
+      Object.freeze([8329, 6800]),
+      Object.freeze([8360, 6827])
     ])
   });
 
@@ -2531,16 +2555,35 @@
 
     const pathD = lierbachSvgPath(LIERBACH_TERRAIN.riverCenterPath);
 
+    // R188: hard invariant — every LIERBACH water pixel is clipped by the exact
+    // same riverPolygon used by isLierbachRiverBlockedFootPoint().
+    const defs = document.createElementNS(ns, "defs");
+    const clipPath = document.createElementNS(ns, "clipPath");
+    clipPath.id = "lierbach-river-clip";
+    clipPath.setAttribute("clipPathUnits", "userSpaceOnUse");
+    const clipPolygon = document.createElementNS(ns, "polygon");
+    clipPolygon.setAttribute(
+      "points",
+      lierbachSvgPolygonPoints(LIERBACH_TERRAIN.riverPolygon)
+    );
+    clipPath.appendChild(clipPolygon);
+    defs.appendChild(clipPath);
+    svg.appendChild(defs);
+
+    const waterGroup = document.createElementNS(ns, "g");
+    waterGroup.setAttribute("clip-path", "url(#lierbach-river-clip)");
+    svg.appendChild(waterGroup);
+
     // R187: NO broad blue fill. The map already contains the real river.
     // Only narrow, translucent moving reflections are added on top of that water.
     const soft = document.createElementNS(ns, "path");
     soft.setAttribute("d", pathD);
     soft.setAttribute("fill", "none");
     soft.setAttribute("stroke", "rgba(120,205,235,.12)");
-    soft.setAttribute("stroke-width", "150");
+    soft.setAttribute("stroke-width", "92");
     soft.setAttribute("stroke-linecap", "round");
     soft.setAttribute("stroke-linejoin", "round");
-    svg.appendChild(soft);
+    waterGroup.appendChild(soft);
 
     const current = document.createElementNS(ns, "path");
     current.setAttribute("d", pathD);
@@ -2552,7 +2595,7 @@
     current.setAttribute("pathLength", "1000");
     current.style.strokeDasharray = "22 34 8 46";
     current.style.animation = "lierbachRiverFlow 4.8s linear infinite";
-    svg.appendChild(current);
+    waterGroup.appendChild(current);
 
     const sparkle = document.createElementNS(ns, "path");
     sparkle.setAttribute("d", pathD);
@@ -2564,7 +2607,7 @@
     sparkle.setAttribute("pathLength", "1000");
     sparkle.style.strokeDasharray = "5 58 3 82";
     sparkle.style.animation = "lierbachRiverSparkle 3.1s linear infinite";
-    svg.appendChild(sparkle);
+    waterGroup.appendChild(sparkle);
 
     if (!document.getElementById("lierbach-river-style")) {
       const style = document.createElement("style");
