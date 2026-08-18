@@ -3,7 +3,7 @@
 
   // R121 DEPLOYMENT VERIFICATION — harmless build marker.
   // If this line appears in DevTools, the browser is definitely running R121.
-  console.info("HDR BUILD R169 - KUHBACH FLORIANUS + HUT");
+  console.info("HDR BUILD R170 - INVENTAR TELEPORTER");
 
   const MAPS = Object.freeze({
     oberkirch: Object.freeze({
@@ -7602,6 +7602,92 @@
     height: 1,
     type: "quickslot"
   });
+
+  // R170 DEV-REISEKARTE — 1x1 Inventaritem. Linksklick öffnet die Kartenwahl.
+  const TELEPORTER_ITEM = Object.freeze({
+    id: "dev-teleporter-map",
+    name: "REISEKARTE",
+    description: "SCHNELLREISE ZU BEKANNTEN KARTEN",
+    icon: "assets/items/REISEKARTE.svg",
+    stackable: false,
+    width: 1,
+    height: 1,
+    type: "teleporter"
+  });
+
+  const TELEPORT_DESTINATIONS = Object.freeze([
+    Object.freeze({ key: "oberkirch", label: "OBERKIRCH", spawn: MAP_EXIT_CONFIG.oberkirchOriginalNorthReturnSpawn }),
+    Object.freeze({ key: "winterbach", label: "WINTERBACH", spawn: MAP_EXIT_CONFIG.winterbachSpawn }),
+    Object.freeze({ key: "lautenbach", label: "LAUTENBACH", spawn: MAP_EXIT_CONFIG.lautenbachSouthLeftSpawn }),
+    Object.freeze({ key: "hubacker", label: "HUBACKER", spawn: MAP_EXIT_CONFIG.hubackerSouthLeftSpawn }),
+    Object.freeze({ key: "renchtalstadion", label: "RENCHTALSTADION", spawn: MAP_EXIT_CONFIG.stadiumFromOberkirchSpawn }),
+    Object.freeze({ key: "oedsbach", label: "ÖDSBACH", spawn: MAP_EXIT_CONFIG.oedsbachFromWinterbachSpawn }),
+    Object.freeze({ key: "ramsbach", label: "RAMSBACH", spawn: MAP_EXIT_CONFIG.ramsbachFromHubackerSpawn }),
+    Object.freeze({ key: "oppenau", label: "OPPENAU", spawn: MAP_EXIT_CONFIG.oppenauFromRamsbachSpawn }),
+    Object.freeze({ key: "kuhbach", label: "KUHBACH", spawn: MAP_EXIT_CONFIG.kuhbachFromOppenauSpawn })
+  ]);
+
+  let teleporterUI = null;
+
+  function installTeleporterStyles() {
+    if (document.getElementById("teleporterStyles")) return;
+    const style = document.createElement("style");
+    style.id = "teleporterStyles";
+    style.textContent = `
+      #teleporterUI { position: fixed; inset: 0; z-index: 13000; display: none; place-items: center; background: rgba(0,0,0,.20); pointer-events: auto; }
+      #teleporterUI.teleporter-ui--open { display: grid; }
+      .teleporter-panel { position: relative; width: min(620px, 82vw); padding: 34px 38px 38px; border: 2px solid rgba(196,158,91,.78); background: rgba(17,13,9,.86); box-shadow: 0 18px 60px rgba(0,0,0,.62), inset 0 0 32px rgba(118,82,39,.20); color: #ead8ae; font-family: Georgia, "Times New Roman", serif; }
+      .teleporter-title { margin: 0 42px 24px 0; font-size: 28px; letter-spacing: .13em; text-align: center; color: #e7c77f; text-shadow: 0 2px 3px #000; }
+      .teleporter-grid { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 10px; }
+      .teleporter-destination { min-height: 48px; border: 1px solid rgba(184,146,79,.55); background: rgba(37,27,17,.72); color: #e7d3a3; font: 700 16px Georgia, "Times New Roman", serif; letter-spacing: .06em; cursor: pointer; }
+      .teleporter-destination:hover, .teleporter-destination:focus-visible { background: rgba(91,65,34,.82); border-color: rgba(236,201,132,.95); outline: none; box-shadow: inset 0 0 14px rgba(255,224,157,.12); }
+      .teleporter-close { position: absolute; right: 14px; top: 10px; border: 0; background: transparent; color: #e7d3a3; font: 32px Georgia, serif; cursor: pointer; }
+      @media (max-width: 620px) { .teleporter-grid { grid-template-columns: 1fr; } .teleporter-panel { max-height: 78vh; overflow: auto; } }
+    `;
+    document.head.appendChild(style);
+  }
+
+  function closeTeleporter() {
+    if (!teleporterUI) return;
+    teleporterUI.classList.remove("teleporter-ui--open");
+    teleporterUI.setAttribute("aria-hidden", "true");
+  }
+
+  function openTeleporter() {
+    installTeleporterStyles();
+    if (!teleporterUI) {
+      const root = document.createElement("div");
+      root.id = "teleporterUI";
+      root.setAttribute("aria-hidden", "true");
+      const panel = document.createElement("div");
+      panel.className = "teleporter-panel";
+      const title = document.createElement("h2");
+      title.className = "teleporter-title";
+      title.textContent = "REISEKARTE";
+      const close = document.createElement("button");
+      close.type = "button"; close.className = "teleporter-close"; close.textContent = "×"; close.setAttribute("aria-label", "Reisekarte schließen");
+      close.addEventListener("click", closeTeleporter);
+      const grid = document.createElement("div"); grid.className = "teleporter-grid";
+      for (const destination of TELEPORT_DESTINATIONS) {
+        const button = document.createElement("button");
+        button.type = "button"; button.className = "teleporter-destination"; button.textContent = destination.label;
+        button.addEventListener("click", async () => {
+          if (mapTransitioning) return;
+          closeTeleporter();
+          closeInventory();
+          const targetMap = MAPS[destination.key];
+          if (!targetMap) return;
+          await switchMap(targetMap, destination.spawn, true);
+        });
+        grid.appendChild(button);
+      }
+      panel.append(title, close, grid); root.appendChild(panel); document.body.appendChild(root); teleporterUI = root;
+      root.addEventListener("click", (event) => { if (event.target === root) closeTeleporter(); });
+    }
+    keys.clear(); attackHeld = false; cancelAttackImmediately();
+    teleporterUI.classList.add("teleporter-ui--open");
+    teleporterUI.setAttribute("aria-hidden", "false");
+  }
 
   // ------------------------------------------------------------------
   // R151 HEILGEGENSTÄNDE — 1x1, stackbar, quickbarfähig.
@@ -20386,7 +20472,8 @@
         "inventory-item" +
         (stack.type === "weapon" ? " inventory-item--weapon" : "") +
         (stack.type === "quickslot" ? " inventory-item--quickslot" : "") +
-        (stack.type === "equipment-kit" ? " inventory-item--equipment-kit" : "");
+        (stack.type === "equipment-kit" ? " inventory-item--equipment-kit" : "") +
+        (stack.type === "teleporter" ? " inventory-item--teleporter" : "");
       item.dataset.itemId = stack.id;
       item.dataset.slotIndex = String(slotIndex);
       item.dataset.pageIndex = String(inventoryState.currentPage);
@@ -20421,7 +20508,14 @@
         item.appendChild(quantity);
       }
 
-      if (stack.type === "equipment-kit") {
+      if (stack.type === "teleporter") {
+        item.title = "REISEKARTE · Linksklick: Schnellreise";
+        item.addEventListener("click", (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          openTeleporter();
+        });
+      } else if (stack.type === "equipment-kit") {
         item.appendChild(createWhiteStagKitTooltip());
         item.addEventListener("contextmenu", (event) => {
           event.preventDefault();
@@ -20652,7 +20746,7 @@
       CARROT_ITEM.icon, RABBIT_FOOT_ITEM.icon,
       WOLF_PELT_ITEM.icon, WOLF_CLAW_ITEM.icon, WANDERER_BAG_ITEM.icon,
       RADISH_ITEM.icon, CABBAGE_ITEM.icon, LETTUCE_ITEM.icon, BOAR_TUSK_ITEM.icon,
-      PINK_PIG_CLUB_ITEM.icon, CALIPH_LAMP_ITEM.icon,
+      PINK_PIG_CLUB_ITEM.icon, CALIPH_LAMP_ITEM.icon, TELEPORTER_ITEM.icon,
       HEALTH_CONSUMABLES.bandage.icon,
       HEALTH_CONSUMABLES.herbalWrap.icon,
       HEALTH_CONSUMABLES.herbalPunchSpinach.icon,
@@ -22789,8 +22883,17 @@
       event.preventDefault();
     }
 
+    if (event.code === "Escape" && teleporterUI && teleporterUI.classList.contains("teleporter-ui--open")) {
+      event.preventDefault();
+      closeTeleporter();
+      return;
+    }
+
     if (event.code === "KeyI") {
-      if (!event.repeat) toggleInventory();
+      if (!event.repeat) {
+        if (teleporterUI && teleporterUI.classList.contains("teleporter-ui--open")) closeTeleporter();
+        else toggleInventory();
+      }
       return;
     }
 
@@ -23076,6 +23179,9 @@
 
     // R144: first armor kit is seeded deterministically into the marked 2x3 area.
     addStarterWhiteStagKit();
+
+    // R170 DEV: one 1x1 travel-map item in the next genuinely free inventory cell.
+    addItemToInventory(TELEPORTER_ITEM);
 
     // Install immediately as a black curtain so OBERKIRCH never flashes before
     // the new-game sequence. It is screen UI only; no map state is changed.
