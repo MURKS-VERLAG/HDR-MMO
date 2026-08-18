@@ -3,7 +3,7 @@
 
   // R121 DEPLOYMENT VERIFICATION — harmless build marker.
   // If this line appears in DevTools, the browser is definitely running R121.
-  console.info("HDR BUILD R171 - KUHBACH FLORIANUS ASSETS + HALTERUS MUSIC");
+  console.info("HDR BUILD R172 - KUHBACH FLORIANUS DANCE + DISCO");
 
   const MAPS = Object.freeze({
     oberkirch: Object.freeze({
@@ -1700,10 +1700,10 @@
 
 
   // ------------------------------------------------------------------
-  // R169 KUHBACH — FLORIANUS HALTERUS + VIEHHALTERHÜTTE
-  // Placement/scale follows the supplied KUHBACH reference screenshot.
-  // The complete hut/corral artwork is mirrored exactly as in the reference.
-  // Only the actual hut building has a hard PLAYER foot hitbox.
+  // R172 KUHBACH — FLORIANUS DANCE LOOP + DISCO LIGHTS
+  // Hut placement/collision stays untouched. Florianus now uses the exact
+  // PLAYER canvas size (420x630), cycles all supplied poses + mirrors, and
+  // crossfades smoothly once per second with an irregular RGB spotlight.
   // ------------------------------------------------------------------
   const KUHBACH_FLORIANUS = Object.freeze({
     hut: Object.freeze({
@@ -1715,29 +1715,105 @@
       height: 2267,
       mirrored: true,
       zIndex: 6,
-
-      // Fixed building footprint only. The surrounding paddock remains usable
-      // for later quest/event logic instead of making the entire PNG one giant wall.
-      collision: Object.freeze({
-        x1: 0.56,
-        y1: 0.05,
-        x2: 0.96,
-        y2: 0.61
-      })
+      collision: Object.freeze({ x1: 0.56, y1: 0.05, x2: 0.96, y2: 0.61 })
     }),
     florianus: Object.freeze({
       id: "kuhbach-florianus-halterus",
-      src: "assets/npcs/kuhbach/FLORIANUS_HALTERUS.png",
       x: 6850,
       y: 1630,
-      width: 600,
-      height: 900,
-      zIndex: 8
+      width: PLAYER.width,
+      height: PLAYER.height,
+      zIndex: 8,
+      frameMs: 1000,
+      fadeMs: 280,
+      poses: Object.freeze([
+        "assets/npcs/kuhbach/FLORIANUS_HALTERUS.png",
+        "assets/npcs/kuhbach/dance/FLORIANUS_DANCE_1.webp",
+        "assets/npcs/kuhbach/dance/FLORIANUS_DANCE_2.webp",
+        "assets/npcs/kuhbach/dance/FLORIANUS_DANCE_3.webp"
+      ])
     })
   });
 
   let kuhbachFlorianusHutEl = null;
   let kuhbachFlorianusEl = null;
+  let kuhbachFlorianusDanceTimer = 0;
+  let kuhbachFlorianusLightTimer = 0;
+  let kuhbachFlorianusDanceIndex = -1;
+  let kuhbachFlorianusFrontLayer = 0;
+
+  function randomDifferentIndex(length, previous) {
+    if (length <= 1) return 0;
+    let next = Math.floor(Math.random() * length);
+    if (next === previous) next = (next + 1 + Math.floor(Math.random() * (length - 1))) % length;
+    return next;
+  }
+
+  function florianusDanceVariants() {
+    const variants = [];
+    for (const src of KUHBACH_FLORIANUS.florianus.poses) {
+      variants.push({ src, mirrored: false });
+      variants.push({ src, mirrored: true });
+    }
+    return variants;
+  }
+
+  const KUHBACH_FLORIANUS_DANCE_VARIANTS = Object.freeze(florianusDanceVariants());
+
+  function setKuhbachFlorianusDanceFrame(immediate = false) {
+    if (!kuhbachFlorianusEl) return;
+    const layers = kuhbachFlorianusEl.querySelectorAll(".kuhbach-florianus-dance-frame");
+    if (layers.length !== 2) return;
+
+    const nextIndex = randomDifferentIndex(KUHBACH_FLORIANUS_DANCE_VARIANTS.length, kuhbachFlorianusDanceIndex);
+    const variant = KUHBACH_FLORIANUS_DANCE_VARIANTS[nextIndex];
+    const incomingIndex = immediate ? kuhbachFlorianusFrontLayer : 1 - kuhbachFlorianusFrontLayer;
+    const incoming = layers[incomingIndex];
+    const outgoing = layers[1 - incomingIndex];
+
+    incoming.src = encodeURI(variant.src);
+    incoming.style.transform = variant.mirrored ? "scaleX(-1)" : "scaleX(1)";
+    incoming.style.opacity = "1";
+    if (!immediate) outgoing.style.opacity = "0";
+
+    kuhbachFlorianusDanceIndex = nextIndex;
+    kuhbachFlorianusFrontLayer = incomingIndex;
+  }
+
+  function scheduleKuhbachFlorianusDance() {
+    clearTimeout(kuhbachFlorianusDanceTimer);
+    kuhbachFlorianusDanceTimer = window.setTimeout(() => {
+      if (MAP.id === "kuhbach") setKuhbachFlorianusDanceFrame(false);
+      scheduleKuhbachFlorianusDance();
+    }, KUHBACH_FLORIANUS.florianus.frameMs);
+  }
+
+  function scheduleKuhbachFlorianusDiscoLight() {
+    clearTimeout(kuhbachFlorianusLightTimer);
+    const light = kuhbachFlorianusEl && kuhbachFlorianusEl.querySelector(".kuhbach-florianus-disco-light");
+    if (!light) return;
+
+    const palette = [
+      [255, 30, 45],
+      [30, 110, 255],
+      [35, 255, 105],
+      [255, 35, 220],
+      [40, 235, 255],
+      [255, 190, 35]
+    ];
+    const rgb = palette[Math.floor(Math.random() * palette.length)];
+    const fast = Math.random() < 0.62;
+    const hold = fast ? 120 + Math.random() * 280 : 650 + Math.random() * 950;
+    const x = 28 + Math.random() * 44;
+    const y = 22 + Math.random() * 46;
+    const opacity = 0.28 + Math.random() * 0.34;
+
+    light.style.transitionDuration = `${fast ? 90 : 260}ms`;
+    light.style.opacity = String(opacity);
+    light.style.background = `radial-gradient(ellipse at ${x}% ${y}%, rgba(${rgb[0]},${rgb[1]},${rgb[2]},.88) 0%, rgba(${rgb[0]},${rgb[1]},${rgb[2]},.42) 34%, rgba(${rgb[0]},${rgb[1]},${rgb[2]},0) 72%)`;
+
+    kuhbachFlorianusLightTimer = window.setTimeout(scheduleKuhbachFlorianusDiscoLight, hold);
+  }
 
   function createKuhbachFlorianusScene() {
     if (!kuhbachFlorianusHutEl) {
@@ -1765,26 +1841,55 @@
 
     if (!kuhbachFlorianusEl) {
       const c = KUHBACH_FLORIANUS.florianus;
-      const image = document.createElement("img");
-      image.id = c.id;
-      image.src = encodeURI(c.src);
-      image.alt = "";
-      image.draggable = false;
-      image.style.position = "absolute";
-      image.style.left = `${c.x}px`;
-      image.style.top = `${c.y}px`;
-      image.style.width = `${c.width}px`;
-      image.style.height = `${c.height}px`;
-      image.style.transform = "translate(-50%, -100%)";
-      image.style.transformOrigin = "50% 100%";
-      image.style.objectFit = "contain";
-      image.style.objectPosition = "50% 100%";
-      image.style.pointerEvents = "none";
-      image.style.userSelect = "none";
-      image.style.zIndex = String(c.zIndex);
-      image.style.display = MAP.id === "kuhbach" ? "" : "none";
-      world.appendChild(image);
-      kuhbachFlorianusEl = image;
+      const root = document.createElement("div");
+      root.id = c.id;
+      root.style.position = "absolute";
+      root.style.left = `${c.x}px`;
+      root.style.top = `${c.y}px`;
+      root.style.width = `${c.width}px`;
+      root.style.height = `${c.height}px`;
+      root.style.transform = "translate(-50%, -100%)";
+      root.style.transformOrigin = "50% 100%";
+      root.style.pointerEvents = "none";
+      root.style.userSelect = "none";
+      root.style.zIndex = String(c.zIndex);
+      root.style.display = MAP.id === "kuhbach" ? "" : "none";
+
+      for (let i = 0; i < 2; i += 1) {
+        const image = document.createElement("img");
+        image.className = "kuhbach-florianus-dance-frame";
+        image.alt = "";
+        image.draggable = false;
+        image.style.position = "absolute";
+        image.style.inset = "0";
+        image.style.width = "100%";
+        image.style.height = "100%";
+        image.style.objectFit = "contain";
+        image.style.objectPosition = "50% 100%";
+        image.style.transformOrigin = "50% 100%";
+        image.style.opacity = "0";
+        image.style.transition = `opacity ${c.fadeMs}ms ease-in-out`;
+        image.style.filter = "drop-shadow(0 8px 5px rgba(0,0,0,.28))";
+        root.appendChild(image);
+      }
+
+      const light = document.createElement("div");
+      light.className = "kuhbach-florianus-disco-light";
+      light.style.position = "absolute";
+      light.style.inset = "-18% -24% -10% -24%";
+      light.style.pointerEvents = "none";
+      light.style.mixBlendMode = "screen";
+      light.style.opacity = "0";
+      light.style.transitionProperty = "opacity, background";
+      light.style.transitionTimingFunction = "ease-in-out";
+      light.style.borderRadius = "45%";
+      root.appendChild(light);
+
+      world.appendChild(root);
+      kuhbachFlorianusEl = root;
+      setKuhbachFlorianusDanceFrame(true);
+      scheduleKuhbachFlorianusDance();
+      scheduleKuhbachFlorianusDiscoLight();
     }
   }
 
