@@ -3,7 +3,7 @@
 
   // R121 DEPLOYMENT VERIFICATION — harmless build marker.
   // If this line appears in DevTools, the browser is definitely running R121.
-  console.info("HDR BUILD R192 - ALLERHEILIGEN ZIGZAG TOP RELEASE MINIFIX");
+  console.info("HDR BUILD R193 - LIERBACH WIRTSCHAFT + MAP MUSIC + BRIDGE PRECISION");
 
   const MAPS = Object.freeze({
     oberkirch: Object.freeze({
@@ -889,10 +889,10 @@
     "oppenau": "assets/audio/maps/OPPENAU - DIE GROSSE REISE.mp3",
     // R167 KUHBACH currently continues the OPPENAU journey theme.
     "kuhbach": "assets/audio/maps/KUHBACH - HALTERUS.mp3",
-    // R182: LIERBACH temporarily continues OPPENAU's journey theme; no new audio asset required.
-    "lierbach": "assets/audio/maps/OPPENAU - DIE GROSSE REISE.mp3",
-    // R189: ALLERHEILIGEN continues the same journey theme until a dedicated track is supplied.
-    "allerheiligen": "assets/audio/maps/OPPENAU - DIE GROSSE REISE.mp3"
+    // R193: dedicated LIERBACH track supplied by the user (attachment 3).
+    "lierbach": "assets/audio/maps/LIERBACH - STONE-HALL HYMN.mp3",
+    // R193: dedicated ALLERHEILIGEN track supplied by the user (attachment 4).
+    "allerheiligen": "assets/audio/maps/ALLERHEILIGEN - STONE-HALL HYMN.mp3"
   });
 
   const MAP_MUSIC_VOLUME = 1.0;
@@ -2457,9 +2457,10 @@
     // R187 WHITE bridge snap: aligned with the ACTUAL wooden deck in screenshot 1.
     // World Y grows downward, therefore the bridge correctly slopes DOWN toward the right.
     bridgePath: Object.freeze([
-      // R191: exact deck centreline from reference Z2, LEFT endpoint -> RIGHT endpoint.
-      Object.freeze([3900, 4215]),
-      Object.freeze([5485, 4215])
+      // R193: re-traced from the CURRENT white reference line.
+      // LEFT endpoint is lower; RIGHT endpoint is higher, exactly matching the deck.
+      Object.freeze([4325, 4225]),
+      Object.freeze([5525, 3980])
     ]),
     bridgeEngageDistance: 175,
     bridgeRiverClearance: 145,
@@ -2467,6 +2468,68 @@
   });
 
   let lierbachRiverEffectEl = null;
+
+  // ------------------------------------------------------------------
+  // R193 LIERBACH — WIRTSCHAFT
+  // Placement/scale reconstructed from the CURRENT supplied composite.
+  // Entire placed image rectangle is solid for the PLAYER; player always
+  // renders in front of the building.
+  // ------------------------------------------------------------------
+  const LIERBACH_WIRTSCHAFT = Object.freeze({
+    id: "lierbach-wirtschaft",
+    src: "assets/buildings/LIERBACH WIRTSCHAFT.png",
+    left: 5840,
+    top: 2070,
+    width: 2600,
+    height: 1733,
+    zIndex: 18
+  });
+
+  let lierbachWirtschaftEl = null;
+
+  function createLierbachWirtschaft() {
+    if (lierbachWirtschaftEl) return;
+
+    const c = LIERBACH_WIRTSCHAFT;
+    const image = document.createElement("img");
+    image.id = c.id;
+    image.src = encodeURI(c.src);
+    image.alt = "";
+    image.draggable = false;
+    image.style.position = "absolute";
+    image.style.left = `${c.left}px`;
+    image.style.top = `${c.top}px`;
+    image.style.width = `${c.width}px`;
+    image.style.height = `${c.height}px`;
+    image.style.objectFit = "contain";
+    image.style.objectPosition = "50% 100%";
+    image.style.pointerEvents = "none";
+    image.style.userSelect = "none";
+    image.style.zIndex = String(c.zIndex);
+    image.style.display = MAP.id === "lierbach" ? "" : "none";
+
+    world.appendChild(image);
+    lierbachWirtschaftEl = image;
+  }
+
+  function updateLierbachWirtschaftVisibility() {
+    if (!lierbachWirtschaftEl) return;
+    lierbachWirtschaftEl.style.display = MAP.id === "lierbach" ? "" : "none";
+  }
+
+  function isLierbachWirtschaftBlockedFootPoint(x, y) {
+    if (MAP.id !== "lierbach") return false;
+    const c = LIERBACH_WIRTSCHAFT;
+
+    // Requested COMPLETE hitbox: the full placed Wirtschaft footprint is solid.
+    return (
+      x >= c.left &&
+      x <= c.left + c.width &&
+      y >= c.top &&
+      y <= c.top + c.height
+    );
+  }
+
 
   // R189 LIERBACH upper yellow-arrow exit:
   // exact purple reference line, lower endpoint -> upper endpoint.
@@ -13243,6 +13306,9 @@
     // R184 LIERBACH: river is hard collision everywhere except the exact bridge corridor.
     if (isLierbachRiverBlockedFootPoint(x, y)) return false;
 
+    // R193 LIERBACH WIRTSCHAFT: complete solid building hitbox.
+    if (isLierbachWirtschaftBlockedFootPoint(x, y)) return false;
+
     // New hard collision for church body + tavern.
     // Only the player's foot anchor participates.
     if (isBuildingBlockedFootPoint(x, y)) return false;
@@ -15074,6 +15140,12 @@
 
     if (MAP.id === "kuhbach") {
       updateKuhbachFlorianusSceneVisibility();
+      playerEl.style.zIndex = "100";
+      return;
+    }
+
+    if (MAP.id === "lierbach") {
+      updateLierbachWirtschaftVisibility();
       playerEl.style.zIndex = "100";
       return;
     }
@@ -22614,6 +22686,7 @@
     setRamsbachFogVisibility(MAP.id === "ramsbach");
     setHubackerFogVisibility(MAP.id === "hubacker");
     setLierbachFogVisibility(MAP.id === "lierbach");
+    updateLierbachWirtschaftVisibility();
     setWinterbachSnowVisibility(MAP.id === "winterbach-ranglehen");
     setRamsbachBearVisibility(MAP.id === RAMSBACH_BEAR_CONFIG.mapId);
     updatePlayerHudVisibility();
@@ -24733,6 +24806,7 @@
   createKuhbachFlorianusScene();
   createKuhbachCreekEffect();
   createLierbachRiverEffect();
+  createLierbachWirtschaft();
   createOedsbachFog();
   createRamsbachFog();
   createHubackerFog();
