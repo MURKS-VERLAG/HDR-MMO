@@ -3,7 +3,7 @@
 
   // R121 DEPLOYMENT VERIFICATION — harmless build marker.
   // If this line appears in DevTools, the browser is definitely running R121.
-  console.info("HDR BUILD R173 - FLORIANUS DANCE 250MS");
+  console.info("HDR BUILD R174 - KUHBACH TERRAIN COLLISION + BACH + HILL SLOPE");
 
   const MAPS = Object.freeze({
     oberkirch: Object.freeze({
@@ -1911,6 +1911,236 @@
       localY >= r.y1 &&
       localY <= r.y2
     );
+  }
+
+
+  // ------------------------------------------------------------------
+  // R174 KUHBACH — terrain from supplied painted reference.
+  // RED filled regions = hard blocked terrain.
+  // RED outline = hard fence boundary with an intentional gate opening.
+  // WHITE line = visual flowing creek shimmer only (walkable).
+  // GREEN left hillside = A/D gets a diagonal slope bias.
+  // ------------------------------------------------------------------
+  const KUHBACH_TERRAIN = Object.freeze({
+    // Screenshot reference mapped to the 10000 x 5998 KUHBACH world.
+    blockedPolygons: Object.freeze([
+      Object.freeze([
+        { x: 8044, y:   0 }, { x: 10000, y:   0 }, { x: 10000, y: 2335 },
+        { x: 9305, y: 2805 }, { x: 8445, y: 2545 }, { x: 8045, y: 1905 },
+        { x: 7195, y: 1185 }, { x: 7425, y:  585 }
+      ]),
+      Object.freeze([
+        { x: 7605, y: 2815 }, { x: 8510, y: 2460 }, { x: 9210, y: 2675 },
+        { x: 8835, y: 3375 }, { x: 7955, y: 3575 }, { x: 7625, y: 3205 }
+      ]),
+      Object.freeze([
+        { x: 8295, y: 3780 }, { x: 9815, y: 3050 }, { x: 9815, y: 4940 },
+        { x: 9055, y: 5300 }, { x: 8395, y: 5140 }
+      ])
+    ]),
+
+    // Fence line around Florianus' paddock. Bottom-right gate opening is NOT present here.
+    fenceSegments: Object.freeze([
+      Object.freeze([{ x: 5665, y: 1350 }, { x: 6650, y:  930 }]),
+      Object.freeze([{ x: 6650, y:  930 }, { x: 7040, y:  900 }]),
+      Object.freeze([{ x: 7040, y:  900 }, { x: 7685, y: 1125 }]),
+      Object.freeze([{ x: 7685, y: 1125 }, { x: 8170, y: 1385 }]),
+      Object.freeze([{ x: 8170, y: 1385 }, { x: 8085, y: 1655 }]),
+      Object.freeze([{ x: 8085, y: 1655 }, { x: 7740, y: 1825 }]),
+
+      // deliberate gate gap from ~7740..7280 world-X
+
+      Object.freeze([{ x: 7220, y: 1940 }, { x: 6175, y: 2070 }]),
+      Object.freeze([{ x: 6175, y: 2070 }, { x: 6115, y: 1830 }]),
+      Object.freeze([{ x: 6115, y: 1830 }, { x: 5680, y: 1580 }]),
+      Object.freeze([{ x: 5680, y: 1580 }, { x: 5665, y: 1350 }])
+    ]),
+    fenceRadius: 62,
+
+    hillPolygon: Object.freeze([
+      { x: 3415, y:    0 },
+      { x:  180, y:    0 },
+      { x:    0, y: 5440 },
+      { x: 1565, y: 3820 },
+      { x: 1950, y: 2990 },
+      { x: 2100, y: 2110 },
+      { x: 2980, y:  945 }
+    ]),
+    hillSlopeBias: 0.58,
+
+    creekPath: Object.freeze([
+      { x: 6400, y:    0 },
+      { x: 5760, y:  210 },
+      { x: 5480, y:  605 },
+      { x: 5650, y: 1010 },
+      { x: 5500, y: 1395 },
+      { x: 4580, y: 1905 },
+      { x: 4340, y: 2420 },
+      { x: 3560, y: 2770 },
+      { x: 2940, y: 3070 },
+      { x: 2810, y: 3525 },
+      { x: 2460, y: 3980 },
+      { x: 2020, y: 4350 },
+      { x: 1640, y: 4625 },
+      { x: 1010, y: 4845 },
+      { x:  300, y: 5360 },
+      { x:    0, y: 5900 }
+    ])
+  });
+
+  let kuhbachCreekEffectEl = null;
+
+  function distancePointToSegment(px, py, a, b) {
+    const vx = b.x - a.x;
+    const vy = b.y - a.y;
+    const wx = px - a.x;
+    const wy = py - a.y;
+    const len2 = vx * vx + vy * vy;
+    if (len2 <= 0.0001) return Math.hypot(px - a.x, py - a.y);
+    const t = Math.max(0, Math.min(1, (wx * vx + wy * vy) / len2));
+    const cx = a.x + vx * t;
+    const cy = a.y + vy * t;
+    return Math.hypot(px - cx, py - cy);
+  }
+
+  function isKuhbachReferenceBlockedFootPoint(x, y) {
+    if (MAP.id !== "kuhbach") return false;
+
+    for (const polygon of KUHBACH_TERRAIN.blockedPolygons) {
+      if (worldPointInPolygon(x, y, polygon)) return true;
+    }
+
+    for (const segment of KUHBACH_TERRAIN.fenceSegments) {
+      if (
+        distancePointToSegment(x, y, segment[0], segment[1]) <=
+        KUHBACH_TERRAIN.fenceRadius
+      ) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  function playerInsideKuhbachHillSlope() {
+    return (
+      MAP.id === "kuhbach" &&
+      worldPointInPolygon(playerX, playerY, KUHBACH_TERRAIN.hillPolygon)
+    );
+  }
+
+  function smoothSvgPath(points) {
+    if (!points.length) return "";
+    if (points.length === 1) return `M ${points[0].x} ${points[0].y}`;
+
+    let d = `M ${points[0].x} ${points[0].y}`;
+    for (let i = 0; i < points.length - 1; i += 1) {
+      const p0 = points[Math.max(0, i - 1)];
+      const p1 = points[i];
+      const p2 = points[i + 1];
+      const p3 = points[Math.min(points.length - 1, i + 2)];
+
+      const c1x = p1.x + (p2.x - p0.x) / 6;
+      const c1y = p1.y + (p2.y - p0.y) / 6;
+      const c2x = p2.x - (p3.x - p1.x) / 6;
+      const c2y = p2.y - (p3.y - p1.y) / 6;
+      d += ` C ${c1x} ${c1y}, ${c2x} ${c2y}, ${p2.x} ${p2.y}`;
+    }
+    return d;
+  }
+
+  function createKuhbachCreekEffect() {
+    if (kuhbachCreekEffectEl) return;
+
+    const ns = "http://www.w3.org/2000/svg";
+    const svg = document.createElementNS(ns, "svg");
+    svg.id = "kuhbach-creek-effect";
+    svg.setAttribute("viewBox", `0 0 ${MAPS.kuhbach.width} ${MAPS.kuhbach.height}`);
+    svg.style.position = "absolute";
+    svg.style.left = "0";
+    svg.style.top = "0";
+    svg.style.width = `${MAPS.kuhbach.width}px`;
+    svg.style.height = `${MAPS.kuhbach.height}px`;
+    svg.style.pointerEvents = "none";
+    svg.style.overflow = "visible";
+    svg.style.zIndex = "5";
+    svg.style.display = MAP.id === "kuhbach" ? "" : "none";
+
+    const defs = document.createElementNS(ns, "defs");
+
+    const filter = document.createElementNS(ns, "filter");
+    filter.id = "kuhbach-creek-soft";
+    filter.setAttribute("x", "-30%");
+    filter.setAttribute("y", "-30%");
+    filter.setAttribute("width", "160%");
+    filter.setAttribute("height", "160%");
+
+    const blur = document.createElementNS(ns, "feGaussianBlur");
+    blur.setAttribute("stdDeviation", "11");
+    filter.appendChild(blur);
+    defs.appendChild(filter);
+    svg.appendChild(defs);
+
+    const pathD = smoothSvgPath(KUHBACH_TERRAIN.creekPath);
+
+    const glow = document.createElementNS(ns, "path");
+    glow.setAttribute("d", pathD);
+    glow.setAttribute("fill", "none");
+    glow.setAttribute("stroke", "rgba(70,185,255,.34)");
+    glow.setAttribute("stroke-width", "54");
+    glow.setAttribute("stroke-linecap", "round");
+    glow.setAttribute("stroke-linejoin", "round");
+    glow.setAttribute("filter", "url(#kuhbach-creek-soft)");
+    svg.appendChild(glow);
+
+    const water = document.createElementNS(ns, "path");
+    water.setAttribute("d", pathD);
+    water.setAttribute("fill", "none");
+    water.setAttribute("stroke", "rgba(105,210,255,.52)");
+    water.setAttribute("stroke-width", "24");
+    water.setAttribute("stroke-linecap", "round");
+    water.setAttribute("stroke-linejoin", "round");
+    water.setAttribute("pathLength", "1000");
+    water.style.strokeDasharray = "36 20 10 26";
+    water.style.animation = "kuhbachCreekFlow 3.2s linear infinite";
+    svg.appendChild(water);
+
+    const shimmer = document.createElementNS(ns, "path");
+    shimmer.setAttribute("d", pathD);
+    shimmer.setAttribute("fill", "none");
+    shimmer.setAttribute("stroke", "rgba(245,252,255,.72)");
+    shimmer.setAttribute("stroke-width", "8");
+    shimmer.setAttribute("stroke-linecap", "round");
+    shimmer.setAttribute("pathLength", "1000");
+    shimmer.style.strokeDasharray = "10 54 4 70";
+    shimmer.style.animation = "kuhbachCreekFlowFast 1.75s linear infinite";
+    svg.appendChild(shimmer);
+
+    if (!document.getElementById("kuhbach-creek-style")) {
+      const style = document.createElement("style");
+      style.id = "kuhbach-creek-style";
+      style.textContent = `
+        @keyframes kuhbachCreekFlow {
+          from { stroke-dashoffset: 0; }
+          to   { stroke-dashoffset: -180; }
+        }
+        @keyframes kuhbachCreekFlowFast {
+          from { stroke-dashoffset: 0; opacity: .42; }
+          45%  { opacity: .92; }
+          to   { stroke-dashoffset: -230; opacity: .42; }
+        }
+      `;
+      document.head.appendChild(style);
+    }
+
+    world.appendChild(svg);
+    kuhbachCreekEffectEl = svg;
+  }
+
+  function updateKuhbachCreekEffectVisibility() {
+    if (kuhbachCreekEffectEl) {
+      kuhbachCreekEffectEl.style.display = MAP.id === "kuhbach" ? "" : "none";
+    }
   }
 
   // ------------------------------------------------------------------
@@ -12205,6 +12435,9 @@
     // R169 KUHBACH: fixed foot hitbox for Florianus' hut building only.
     if (isKuhbachFlorianusHutBlockedFootPoint(x, y)) return false;
 
+    // R174 KUHBACH painted reference: red filled terrain + red fence line.
+    if (isKuhbachReferenceBlockedFootPoint(x, y)) return false;
+
     // R122 SAFE RAMSBACH COLLISION ISOLATION:
     // Ramsbach terrain/locked-footprint code must NEVER participate on another map.
     // If the new Ramsbach collision itself throws, keep the player-control frame alive
@@ -12645,6 +12878,13 @@
       moveAlongActiveBridge(horizontalDirection, deltaSeconds);
       clampPlayer();
       return;
+    }
+
+    // R174 KUHBACH green hillside:
+    // horizontal travel naturally follows the painted slope.
+    // A alone => up-left, D alone => down-right.
+    if (playerInsideKuhbachHillSlope() && dx !== 0) {
+      dy += dx * KUHBACH_TERRAIN.hillSlopeBias;
     }
 
     const length = Math.hypot(dx, dy) || 1;
@@ -13942,6 +14182,7 @@
 
     if (MAP.id === "kuhbach") {
       updateKuhbachFlorianusSceneVisibility();
+    updateKuhbachCreekEffectVisibility();
       playerEl.style.zIndex = "100";
       return;
     }
@@ -23310,6 +23551,7 @@
   createOedegard();
   createOedsbachRedneckScene();
   createKuhbachFlorianusScene();
+  createKuhbachCreekEffect();
   createOedsbachFog();
   createRamsbachFog();
   createHubackerFog();
