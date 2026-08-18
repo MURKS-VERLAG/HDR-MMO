@@ -3,7 +3,7 @@
 
   // R121 DEPLOYMENT VERIFICATION — harmless build marker.
   // If this line appears in DevTools, the browser is definitely running R121.
-  console.info("HDR BUILD R175 - KUHBACH CREEK MAP-ISOLATION + ZOOM FLICKER FIX");
+  console.info("HDR BUILD R176 - FLORIANUS BLACK FLICKER FIX");
 
   const MAPS = Object.freeze({
     oberkirch: Object.freeze({
@@ -1725,7 +1725,7 @@
       height: PLAYER.height,
       zIndex: 8,
       frameMs: 250,
-      fadeMs: 280,
+      fadeMs: 0,
       poses: Object.freeze([
         "assets/npcs/kuhbach/FLORIANUS_HALTERUS.png",
         "assets/npcs/kuhbach/dance/FLORIANUS_DANCE_1.webp",
@@ -1740,7 +1740,6 @@
   let kuhbachFlorianusDanceTimer = 0;
   let kuhbachFlorianusLightTimer = 0;
   let kuhbachFlorianusDanceIndex = -1;
-  let kuhbachFlorianusFrontLayer = 0;
 
   function randomDifferentIndex(length, previous) {
     if (length <= 1) return 0;
@@ -1762,35 +1761,53 @@
 
   function setKuhbachFlorianusDanceFrame(immediate = false) {
     if (!kuhbachFlorianusEl) return;
-    const layers = kuhbachFlorianusEl.querySelectorAll(".kuhbach-florianus-dance-frame");
-    if (layers.length !== 2) return;
+    const image = kuhbachFlorianusEl.querySelector(".kuhbach-florianus-dance-frame");
+    if (!image) return;
 
-    const nextIndex = randomDifferentIndex(KUHBACH_FLORIANUS_DANCE_VARIANTS.length, kuhbachFlorianusDanceIndex);
+    const nextIndex = randomDifferentIndex(
+      KUHBACH_FLORIANUS_DANCE_VARIANTS.length,
+      kuhbachFlorianusDanceIndex
+    );
     const variant = KUHBACH_FLORIANUS_DANCE_VARIANTS[nextIndex];
-    const incomingIndex = immediate ? kuhbachFlorianusFrontLayer : 1 - kuhbachFlorianusFrontLayer;
-    const incoming = layers[incomingIndex];
-    const outgoing = layers[1 - incomingIndex];
 
-    incoming.src = encodeURI(variant.src);
-    incoming.style.transform = variant.mirrored ? "scaleX(-1)" : "scaleX(1)";
-    incoming.style.opacity = "1";
-    if (!immediate) outgoing.style.opacity = "0";
+    // R176: ONE sprite layer only. The old 2-layer opacity crossfade lasted
+    // 280ms while frames changed every 250ms, so the browser was permanently
+    // compositing two large transparent images during zoom. Keep the exact
+    // 250ms rhythm, but swap the frame directly and safely.
+    image.src = encodeURI(variant.src);
+    image.style.transform = variant.mirrored ? "scaleX(-1)" : "scaleX(1)";
+    image.style.opacity = "1";
 
     kuhbachFlorianusDanceIndex = nextIndex;
-    kuhbachFlorianusFrontLayer = incomingIndex;
   }
 
   function scheduleKuhbachFlorianusDance() {
     clearTimeout(kuhbachFlorianusDanceTimer);
+    if (MAP.id !== "kuhbach") {
+      kuhbachFlorianusDanceTimer = 0;
+      return;
+    }
+
     kuhbachFlorianusDanceTimer = window.setTimeout(() => {
-      if (MAP.id === "kuhbach") setKuhbachFlorianusDanceFrame(false);
+      if (MAP.id !== "kuhbach") {
+        kuhbachFlorianusDanceTimer = 0;
+        return;
+      }
+      setKuhbachFlorianusDanceFrame(false);
       scheduleKuhbachFlorianusDance();
     }, KUHBACH_FLORIANUS.florianus.frameMs);
   }
 
   function scheduleKuhbachFlorianusDiscoLight() {
     clearTimeout(kuhbachFlorianusLightTimer);
-    const light = kuhbachFlorianusEl && kuhbachFlorianusEl.querySelector(".kuhbach-florianus-disco-light");
+    if (MAP.id !== "kuhbach") {
+      kuhbachFlorianusLightTimer = 0;
+      return;
+    }
+
+    const light =
+      kuhbachFlorianusEl &&
+      kuhbachFlorianusEl.querySelector(".kuhbach-florianus-disco-light");
     if (!light) return;
 
     const palette = [
@@ -1803,16 +1820,24 @@
     ];
     const rgb = palette[Math.floor(Math.random() * palette.length)];
     const fast = Math.random() < 0.62;
-    const hold = fast ? 120 + Math.random() * 280 : 650 + Math.random() * 950;
-    const x = 28 + Math.random() * 44;
-    const y = 22 + Math.random() * 46;
-    const opacity = 0.28 + Math.random() * 0.34;
+    const hold = fast ? 160 + Math.random() * 260 : 700 + Math.random() * 900;
+    const x = 32 + Math.random() * 36;
+    const y = 28 + Math.random() * 36;
+    const opacity = 0.18 + Math.random() * 0.24;
 
-    light.style.transitionDuration = `${fast ? 90 : 260}ms`;
+    // R176: NO mix-blend-mode and NO animated background interpolation.
+    // Those create separate GPU compositing surfaces and were the strongest
+    // match for the black rectangle/vertical flicker at high zoom.
+    light.style.transitionDuration = `${fast ? 70 : 180}ms`;
     light.style.opacity = String(opacity);
-    light.style.background = `radial-gradient(ellipse at ${x}% ${y}%, rgba(${rgb[0]},${rgb[1]},${rgb[2]},.88) 0%, rgba(${rgb[0]},${rgb[1]},${rgb[2]},.42) 34%, rgba(${rgb[0]},${rgb[1]},${rgb[2]},0) 72%)`;
+    light.style.background =
+      `radial-gradient(ellipse at ${x}% ${y}%, ` +
+      `rgba(${rgb[0]},${rgb[1]},${rgb[2]},.62) 0%, ` +
+      `rgba(${rgb[0]},${rgb[1]},${rgb[2]},.22) 38%, ` +
+      `rgba(${rgb[0]},${rgb[1]},${rgb[2]},0) 72%)`;
 
-    kuhbachFlorianusLightTimer = window.setTimeout(scheduleKuhbachFlorianusDiscoLight, hold);
+    kuhbachFlorianusLightTimer =
+      window.setTimeout(scheduleKuhbachFlorianusDiscoLight, hold);
   }
 
   function createKuhbachFlorianusScene() {
@@ -1855,32 +1880,28 @@
       root.style.zIndex = String(c.zIndex);
       root.style.display = MAP.id === "kuhbach" ? "" : "none";
 
-      for (let i = 0; i < 2; i += 1) {
-        const image = document.createElement("img");
-        image.className = "kuhbach-florianus-dance-frame";
-        image.alt = "";
-        image.draggable = false;
-        image.style.position = "absolute";
-        image.style.inset = "0";
-        image.style.width = "100%";
-        image.style.height = "100%";
-        image.style.objectFit = "contain";
-        image.style.objectPosition = "50% 100%";
-        image.style.transformOrigin = "50% 100%";
-        image.style.opacity = "0";
-        image.style.transition = `opacity ${c.fadeMs}ms ease-in-out`;
-        image.style.filter = "drop-shadow(0 8px 5px rgba(0,0,0,.28))";
-        root.appendChild(image);
-      }
+      const image = document.createElement("img");
+      image.className = "kuhbach-florianus-dance-frame";
+      image.alt = "";
+      image.draggable = false;
+      image.style.position = "absolute";
+      image.style.inset = "0";
+      image.style.width = "100%";
+      image.style.height = "100%";
+      image.style.objectFit = "contain";
+      image.style.objectPosition = "50% 100%";
+      image.style.transformOrigin = "50% 100%";
+      image.style.opacity = "1";
+      image.style.filter = "drop-shadow(0 8px 5px rgba(0,0,0,.28))";
+      root.appendChild(image);
 
       const light = document.createElement("div");
       light.className = "kuhbach-florianus-disco-light";
       light.style.position = "absolute";
       light.style.inset = "-18% -24% -10% -24%";
       light.style.pointerEvents = "none";
-      light.style.mixBlendMode = "screen";
       light.style.opacity = "0";
-      light.style.transitionProperty = "opacity, background";
+      light.style.transitionProperty = "opacity";
       light.style.transitionTimingFunction = "ease-in-out";
       light.style.borderRadius = "45%";
       root.appendChild(light);
@@ -1888,15 +1909,36 @@
       world.appendChild(root);
       kuhbachFlorianusEl = root;
       setKuhbachFlorianusDanceFrame(true);
-      scheduleKuhbachFlorianusDance();
-      scheduleKuhbachFlorianusDiscoLight();
+      if (MAP.id === "kuhbach") {
+        scheduleKuhbachFlorianusDance();
+        scheduleKuhbachFlorianusDiscoLight();
+      }
     }
   }
 
   function updateKuhbachFlorianusSceneVisibility() {
     const visible = MAP.id === "kuhbach";
-    if (kuhbachFlorianusHutEl) kuhbachFlorianusHutEl.style.display = visible ? "" : "none";
-    if (kuhbachFlorianusEl) kuhbachFlorianusEl.style.display = visible ? "" : "none";
+    if (kuhbachFlorianusHutEl) {
+      kuhbachFlorianusHutEl.style.display = visible ? "" : "none";
+    }
+    if (kuhbachFlorianusEl) {
+      kuhbachFlorianusEl.style.display = visible ? "" : "none";
+    }
+
+    if (visible) {
+      if (!kuhbachFlorianusDanceTimer) scheduleKuhbachFlorianusDance();
+      if (!kuhbachFlorianusLightTimer) scheduleKuhbachFlorianusDiscoLight();
+    } else {
+      clearTimeout(kuhbachFlorianusDanceTimer);
+      clearTimeout(kuhbachFlorianusLightTimer);
+      kuhbachFlorianusDanceTimer = 0;
+      kuhbachFlorianusLightTimer = 0;
+
+      const light =
+        kuhbachFlorianusEl &&
+        kuhbachFlorianusEl.querySelector(".kuhbach-florianus-disco-light");
+      if (light) light.style.opacity = "0";
+    }
   }
 
   function isKuhbachFlorianusHutBlockedFootPoint(x, y) {
