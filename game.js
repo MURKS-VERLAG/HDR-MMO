@@ -3,7 +3,7 @@
 
   // R121 DEPLOYMENT VERIFICATION — harmless build marker.
   // If this line appears in DevTools, the browser is definitely running R121.
-  console.info("HDR BUILD R177 - KUHBACH PRECISION TERRAIN + HARD FLICKER FIX");
+  console.info("HDR BUILD R178 - R177 BLACK SCREEN HOTFIX");
 
   const MAPS = Object.freeze({
     oberkirch: Object.freeze({
@@ -1809,10 +1809,46 @@
   }
 
   function createKuhbachFlorianusScene() {
+    // R178 BLACK-SCREEN HOTFIX:
+    // Keep hut and Florianus as two completely separate roots.
+    // R177 accidentally referenced `root` inside the hut branch before `root`
+    // had been declared, causing an immediate ReferenceError during startup.
+
     if (!kuhbachFlorianusHutEl) {
       const c = KUHBACH_FLORIANUS.hut;
-      // R177: all 8 dance variants are resident from the start.
-      // No img.src swapping while zoomed -> no giant transformed-world texture invalidation.
+      const hut = document.createElement("img");
+      hut.className = "kuhbach-florianus-hut";
+      hut.alt = "";
+      hut.draggable = false;
+      hut.src = encodeURI(c.src);
+      hut.style.position = "absolute";
+      hut.style.left = `${c.left}px`;
+      hut.style.top = `${c.top}px`;
+      hut.style.width = `${c.width}px`;
+      hut.style.height = `${c.height}px`;
+      hut.style.objectFit = "contain";
+      hut.style.pointerEvents = "none";
+      hut.style.userSelect = "none";
+      hut.style.zIndex = "7";
+      world.appendChild(hut);
+      kuhbachFlorianusHutEl = hut;
+    }
+
+    if (!kuhbachFlorianusEl) {
+      const c = KUHBACH_FLORIANUS.florianus;
+      const root = document.createElement("div");
+      root.className = "kuhbach-florianus";
+      root.style.position = "absolute";
+      root.style.left = `${c.left}px`;
+      root.style.top = `${c.top}px`;
+      root.style.width = `${c.width}px`;
+      root.style.height = `${c.height}px`;
+      root.style.pointerEvents = "none";
+      root.style.userSelect = "none";
+      root.style.zIndex = "8";
+      root.style.contain = "layout paint style";
+
+      // All dance images stay resident. No runtime img.src swapping.
       for (let i = 0; i < KUHBACH_FLORIANUS_DANCE_VARIANTS.length; i += 1) {
         const variant = KUHBACH_FLORIANUS_DANCE_VARIANTS[i];
         const image = document.createElement("img");
@@ -1837,10 +1873,8 @@
         if (typeof image.decode === "function") image.decode().catch(() => {});
       }
 
-      // Localize all Halterus repaints to his own 420x630 box.
-      root.style.contain = "layout paint style";
-      root.style.overflow = "hidden";
-
+      // Keep the existing hook, but no animated gradient repaint while testing
+      // the hard flicker fix.
       const light = document.createElement("div");
       light.className = "kuhbach-florianus-disco-light";
       light.style.position = "absolute";
@@ -1848,14 +1882,12 @@
       light.style.pointerEvents = "none";
       light.style.opacity = "0";
       light.style.display = "none";
-      light.style.transitionProperty = "opacity";
-      light.style.transitionTimingFunction = "ease-in-out";
-      light.style.borderRadius = "45%";
       root.appendChild(light);
 
       world.appendChild(root);
       kuhbachFlorianusEl = root;
       setKuhbachFlorianusDanceFrame(true);
+
       if (MAP.id === "kuhbach") {
         scheduleKuhbachFlorianusDance();
       }
