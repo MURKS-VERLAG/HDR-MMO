@@ -3,7 +3,7 @@
 
   // R121 DEPLOYMENT VERIFICATION — harmless build marker.
   // If this line appears in DevTools, the browser is definitely running R121.
-  console.info("HDR BUILD R194 - LIERBACH WIRTSCHAFT ALPHA + ALLERHEILIGEN AUTO ZIGZAG");
+  console.info("HDR BUILD R195 - ALLERHEILIGEN TOP D RELEASE + AUTO RETURN LIERBACH");
 
   const MAPS = Object.freeze({
     oberkirch: Object.freeze({
@@ -2665,6 +2665,17 @@
   function isAllerheiligenWalkableFootPoint(x, y) {
     if (MAP.id !== "allerheiligen") return true;
     if (allerheiligenZigzagActive || allerheiligenRightSnap) return true;
+
+    // R195 TOP RELEASE:
+    // The exact green zigzag endpoint (2910,2305) sits a few pixels left of
+    // the normal yellow walkable interior. Keep the route itself untouched,
+    // but bridge that tiny gap so D can end the sequence and walk RIGHT free.
+    const inTopZigzagExitConnector =
+      x >= 2840 && x <= 3150 &&
+      y >= 2160 && y <= 2460;
+
+    if (inTopZigzagExitConnector) return true;
+
     return ALLERHEILIGEN_ROUTE.walkable.some(poly => worldPointInPolygon(x, y, poly));
   }
 
@@ -2789,8 +2800,26 @@
       direction < 0 &&
       allerheiligenZigzagDistance <= 0.001;
 
-    if (atTop || atBottom) {
-      // Endpoint is immediately free again. No extra key press required.
+    if (atBottom) {
+      // R195: completing the automatic descent returns directly to LIERBACH,
+      // exactly at the point where the existing LIERBACH -> ALLERHEILIGEN
+      // ascent begins.
+      allerheiligenZigzagActive = false;
+      allerheiligenZigzagMode = null;
+      allerheiligenSnapReleaseUntil = performance.now() + 350;
+
+      const lierbachReturnPoint = LIERBACH_ALLERHEILIGEN_ASCENT.path[0];
+      void switchMap(
+        MAPS.lierbach,
+        { x: lierbachReturnPoint[0], y: lierbachReturnPoint[1] },
+        true
+      );
+      return true;
+    }
+
+    if (atTop) {
+      // Sequence ends at the exact existing endpoint. D/right movement is now
+      // free through the tiny connector into the normal walkable interior.
       allerheiligenZigzagActive = false;
       allerheiligenZigzagMode = null;
       allerheiligenSnapReleaseUntil = performance.now() + 350;
