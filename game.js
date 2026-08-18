@@ -3,7 +3,7 @@
 
   // R121 DEPLOYMENT VERIFICATION — harmless build marker.
   // If this line appears in DevTools, the browser is definitely running R121.
-  console.info("HDR BUILD R184 - RECOVERY + LIERBACH PRECISION TERRAIN");
+  console.info("HDR BUILD R185 - TELEPORTER GUARANTEED VISIBLE");
 
   const MAPS = Object.freeze({
     oberkirch: Object.freeze({
@@ -20458,6 +20458,64 @@
         text-shadow: 1px 1px 0 #555;
       }
 
+      /* R185 REISEKARTE: self-contained fallback/primary icon.
+         This deliberately does not depend on assets/items/REISEKARTE.svg. */
+      .inventory-teleporter-icon {
+        position:absolute;
+        z-index:3;
+        left:50%;
+        top:50%;
+        width:78%;
+        height:78%;
+        transform:translate(-50%,-50%) rotate(-2deg);
+        box-sizing:border-box;
+        border:2px solid rgba(78,48,21,.96);
+        border-radius:4px 7px 5px 3px;
+        background:
+          linear-gradient(135deg, transparent 0 73%, rgba(80,48,18,.30) 74% 77%, transparent 78%),
+          #d8b878;
+        box-shadow:0 2px 3px rgba(0,0,0,.78), inset 0 0 8px rgba(82,45,12,.34);
+        pointer-events:none;
+        overflow:hidden;
+      }
+
+      .inventory-teleporter-icon::before,
+      .inventory-teleporter-icon::after {
+        content:"";
+        position:absolute;
+        width:7px;
+        height:7px;
+        border:2px solid #5c3216;
+        border-radius:50%;
+        background:#c89d55;
+      }
+
+      .inventory-teleporter-icon::before { left:16%; top:18%; }
+      .inventory-teleporter-icon::after { right:16%; top:45%; }
+
+      .inventory-teleporter-icon__route {
+        position:absolute;
+        left:24%;
+        top:31%;
+        width:54%;
+        height:28%;
+        border-top:3px dashed #6b3c19;
+        border-radius:50%;
+        transform:rotate(18deg);
+      }
+
+      .inventory-teleporter-icon__label {
+        position:absolute;
+        left:0;
+        right:0;
+        bottom:8%;
+        color:#4b2812;
+        font:900 clamp(7px,1vh,11px)/1 Georgia,serif;
+        letter-spacing:.06em;
+        text-align:center;
+        text-shadow:0 1px 0 rgba(255,239,190,.45);
+      }
+
       .inventory-item__quantity {
         position: absolute;
         z-index: 5;
@@ -21368,6 +21426,15 @@
       } else if (stack.id === WHITE_STAG_KIT.id) {
         // R145: NO combined kit symbol. The three real cut-outs occupy the 2x3 block.
         item.appendChild(createWhiteStagKitInventoryVisual());
+      } else if (stack.type === "teleporter") {
+        // R185: REISEKARTE must NEVER become an invisible logical item just because
+        // an external SVG is missing/misnamed. Render a self-contained parchment
+        // symbol directly in the inventory cell; no asset dependency required.
+        const icon = document.createElement("div");
+        icon.className = "inventory-teleporter-icon";
+        icon.setAttribute("aria-hidden", "true");
+        icon.innerHTML = `<span class="inventory-teleporter-icon__route"></span><span class="inventory-teleporter-icon__label">KARTE</span>`;
+        item.appendChild(icon);
       } else if (stack.icon) {
         const icon = document.createElement("img");
         icon.className = "inventory-item__icon";
@@ -21533,6 +21600,42 @@
       return false;
     }
     placeInventoryItem(free.pageIndex, free.slotIndex, stack);
+    return true;
+  }
+
+  // R185: deterministic DEV travel-map placement.
+  // Preferred: page I, row 1, column 5 (slot 4), visibly beside the starter kit.
+  // If another future starter occupies it, fall back to the first free 1x1 cell.
+  function addStarterTeleporter() {
+    if (findInventoryStack(TELEPORTER_ITEM.id)) return true;
+
+    const stack = {
+      id: TELEPORTER_ITEM.id,
+      name: TELEPORTER_ITEM.name,
+      description: TELEPORTER_ITEM.description || "",
+      icon: TELEPORTER_ITEM.icon || "",
+      width: 1,
+      height: 1,
+      quantity: 1,
+      stackable: false,
+      type: "teleporter"
+    };
+
+    const preferredPage = 0;
+    const preferredSlot = 4;
+    if (canPlaceInventoryItem(preferredPage, preferredSlot, 1, 1)) {
+      placeInventoryItem(preferredPage, preferredSlot, stack);
+      if (inventoryState.open) renderInventory();
+      return true;
+    }
+
+    const free = findFirstFreeInventoryArea(1, 1);
+    if (!free || !placeInventoryItem(free.pageIndex, free.slotIndex, stack)) {
+      console.error("R185 REISEKARTE konnte in keinem Inventarslot platziert werden.");
+      return false;
+    }
+
+    if (inventoryState.open) renderInventory();
     return true;
   }
 
@@ -24168,8 +24271,9 @@
     // R144: first armor kit is seeded deterministically into the marked 2x3 area.
     addStarterWhiteStagKit();
 
-    // R170 DEV: one 1x1 travel-map item in the next genuinely free inventory cell.
-    addItemToInventory(TELEPORTER_ITEM);
+    // R185 DEV: deterministic + asset-independent travel map.
+    // The item is guaranteed to be logically present AND visibly rendered.
+    addStarterTeleporter();
 
     // Install immediately as a black curtain so OBERKIRCH never flashes before
     // the new-game sequence. It is screen UI only; no map state is changed.
