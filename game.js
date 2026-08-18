@@ -3,7 +3,7 @@
 
   // R121 DEPLOYMENT VERIFICATION — harmless build marker.
   // If this line appears in DevTools, the browser is definitely running R121.
-  console.info("HDR BUILD R178 - R177 BLACK SCREEN HOTFIX");
+  console.info("HDR BUILD R177 - KUHBACH PRECISION TERRAIN + HARD FLICKER FIX");
 
   const MAPS = Object.freeze({
     oberkirch: Object.freeze({
@@ -1809,46 +1809,53 @@
   }
 
   function createKuhbachFlorianusScene() {
-    // R178 BLACK-SCREEN HOTFIX:
-    // Keep hut and Florianus as two completely separate roots.
-    // R177 accidentally referenced `root` inside the hut branch before `root`
-    // had been declared, causing an immediate ReferenceError during startup.
-
+    // R177 BLACKSCREEN FIX: restore the two scene roots that were accidentally
+    // removed by the previous flicker patch. The old working structure created
+    // the hut image and Florianus root before any dance layers were appended.
     if (!kuhbachFlorianusHutEl) {
       const c = KUHBACH_FLORIANUS.hut;
-      const hut = document.createElement("img");
-      hut.className = "kuhbach-florianus-hut";
-      hut.alt = "";
-      hut.draggable = false;
-      hut.src = encodeURI(c.src);
-      hut.style.position = "absolute";
-      hut.style.left = `${c.left}px`;
-      hut.style.top = `${c.top}px`;
-      hut.style.width = `${c.width}px`;
-      hut.style.height = `${c.height}px`;
-      hut.style.objectFit = "contain";
-      hut.style.pointerEvents = "none";
-      hut.style.userSelect = "none";
-      hut.style.zIndex = "7";
-      world.appendChild(hut);
-      kuhbachFlorianusHutEl = hut;
+      const image = document.createElement("img");
+      image.id = c.id;
+      image.src = encodeURI(c.src);
+      image.alt = "";
+      image.draggable = false;
+      image.style.position = "absolute";
+      image.style.left = `${c.left}px`;
+      image.style.top = `${c.top}px`;
+      image.style.width = `${c.width}px`;
+      image.style.height = `${c.height}px`;
+      image.style.objectFit = "contain";
+      image.style.objectPosition = "50% 100%";
+      image.style.transformOrigin = "50% 100%";
+      image.style.transform = c.mirrored ? "scaleX(-1)" : "scaleX(1)";
+      image.style.pointerEvents = "none";
+      image.style.userSelect = "none";
+      image.style.zIndex = String(c.zIndex);
+      image.style.display = MAP.id === "kuhbach" ? "" : "none";
+      world.appendChild(image);
+      kuhbachFlorianusHutEl = image;
     }
 
     if (!kuhbachFlorianusEl) {
       const c = KUHBACH_FLORIANUS.florianus;
       const root = document.createElement("div");
-      root.className = "kuhbach-florianus";
+      root.id = c.id;
       root.style.position = "absolute";
-      root.style.left = `${c.left}px`;
-      root.style.top = `${c.top}px`;
+      root.style.left = `${c.x}px`;
+      root.style.top = `${c.y}px`;
       root.style.width = `${c.width}px`;
       root.style.height = `${c.height}px`;
+      root.style.transform = "translate(-50%, -100%)";
+      root.style.transformOrigin = "50% 100%";
       root.style.pointerEvents = "none";
       root.style.userSelect = "none";
-      root.style.zIndex = "8";
+      root.style.zIndex = String(c.zIndex);
+      root.style.display = MAP.id === "kuhbach" ? "" : "none";
       root.style.contain = "layout paint style";
+      root.style.overflow = "hidden";
 
-      // All dance images stay resident. No runtime img.src swapping.
+      // Keep the R177 no-src-swap approach: all 8 variants stay resident and
+      // only visibility changes every 250 ms. This preserves the flicker fix.
       for (let i = 0; i < KUHBACH_FLORIANUS_DANCE_VARIANTS.length; i += 1) {
         const variant = KUHBACH_FLORIANUS_DANCE_VARIANTS[i];
         const image = document.createElement("img");
@@ -1873,8 +1880,6 @@
         if (typeof image.decode === "function") image.decode().catch(() => {});
       }
 
-      // Keep the existing hook, but no animated gradient repaint while testing
-      // the hard flicker fix.
       const light = document.createElement("div");
       light.className = "kuhbach-florianus-disco-light";
       light.style.position = "absolute";
@@ -1882,15 +1887,13 @@
       light.style.pointerEvents = "none";
       light.style.opacity = "0";
       light.style.display = "none";
+      light.style.borderRadius = "45%";
       root.appendChild(light);
 
       world.appendChild(root);
       kuhbachFlorianusEl = root;
       setKuhbachFlorianusDanceFrame(true);
-
-      if (MAP.id === "kuhbach") {
-        scheduleKuhbachFlorianusDance();
-      }
+      if (MAP.id === "kuhbach") scheduleKuhbachFlorianusDance();
     }
   }
 
