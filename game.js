@@ -3,7 +3,7 @@
 
   // R121 DEPLOYMENT VERIFICATION — harmless build marker.
   // If this line appears in DevTools, the browser is definitely running R121.
-  console.info("HDR BUILD R174 - KUHBACH TERRAIN COLLISION + BACH + HILL SLOPE");
+  console.info("HDR BUILD R175 - KUHBACH CREEK MAP-ISOLATION + ZOOM FLICKER FIX");
 
   const MAPS = Object.freeze({
     oberkirch: Object.freeze({
@@ -2062,24 +2062,9 @@
     svg.style.width = `${MAPS.kuhbach.width}px`;
     svg.style.height = `${MAPS.kuhbach.height}px`;
     svg.style.pointerEvents = "none";
-    svg.style.overflow = "visible";
+    svg.style.overflow = "hidden";
     svg.style.zIndex = "5";
     svg.style.display = MAP.id === "kuhbach" ? "" : "none";
-
-    const defs = document.createElementNS(ns, "defs");
-
-    const filter = document.createElementNS(ns, "filter");
-    filter.id = "kuhbach-creek-soft";
-    filter.setAttribute("x", "-30%");
-    filter.setAttribute("y", "-30%");
-    filter.setAttribute("width", "160%");
-    filter.setAttribute("height", "160%");
-
-    const blur = document.createElementNS(ns, "feGaussianBlur");
-    blur.setAttribute("stdDeviation", "11");
-    filter.appendChild(blur);
-    defs.appendChild(filter);
-    svg.appendChild(defs);
 
     const pathD = smoothSvgPath(KUHBACH_TERRAIN.creekPath);
 
@@ -2090,7 +2075,7 @@
     glow.setAttribute("stroke-width", "54");
     glow.setAttribute("stroke-linecap", "round");
     glow.setAttribute("stroke-linejoin", "round");
-    glow.setAttribute("filter", "url(#kuhbach-creek-soft)");
+    // R175: removed expensive full-map SVG blur; prevents high-zoom GPU flicker.
     svg.appendChild(glow);
 
     const water = document.createElementNS(ns, "path");
@@ -14103,6 +14088,8 @@
 
   // HARD DEPTH SWITCH FOR THE TWO WALK-BEHIND TOWERS.
   function updateChurchPlayerDepth() {
+    // R175: hide/show creek before any map-specific early return.
+    updateKuhbachCreekEffectVisibility();
     if (!playerEl) return;
 
     // R135: a dead player is ground scenery. All animal actor layers begin above
@@ -14182,7 +14169,6 @@
 
     if (MAP.id === "kuhbach") {
       updateKuhbachFlorianusSceneVisibility();
-    updateKuhbachCreekEffectVisibility();
       playerEl.style.zIndex = "100";
       return;
     }
@@ -21525,6 +21511,8 @@
     updateOedsbachRedneckSceneVisibility();
     // R169: Florianus + hut are strictly KUHBACH-only.
     updateKuhbachFlorianusSceneVisibility();
+    // R175: creek is strictly KUHBACH-only and is synchronized on EVERY map switch.
+    updateKuhbachCreekEffectVisibility();
     setOedsbachFogVisibility(MAP.id === "oedsbach");
     setOedsbachShadowVisibility(MAP.id === "oedsbach");
     setRamsbachWorldVisibility(MAP.id === "ramsbach");
