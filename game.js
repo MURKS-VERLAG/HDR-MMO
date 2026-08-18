@@ -3,7 +3,7 @@
 
   // R121 DEPLOYMENT VERIFICATION — harmless build marker.
   // If this line appears in DevTools, the browser is definitely running R121.
-  console.info("HDR BUILD R178 - KUHBACH RGB REMOVAL + MAP GUARD + CREEK LOWER TRACE");
+  console.info("HDR BUILD R179 - KUHBACH RGB RESTORED + ZOOM LOCK");
 
   const MAPS = Object.freeze({
     oberkirch: Object.freeze({
@@ -1794,18 +1794,42 @@
   }
 
   function scheduleKuhbachFlorianusDiscoLight() {
-    // R177 HARD FLICKER FIX:
-    // dynamic disco repaint is disabled. The prior R176 simplification proved
-    // mix-blend was not the only cause; we now remove the remaining gradient repaint entirely.
     clearTimeout(kuhbachFlorianusLightTimer);
-    kuhbachFlorianusLightTimer = 0;
-    const light =
-      kuhbachFlorianusEl &&
-      kuhbachFlorianusEl.querySelector(".kuhbach-florianus-disco-light");
-    if (light) {
-      light.style.display = "none";
-      light.style.opacity = "0";
+    if (MAP.id !== "kuhbach" || !kuhbachFlorianusEl) {
+      kuhbachFlorianusLightTimer = 0;
+      return;
     }
+
+    const light = kuhbachFlorianusEl.querySelector(".kuhbach-florianus-disco-light");
+    if (!light) {
+      kuhbachFlorianusLightTimer = 0;
+      return;
+    }
+
+    const colors = [
+      "rgba(255,35,35,.82)",
+      "rgba(35,255,90,.78)",
+      "rgba(35,110,255,.84)"
+    ];
+    const shuffled = colors.slice().sort(() => Math.random() - 0.5);
+    const x1 = 18 + Math.random() * 64;
+    const y1 = 12 + Math.random() * 70;
+    const x2 = 18 + Math.random() * 64;
+    const y2 = 12 + Math.random() * 70;
+    const x3 = 18 + Math.random() * 64;
+    const y3 = 12 + Math.random() * 70;
+
+    light.style.display = "block";
+    light.style.opacity = "1";
+    light.style.background =
+      `radial-gradient(circle at ${x1}% ${y1}%, ${shuffled[0]} 0 12%, transparent 42%), ` +
+      `radial-gradient(circle at ${x2}% ${y2}%, ${shuffled[1]} 0 12%, transparent 42%), ` +
+      `radial-gradient(circle at ${x3}% ${y3}%, ${shuffled[2]} 0 12%, transparent 42%)`;
+
+    kuhbachFlorianusLightTimer = window.setTimeout(
+      scheduleKuhbachFlorianusDiscoLight,
+      180 + Math.random() * 170
+    );
   }
 
   function createKuhbachFlorianusScene() {
@@ -1879,10 +1903,27 @@
         if (typeof image.decode === "function") image.decode().catch(() => {});
       }
 
+      const light = document.createElement("div");
+      light.className = "kuhbach-florianus-disco-light";
+      light.style.position = "absolute";
+      light.style.left = "-70%";
+      light.style.top = "-65%";
+      light.style.width = "240%";
+      light.style.height = "230%";
+      light.style.pointerEvents = "none";
+      light.style.zIndex = "20";
+      light.style.opacity = "0";
+      light.style.mixBlendMode = "screen";
+      light.style.filter = "blur(12px) saturate(1.35)";
+      root.appendChild(light);
+
       world.appendChild(root);
       kuhbachFlorianusEl = root;
       setKuhbachFlorianusDanceFrame(true);
-      if (MAP.id === "kuhbach") scheduleKuhbachFlorianusDance();
+      if (MAP.id === "kuhbach") {
+        scheduleKuhbachFlorianusDance();
+        scheduleKuhbachFlorianusDiscoLight();
+      }
     }
   }
 
@@ -1897,6 +1938,7 @@
 
     if (visible) {
       if (!kuhbachFlorianusDanceTimer) scheduleKuhbachFlorianusDance();
+      if (!kuhbachFlorianusLightTimer) scheduleKuhbachFlorianusDiscoLight();
     } else {
       clearTimeout(kuhbachFlorianusDanceTimer);
       clearTimeout(kuhbachFlorianusLightTimer);
@@ -21624,6 +21666,7 @@
     if (debugTitle) debugTitle.textContent = MAP.name;
 
     calculateFitScale();
+    if (MAP.id === "kuhbach") zoomLevel = 0;
     displayScale = scaleForLevel(zoomLevel);
     targetScale = displayScale;
     zoomAnimating = false;
@@ -23129,6 +23172,9 @@
   }
 
   function setZoomLevel(nextLevel) {
+    // R179 KUHBACH: one fixed zoom only — always the furthest-out level.
+    // This bypasses the Chromium/GPU flicker that only appears while KUHBACH is zoomed in.
+    if (MAP.id === "kuhbach") nextLevel = 0;
     nextLevel = Math.max(0, Math.min(ZOOM_MULTIPLIERS.length - 1, nextLevel));
     if (nextLevel === zoomLevel) return;
 
