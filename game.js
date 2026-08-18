@@ -3,7 +3,7 @@
 
   // R121 DEPLOYMENT VERIFICATION — harmless build marker.
   // If this line appears in DevTools, the browser is definitely running R121.
-  console.info("HDR BUILD R191 - LIERBACH BRIDGE + ALLERHEILIGEN ROUTES");
+  console.info("HDR BUILD R192 - ALLERHEILIGEN ZIGZAG TOP RELEASE MINIFIX");
 
   const MAPS = Object.freeze({
     oberkirch: Object.freeze({
@@ -2576,10 +2576,8 @@
     }
     const q=pointAtBridgeDistance(path, allerheiligenZigzagDistance);
     playerX=q.x; playerY=q.y; facing="up";
-    if (allerheiligenZigzagDistance >= metrics.total-1) {
-      allerheiligenZigzagActive=false;
-      allerheiligenSnapReleaseUntil=performance.now()+250;
-    }
+    // R192: remain snapped at the top until the player's NEXT movement input
+    // explicitly chooses: S/S-combo = descend, anything else = leave the line.
     return true;
   }
 
@@ -13636,10 +13634,42 @@
       neuensteinSnapping = false;
     }
 
-    // R191 ALLERHEILIGEN forced route ownership.
+    // R192 ALLERHEILIGEN MINIFIX:
+    // At the very top of the spawn zigzag, S / S-combinations stay snapped and go back down.
+    // Any other movement key releases the zigzag immediately and that same input continues freely.
     if (MAP.id === "allerheiligen") {
       engageAllerheiligenSpawnZigzagIfNeeded();
-      if (allerheiligenZigzagActive) { moveAlongAllerheiligenZigzag(dx,dy,deltaSeconds); clampPlayer(); return; }
+
+      if (allerheiligenZigzagActive) {
+        const zigMetrics = getPathMetrics(ALLERHEILIGEN_ROUTE.zigzag);
+        const atZigzagTop = allerheiligenZigzagDistance >= zigMetrics.total - 1;
+
+        if (atZigzagTop && (dx !== 0 || dy !== 0) && dy >= 0) {
+          if (dy > 0) {
+            allerheiligenZigzagDistance = Math.max(
+              0,
+              allerheiligenZigzagDistance - currentPlayerMoveSpeed() * deltaSeconds
+            );
+            const q = pointAtBridgeDistance(
+              ALLERHEILIGEN_ROUTE.zigzag,
+              allerheiligenZigzagDistance
+            );
+            playerX = q.x;
+            playerY = q.y;
+            facing = "down";
+            clampPlayer();
+            return;
+          }
+
+          allerheiligenZigzagActive = false;
+          allerheiligenSnapReleaseUntil = performance.now() + 300;
+        } else {
+          moveAlongAllerheiligenZigzag(dx, dy, deltaSeconds);
+          clampPlayer();
+          return;
+        }
+      }
+
       if (allerheiligenRightSnap || tryEngageAllerheiligenRightSnap(dx,dy)) { moveAlongAllerheiligenRightSnap(dx,dy,deltaSeconds); clampPlayer(); return; }
     }
 
