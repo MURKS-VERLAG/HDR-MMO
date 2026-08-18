@@ -2636,8 +2636,8 @@
     // Stored RIGHT -> LEFT. A walks left, D walks right.
     // LEFT endpoint stays locked; RIGHT endpoint releases with D.
     orangeBridgeSnap: Object.freeze([
-      Object.freeze([5905,5708]),
-      Object.freeze([5232,5824])
+      Object.freeze([5905,5858]),
+      Object.freeze([5232,5974])
     ]),
 
     // R196 YELLOW single replacement snap line at the former green/purple route.
@@ -2731,12 +2731,12 @@
     Object.freeze({
       id: "allerheiligen-cave",
       src: "assets/buildings/ALLERHEILIGEN HOEHLENEINGANG.png",
-      left: 4385, top: 3125, width: 1260, height: 860, zIndex: 17
+      left: 4385, top: 2825, width: 1260, height: 860, zIndex: 17
     }),
     Object.freeze({
       id: "allerheiligen-fisher",
       src: "assets/buildings/ALLERHEILIGEN FISCHER.png",
-      left: 3805, top: 5485, width: 1340, height: 978, zIndex: 17
+      left: 3805, top: 5185, width: 1340, height: 978, zIndex: 17
     })
   ]);
 
