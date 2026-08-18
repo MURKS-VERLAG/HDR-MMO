@@ -3,7 +3,7 @@
 
   // R121 DEPLOYMENT VERIFICATION — harmless build marker.
   // If this line appears in DevTools, the browser is definitely running R121.
-  console.info("HDR BUILD R198 - ALLERHEILIGEN LANDMARK PRECISION + HUBACKER FOG");
+  console.info("HDR BUILD R199 - HILSEN MAP INTEGRATION");
 
   const MAPS = Object.freeze({
     oberkirch: Object.freeze({
@@ -82,6 +82,13 @@
       image: "assets/maps/MAP 11 ALLERHEILIGEN.jpg",
       width: 10240,
       height: 6825
+    }),
+    hilsen: Object.freeze({
+      id: "hilsen",
+      name: "HILSEN",
+      image: "assets/maps/MAP 12 HILSEN.webp",
+      width: 10000,
+      height: 8003
     })
   });
 
@@ -372,6 +379,18 @@
     allerheiligenFromLierbachSpawn: Object.freeze({
       x: 2050,
       y: 6100
+    }),
+
+    // R199 OBERKIRCH -> HILSEN: left/west road marked by the supplied red arrow.
+    oberkirchHilsenWest: Object.freeze({
+      y1: 1250,
+      y2: 2350,
+      leaveX: -18
+    }),
+    // Arrival on HILSEN's matching right/east road.
+    hilsenFromOberkirchSpawn: Object.freeze({
+      x: 9750,
+      y: 5600
     })
   });
 
@@ -23197,6 +23216,14 @@
     }
   }
 
+  function playerInOberkirchHilsenWestExitLane() {
+    return (
+      MAP.id === "oberkirch-zentrum" &&
+      playerY >= MAP_EXIT_CONFIG.oberkirchHilsenWest.y1 &&
+      playerY <= MAP_EXIT_CONFIG.oberkirchHilsenWest.y2
+    );
+  }
+
   function playerInOberkirchNorthExitLane() {
     return (
       MAP.id === "oberkirch-zentrum" &&
@@ -23388,6 +23415,16 @@
     const movingDown = keys.has("KeyS") || keys.has("ArrowDown");
     const movingLeft = keys.has("KeyA") || keys.has("ArrowLeft");
     const movingRight = keys.has("KeyD") || keys.has("ArrowRight");
+
+    // R199 OBERKIRCH left red-arrow road -> HILSEN.
+    if (
+      playerInOberkirchHilsenWestExitLane() &&
+      movingLeft &&
+      playerX <= MAP_EXIT_CONFIG.oberkirchHilsenWest.leaveX
+    ) {
+      switchMap(MAPS.hilsen, MAP_EXIT_CONFIG.hilsenFromOberkirchSpawn, true);
+      return true;
+    }
 
     // R184 LIERBACH lower yellow-arrow footpath -> OPPENAU north road.
     if (
@@ -24095,7 +24132,10 @@
       (keys.has("KeyD") || keys.has("ArrowRight"));
 
     const westExitOpen =
-      playerInKuhbachOppenauWestExitLane() &&
+      (
+        playerInKuhbachOppenauWestExitLane() ||
+        playerInOberkirchHilsenWestExitLane()
+      ) &&
       (keys.has("KeyA") || keys.has("ArrowLeft"));
 
     if (eastExitOpen) {
@@ -24107,8 +24147,11 @@
         Math.min(leaveX + 80, playerX)
       );
     } else if (westExitOpen) {
+      const leaveX = MAP.id === "oberkirch-zentrum"
+        ? MAP_EXIT_CONFIG.oberkirchHilsenWest.leaveX
+        : MAP_EXIT_CONFIG.kuhbachOppenauWest.leaveX;
       playerX = Math.max(
-        MAP_EXIT_CONFIG.kuhbachOppenauWest.leaveX - 80,
+        leaveX - 80,
         Math.min(MAP.width - halfW, playerX)
       );
     } else {
