@@ -3,7 +3,7 @@
 
   // R121 DEPLOYMENT VERIFICATION — harmless build marker.
   // If this line appears in DevTools, the browser is definitely running R121.
-  console.info("HDR BUILD R183 - TELEPORTER RESTORE + LIERBACH + OPPENAU RAMSBACH RETURN");
+  console.info("HDR BUILD R168 - KUHBACH EXIT + REDNECK ISOLATION");
 
   const MAPS = Object.freeze({
     oberkirch: Object.freeze({
@@ -68,13 +68,6 @@
       image: "assets/maps/MAP 9 KUHBACH.webp",
       width: 10000,
       height: 5998
-    }),
-    lierbach: Object.freeze({
-      id: "lierbach",
-      name: "LIERBACH",
-      image: "assets/maps/MAP 10 LIERBACH.jpg",
-      width: 10240,
-      height: 6827
     })
   });
 
@@ -297,18 +290,6 @@
       y: 5505
     }),
 
-    // R183 MAP 8 OPPENAU -> RAMSBACH: lower main city gate.
-    oppenauRamsbachSouth: Object.freeze({
-      x1: 2390,
-      x2: 2860,
-      leavePadding: 18
-    }),
-    // Return to the same RAMSBACH north road used for RAMSBACH -> OPPENAU.
-    ramsbachFromOppenauSpawn: Object.freeze({
-      x: 3700,
-      y: 165
-    }),
-
     // R167 MAP 8 OPPENAU -> MAP 9 KUHBACH: lower-right road leaves east.
     oppenauKuhbachEast: Object.freeze({
       // R168: actual lower-right road / black-border lane from supplied screenshot.
@@ -331,18 +312,6 @@
     oppenauFromKuhbachSpawn: Object.freeze({
       x: 9980,
       y: 4475
-    }),
-
-    // R182 MAP 8 OPPENAU -> MAP 10 LIERBACH: red-arrow upper road.
-    oppenauLierbachNorth: Object.freeze({
-      x1: 2050,
-      x2: 2850,
-      leaveY: -18
-    }),
-    // MAP 10 arrival: lower-right end of the riverside footpath.
-    lierbachFromOppenauSpawn: Object.freeze({
-      x: 9050,
-      y: 6480
     })
   });
 
@@ -693,7 +662,6 @@
 
   const ZOOM_MULTIPLIERS = [1, 1.75, 3, 4.5];
   const ZOOM_DURATION = 300;
-  const KUHBACH_LOCKED_ZOOM_LEVEL = 2;
 
   const attackAudio = new Audio("assets/audio/PLAYER ATTACK.mp3");
   attackAudio.preload = "auto";
@@ -859,9 +827,7 @@
     // R155 dedicated OPPENAU track supplied by the user.
     "oppenau": "assets/audio/maps/OPPENAU - DIE GROSSE REISE.mp3",
     // R167 KUHBACH currently continues the OPPENAU journey theme.
-    "kuhbach": "assets/audio/maps/KUHBACH - HALTERUS.mp3",
-    // R182: LIERBACH temporarily continues OPPENAU's journey theme; no new audio asset required.
-    "lierbach": "assets/audio/maps/OPPENAU - DIE GROSSE REISE.mp3"
+    "kuhbach": "assets/audio/maps/OPPENAU - DIE GROSSE REISE.mp3"
   });
 
   const MAP_MUSIC_VOLUME = 1.0;
@@ -1357,11 +1323,6 @@
       id: "oedsbach-winterbach", mapId: "oedsbach", text: "WINTERBACH",
       x: 1820, y: 6170, direction: "down", glow: "#ffffff",
       trigger: { x1: 1050, y1: 5350, x2: 2700, y2: 6655 }
-    },
-    {
-      id: "oppenau-lierbach", mapId: "oppenau", text: "LIERBACH",
-      x: 2450, y: 360, direction: "up", glow: "#ffffff",
-      trigger: { x1: 1900, y1: 0, x2: 3050, y2: 1050 }
     }
   ]);
 
@@ -1735,568 +1696,6 @@
     const visible = MAP.id === "oedsbach";
     if (oedsbachRedneckHutEl) oedsbachRedneckHutEl.style.display = visible ? "" : "none";
     if (oedsbachFredneckEl) oedsbachFredneckEl.style.display = visible ? "" : "none";
-  }
-
-
-  // ------------------------------------------------------------------
-  // R172 KUHBACH — FLORIANUS DANCE LOOP + DISCO LIGHTS
-  // Hut placement/collision stays untouched. Florianus now uses the exact
-  // PLAYER canvas size (420x630), cycles all supplied poses + mirrors, and
-  // crossfades smoothly every 0.25 seconds with an irregular RGB spotlight.
-  // ------------------------------------------------------------------
-  const KUHBACH_FLORIANUS = Object.freeze({
-    hut: Object.freeze({
-      id: "kuhbach-florianus-hut",
-      src: "assets/buildings/kuhbach/FLORIANUS_HALTERUS_HUETTE.png",
-      left: 5600,
-      top: 110,
-      width: 3400,
-      height: 2267,
-      mirrored: true,
-      zIndex: 6,
-      collision: Object.freeze({ x1: 0.56, y1: 0.05, x2: 0.96, y2: 0.61 })
-    }),
-    florianus: Object.freeze({
-      id: "kuhbach-florianus-halterus",
-      x: 6840,
-      y: 1515,
-      width: PLAYER.width,
-      height: PLAYER.height,
-      zIndex: 8,
-      frameMs: 250,
-      fadeMs: 0,
-      poses: Object.freeze([
-        "assets/npcs/kuhbach/FLORIANUS_HALTERUS.png",
-        "assets/npcs/kuhbach/dance/FLORIANUS_DANCE_1.webp",
-        "assets/npcs/kuhbach/dance/FLORIANUS_DANCE_2.webp",
-        "assets/npcs/kuhbach/dance/FLORIANUS_DANCE_3.webp"
-      ])
-    })
-  });
-
-  let kuhbachFlorianusHutEl = null;
-  let kuhbachFlorianusEl = null;
-  let kuhbachFlorianusDanceTimer = 0;
-  let kuhbachFlorianusLightTimer = 0;
-  let kuhbachFlorianusDanceIndex = -1;
-
-  function randomDifferentIndex(length, previous) {
-    if (length <= 1) return 0;
-    let next = Math.floor(Math.random() * length);
-    if (next === previous) next = (next + 1 + Math.floor(Math.random() * (length - 1))) % length;
-    return next;
-  }
-
-  function florianusDanceVariants() {
-    const variants = [];
-    for (const src of KUHBACH_FLORIANUS.florianus.poses) {
-      variants.push({ src, mirrored: false });
-      variants.push({ src, mirrored: true });
-    }
-    return variants;
-  }
-
-  const KUHBACH_FLORIANUS_DANCE_VARIANTS = Object.freeze(florianusDanceVariants());
-
-  function setKuhbachFlorianusDanceFrame(immediate = false) {
-    if (!kuhbachFlorianusEl) return;
-    const layers = kuhbachFlorianusEl.querySelectorAll(".kuhbach-florianus-dance-frame");
-    if (!layers.length) return;
-
-    const nextIndex = randomDifferentIndex(
-      KUHBACH_FLORIANUS_DANCE_VARIANTS.length,
-      kuhbachFlorianusDanceIndex
-    );
-
-    for (let i = 0; i < layers.length; i += 1) {
-      layers[i].style.visibility = i === nextIndex ? "visible" : "hidden";
-      layers[i].style.filter = "none";
-    }
-
-    kuhbachFlorianusDanceIndex = nextIndex;
-  }
-
-  function scheduleKuhbachFlorianusDance() {
-    clearTimeout(kuhbachFlorianusDanceTimer);
-    if (MAP.id !== "kuhbach") {
-      kuhbachFlorianusDanceTimer = 0;
-      return;
-    }
-
-    kuhbachFlorianusDanceTimer = window.setTimeout(() => {
-      if (MAP.id !== "kuhbach") {
-        kuhbachFlorianusDanceTimer = 0;
-        return;
-      }
-      setKuhbachFlorianusDanceFrame(false);
-      scheduleKuhbachFlorianusDance();
-    }, KUHBACH_FLORIANUS.florianus.frameMs);
-  }
-
-  function scheduleKuhbachFlorianusDiscoLight() {
-    clearTimeout(kuhbachFlorianusLightTimer);
-    if (MAP.id !== "kuhbach") {
-      kuhbachFlorianusLightTimer = 0;
-      return;
-    }
-
-    const light =
-      kuhbachFlorianusEl &&
-      kuhbachFlorianusEl.querySelector(".kuhbach-florianus-disco-light");
-    if (!light) return;
-
-    const palette = [
-      [255, 30, 45],
-      [30, 110, 255],
-      [35, 255, 105],
-      [255, 35, 220],
-      [40, 235, 255],
-      [255, 190, 35]
-    ];
-    const rgb = palette[Math.floor(Math.random() * palette.length)];
-    const fast = Math.random() < 0.62;
-    const hold = fast ? 120 + Math.random() * 280 : 650 + Math.random() * 950;
-    const x = 28 + Math.random() * 44;
-    const y = 22 + Math.random() * 46;
-    const opacity = 0.28 + Math.random() * 0.34;
-
-    light.style.transitionDuration = `${fast ? 90 : 260}ms`;
-    light.style.opacity = String(opacity);
-    light.style.background =
-      `radial-gradient(ellipse at ${x}% ${y}%, ` +
-      `rgba(${rgb[0]},${rgb[1]},${rgb[2]},.88) 0%, ` +
-      `rgba(${rgb[0]},${rgb[1]},${rgb[2]},.42) 34%, ` +
-      `rgba(${rgb[0]},${rgb[1]},${rgb[2]},0) 72%)`;
-
-    kuhbachFlorianusLightTimer =
-      window.setTimeout(scheduleKuhbachFlorianusDiscoLight, hold);
-  }
-
-  function createKuhbachFlorianusScene() {
-    // R177 BLACKSCREEN FIX: restore the two scene roots that were accidentally
-    // removed by the previous flicker patch. The old working structure created
-    // the hut image and Florianus root before any dance layers were appended.
-    if (!kuhbachFlorianusHutEl) {
-      const c = KUHBACH_FLORIANUS.hut;
-      const image = document.createElement("img");
-      image.id = c.id;
-      image.src = encodeURI(c.src);
-      image.alt = "";
-      image.draggable = false;
-      image.style.position = "absolute";
-      image.style.left = `${c.left}px`;
-      image.style.top = `${c.top}px`;
-      image.style.width = `${c.width}px`;
-      image.style.height = `${c.height}px`;
-      image.style.objectFit = "contain";
-      image.style.objectPosition = "50% 100%";
-      image.style.transformOrigin = "50% 100%";
-      image.style.transform = c.mirrored ? "scaleX(-1)" : "scaleX(1)";
-      image.style.pointerEvents = "none";
-      image.style.userSelect = "none";
-      image.style.zIndex = String(c.zIndex);
-      image.style.display = MAP.id === "kuhbach" ? "" : "none";
-      world.appendChild(image);
-      kuhbachFlorianusHutEl = image;
-    }
-
-    if (!kuhbachFlorianusEl) {
-      const c = KUHBACH_FLORIANUS.florianus;
-      const root = document.createElement("div");
-      root.id = c.id;
-      root.style.position = "absolute";
-      root.style.left = `${c.x}px`;
-      root.style.top = `${c.y}px`;
-      root.style.width = `${c.width}px`;
-      root.style.height = `${c.height}px`;
-      root.style.transform = "translate(-50%, -100%)";
-      root.style.transformOrigin = "50% 100%";
-      root.style.pointerEvents = "none";
-      root.style.userSelect = "none";
-      root.style.zIndex = String(c.zIndex);
-      root.style.display = MAP.id === "kuhbach" ? "" : "none";
-      root.style.overflow = "visible";
-
-      // Keep the R177 no-src-swap approach: all 8 variants stay resident and
-      // only visibility changes every 250 ms. This preserves the flicker fix.
-      for (let i = 0; i < KUHBACH_FLORIANUS_DANCE_VARIANTS.length; i += 1) {
-        const variant = KUHBACH_FLORIANUS_DANCE_VARIANTS[i];
-        const image = document.createElement("img");
-        image.className = "kuhbach-florianus-dance-frame";
-        image.alt = "";
-        image.draggable = false;
-        image.src = encodeURI(variant.src);
-        image.style.position = "absolute";
-        image.style.inset = "0";
-        image.style.width = "100%";
-        image.style.height = "100%";
-        image.style.objectFit = "contain";
-        image.style.objectPosition = "50% 100%";
-        image.style.transformOrigin = "50% 100%";
-        image.style.transform = variant.mirrored ? "scaleX(-1)" : "scaleX(1)";
-        image.style.visibility = "hidden";
-        image.style.opacity = "1";
-        image.style.pointerEvents = "none";
-        image.style.backfaceVisibility = "hidden";
-        image.style.webkitBackfaceVisibility = "hidden";
-        root.appendChild(image);
-        if (typeof image.decode === "function") image.decode().catch(() => {});
-      }
-
-      const light = document.createElement("div");
-      light.className = "kuhbach-florianus-disco-light";
-      light.style.position = "absolute";
-      light.style.inset = "-18% -24% -10% -24%";
-      light.style.pointerEvents = "none";
-      light.style.mixBlendMode = "screen";
-      light.style.opacity = "0";
-      light.style.transitionProperty = "opacity, background";
-      light.style.transitionTimingFunction = "ease-in-out";
-      light.style.borderRadius = "45%";
-      root.appendChild(light);
-
-      world.appendChild(root);
-      kuhbachFlorianusEl = root;
-      setKuhbachFlorianusDanceFrame(true);
-      if (MAP.id === "kuhbach") {
-        scheduleKuhbachFlorianusDance();
-        scheduleKuhbachFlorianusDiscoLight();
-      }
-    }
-  }
-
-  function updateKuhbachFlorianusSceneVisibility() {
-    const visible = MAP.id === "kuhbach";
-    if (kuhbachFlorianusHutEl) {
-      kuhbachFlorianusHutEl.style.display = visible ? "" : "none";
-    }
-    if (kuhbachFlorianusEl) {
-      kuhbachFlorianusEl.style.display = visible ? "" : "none";
-    }
-
-    if (visible) {
-      if (!kuhbachFlorianusDanceTimer) scheduleKuhbachFlorianusDance();
-      if (!kuhbachFlorianusLightTimer) scheduleKuhbachFlorianusDiscoLight();
-    } else {
-      clearTimeout(kuhbachFlorianusDanceTimer);
-      clearTimeout(kuhbachFlorianusLightTimer);
-      kuhbachFlorianusDanceTimer = 0;
-      kuhbachFlorianusLightTimer = 0;
-
-      const light =
-        kuhbachFlorianusEl &&
-        kuhbachFlorianusEl.querySelector(".kuhbach-florianus-disco-light");
-      if (light) light.style.opacity = "0";
-    }
-  }
-
-  function isKuhbachFlorianusHutBlockedFootPoint(x, y) {
-    if (MAP.id !== "kuhbach") return false;
-    const c = KUHBACH_FLORIANUS.hut;
-    const r = c.collision;
-    const localX = (x - c.left) / c.width;
-    const localY = (y - c.top) / c.height;
-    return (
-      localX >= r.x1 &&
-      localX <= r.x2 &&
-      localY >= r.y1 &&
-      localY <= r.y2
-    );
-  }
-
-
-  // ------------------------------------------------------------------
-  // R174 KUHBACH — terrain from supplied painted reference.
-  // RED filled regions = hard blocked terrain.
-  // RED outline = hard fence boundary with an intentional gate opening.
-  // WHITE line = visual flowing creek shimmer only (walkable).
-  // GREEN left hillside = A/D gets a diagonal slope bias.
-  // ------------------------------------------------------------------
-  const KUHBACH_TERRAIN = Object.freeze({
-    // Screenshot reference mapped to the 10000 x 5998 KUHBACH world.
-    blockedPolygons: Object.freeze([
-      Object.freeze([
-        { x: 9850, y:    0 },
-        { x: 8400, y:    0 },
-        { x: 8041, y:    0 },
-        { x: 8033, y:  214 },
-        { x: 7865, y:  343 },
-        { x: 7598, y:  412 },
-        { x: 7110, y:  946 },
-        { x: 7133, y: 1107 },
-        { x: 7850, y: 1236 },
-        { x: 7965, y: 1313 },
-        { x: 8155, y: 1244 },
-        { x: 8285, y: 1282 },
-        { x: 8575, y: 1572 },
-        { x: 8674, y: 1465 },
-        { x: 8590, y: 1122 },
-        { x: 8812, y: 1045 },
-        { x: 8896, y:  939 },
-        { x: 9117, y: 1168 },
-        { x: 8980, y: 1335 },
-        { x: 9117, y: 1442 },
-        { x: 9002, y: 1671 },
-        { x: 9292, y: 1900 },
-        { x: 8804, y: 2068 },
-        { x: 8613, y: 2404 },
-        { x: 7865, y: 2686 },
-        { x: 7644, y: 2915 },
-        { x: 7751, y: 3152 },
-        { x: 8033, y: 3449 },
-        { x: 8819, y: 3106 },
-        { x: 8957, y: 2923 },
-        { x: 8957, y: 2678 },
-        { x: 9048, y: 2556 },
-        { x: 9521, y: 2419 },
-        { x: 9811, y: 2244 }
-      ]),
-      Object.freeze([
-        { x: 9758, y: 2946 },
-        { x: 9285, y: 3068 },
-        { x: 8339, y: 3983 },
-        { x: 8369, y: 4197 },
-        { x: 8278, y: 4380 },
-        { x: 8621, y: 4647 },
-        { x: 8468, y: 4708 },
-        { x: 8400, y: 4891 },
-        { x: 8682, y: 5036 },
-        { x: 8842, y: 5021 },
-        { x: 9712, y: 4350 }
-      ])
-    ]),
-
-    // Fence line around Florianus' paddock. Bottom-right gate opening is NOT present here.
-    fenceSegments: Object.freeze([
-      Object.freeze([{ x: 5665, y: 1350 }, { x: 6650, y:  930 }]),
-      Object.freeze([{ x: 6650, y:  930 }, { x: 7040, y:  900 }]),
-      Object.freeze([{ x: 7040, y:  900 }, { x: 7685, y: 1125 }]),
-      Object.freeze([{ x: 7685, y: 1125 }, { x: 8170, y: 1385 }]),
-      Object.freeze([{ x: 8170, y: 1385 }, { x: 8085, y: 1655 }]),
-      Object.freeze([{ x: 8085, y: 1655 }, { x: 7740, y: 1825 }]),
-
-      // deliberate gate gap from ~7740..7280 world-X
-
-      Object.freeze([{ x: 7220, y: 1940 }, { x: 6175, y: 2070 }]),
-      Object.freeze([{ x: 6175, y: 2070 }, { x: 6115, y: 1830 }]),
-      Object.freeze([{ x: 6115, y: 1830 }, { x: 5680, y: 1580 }]),
-      Object.freeze([{ x: 5680, y: 1580 }, { x: 5665, y: 1350 }])
-    ]),
-    fenceRadius: 62,
-
-    hillPolygon: Object.freeze([
-      { x: 3508, y:   23 },
-      { x:  341, y:    0 },
-      { x:  173, y:    8 },
-      { x:  158, y: 5212 },
-      { x: 1707, y: 3678 },
-      { x: 2073, y: 2915 },
-      { x: 2066, y: 2244 },
-      { x: 2226, y: 1717 },
-      { x: 2798, y: 1366 },
-      { x: 3287, y:  870 },
-      { x: 3470, y:  473 }
-    ]),
-    hillSlopeBias: 0.58,
-
-    creekPath: Object.freeze([
-      { x: 6367, y:    0 },
-      { x: 6286, y:   50 },
-      { x: 6133, y:  145 },
-      { x: 5927, y:  237 },
-      { x: 5782, y:  328 },
-      { x: 5714, y:  420 },
-      { x: 5584, y:  504 },
-      { x: 5507, y:  595 },
-      { x: 5500, y:  687 },
-      { x: 5530, y:  778 },
-      { x: 5569, y:  878 },
-      { x: 5622, y:  965 },
-      { x: 5675, y: 1053 },
-      { x: 5698, y: 1145 },
-      { x: 5675, y: 1244 },
-      { x: 5546, y: 1335 },
-      { x: 5332, y: 1419 },
-      { x: 5164, y: 1511 },
-      { x: 5034, y: 1606 },
-      { x: 4916, y: 1698 },
-      { x: 4790, y: 1786 },
-      { x: 4645, y: 1885 },
-      { x: 4531, y: 1954 },
-      { x: 4496, y: 2064 },
-      { x: 4477, y: 2152 },
-      { x: 4454, y: 2251 },
-      { x: 4409, y: 2335 },
-      { x: 4294, y: 2434 },
-      { x: 4111, y: 2526 },
-      { x: 3913, y: 2610 },
-      { x: 3737, y: 2705 },
-      { x: 3584, y: 2801 },
-      { x: 3378, y: 2900 },
-      { x: 3149, y: 2961 },
-      { x: 3104, y: 3071 },
-      { x: 3088, y: 3167 },
-      { x: 3058, y: 3258 },
-      { x: 3027, y: 3346 },
-      { x: 3004, y: 3434 },
-      { x: 2974, y: 3529 },
-      { x: 2936, y: 3625 },
-      { x: 2875, y: 3716 },
-      { x: 2776, y: 3808 },
-      { x: 2661, y: 3899 },
-      { x: 2531, y: 3983 },
-      { x: 2409, y: 4083 },
-      { x: 2305, y: 4170 },
-      { x: 2190, y: 4260 },
-      { x: 2035, y: 4350 },
-      { x: 1845, y: 4440 },
-      { x: 1615, y: 4530 },
-      { x: 1390, y: 4620 },
-      { x: 1170, y: 4710 },
-      { x:  985, y: 4800 },
-      { x:  835, y: 4890 },
-      { x:  710, y: 4985 },
-      { x:  610, y: 5080 },
-      { x:  515, y: 5180 },
-      { x:  425, y: 5280 },
-      { x:  345, y: 5380 },
-      { x:  275, y: 5480 },
-      { x:  215, y: 5580 },
-      { x:  160, y: 5680 },
-      { x:  110, y: 5780 },
-      { x:   65, y: 5880 },
-      { x:   25, y: 5998 }
-    ])
-  });
-
-  let kuhbachCreekEffectEl = null;
-
-  function distancePointToSegment(px, py, a, b) {
-    const vx = b.x - a.x;
-    const vy = b.y - a.y;
-    const wx = px - a.x;
-    const wy = py - a.y;
-    const len2 = vx * vx + vy * vy;
-    if (len2 <= 0.0001) return Math.hypot(px - a.x, py - a.y);
-    const t = Math.max(0, Math.min(1, (wx * vx + wy * vy) / len2));
-    const cx = a.x + vx * t;
-    const cy = a.y + vy * t;
-    return Math.hypot(px - cx, py - cy);
-  }
-
-  function isKuhbachReferenceBlockedFootPoint(x, y) {
-    if (MAP.id !== "kuhbach") return false;
-
-    for (const polygon of KUHBACH_TERRAIN.blockedPolygons) {
-      if (worldPointInPolygon(x, y, polygon)) return true;
-    }
-
-    for (const segment of KUHBACH_TERRAIN.fenceSegments) {
-      if (
-        distancePointToSegment(x, y, segment[0], segment[1]) <=
-        KUHBACH_TERRAIN.fenceRadius
-      ) {
-        return true;
-      }
-    }
-
-    return false;
-  }
-
-  function playerInsideKuhbachHillSlope() {
-    return (
-      MAP.id === "kuhbach" &&
-      worldPointInPolygon(playerX, playerY, KUHBACH_TERRAIN.hillPolygon)
-    );
-  }
-
-  function smoothSvgPath(points) {
-    // R177: exact reference tracing. We deliberately use dense straight segments
-    // with rounded SVG joins instead of cubic interpolation, because the old
-    // Catmull-Rom control points overshot the painted creek in two bends.
-    if (!points.length) return "";
-    return points
-      .map((p, index) => `${index === 0 ? "M" : "L"} ${p.x} ${p.y}`)
-      .join(" ");
-  }
-
-  function createKuhbachCreekEffect() {
-    if (kuhbachCreekEffectEl) return;
-
-    const ns = "http://www.w3.org/2000/svg";
-    const svg = document.createElementNS(ns, "svg");
-    svg.id = "kuhbach-creek-effect";
-    svg.setAttribute("viewBox", `0 0 ${MAPS.kuhbach.width} ${MAPS.kuhbach.height}`);
-    svg.style.position = "absolute";
-    svg.style.left = "0";
-    svg.style.top = "0";
-    svg.style.width = `${MAPS.kuhbach.width}px`;
-    svg.style.height = `${MAPS.kuhbach.height}px`;
-    svg.style.pointerEvents = "none";
-    svg.style.overflow = "hidden";
-    svg.style.zIndex = "5";
-    svg.style.display = MAP.id === "kuhbach" ? "" : "none";
-
-    const pathD = smoothSvgPath(KUHBACH_TERRAIN.creekPath);
-
-    const glow = document.createElementNS(ns, "path");
-    glow.setAttribute("d", pathD);
-    glow.setAttribute("fill", "none");
-    glow.setAttribute("stroke", "rgba(70,185,255,.34)");
-    glow.setAttribute("stroke-width", "54");
-    glow.setAttribute("stroke-linecap", "round");
-    glow.setAttribute("stroke-linejoin", "round");
-    // R175: removed expensive full-map SVG blur; prevents high-zoom GPU flicker.
-    svg.appendChild(glow);
-
-    const water = document.createElementNS(ns, "path");
-    water.setAttribute("d", pathD);
-    water.setAttribute("fill", "none");
-    water.setAttribute("stroke", "rgba(105,210,255,.52)");
-    water.setAttribute("stroke-width", "24");
-    water.setAttribute("stroke-linecap", "round");
-    water.setAttribute("stroke-linejoin", "round");
-    water.setAttribute("pathLength", "1000");
-    water.style.strokeDasharray = "36 20 10 26";
-    water.style.animation = "kuhbachCreekFlow 3.2s linear infinite";
-    svg.appendChild(water);
-
-    const shimmer = document.createElementNS(ns, "path");
-    shimmer.setAttribute("d", pathD);
-    shimmer.setAttribute("fill", "none");
-    shimmer.setAttribute("stroke", "rgba(245,252,255,.72)");
-    shimmer.setAttribute("stroke-width", "8");
-    shimmer.setAttribute("stroke-linecap", "round");
-    shimmer.setAttribute("pathLength", "1000");
-    shimmer.style.strokeDasharray = "10 54 4 70";
-    shimmer.style.animation = "kuhbachCreekFlowFast 1.75s linear infinite";
-    svg.appendChild(shimmer);
-
-    if (!document.getElementById("kuhbach-creek-style")) {
-      const style = document.createElement("style");
-      style.id = "kuhbach-creek-style";
-      style.textContent = `
-        @keyframes kuhbachCreekFlow {
-          from { stroke-dashoffset: 0; }
-          to   { stroke-dashoffset: -180; }
-        }
-        @keyframes kuhbachCreekFlowFast {
-          from { stroke-dashoffset: 0; opacity: .42; }
-          45%  { opacity: .92; }
-          to   { stroke-dashoffset: -230; opacity: .42; }
-        }
-      `;
-      document.head.appendChild(style);
-    }
-
-    world.appendChild(svg);
-    kuhbachCreekEffectEl = svg;
-  }
-
-  function updateKuhbachCreekEffectVisibility() {
-    if (kuhbachCreekEffectEl) {
-      kuhbachCreekEffectEl.style.display = MAP.id === "kuhbach" ? "" : "none";
-    }
   }
 
   // ------------------------------------------------------------------
@@ -8094,93 +7493,6 @@
     type: "quickslot"
   });
 
-  // R170 DEV-REISEKARTE — 1x1 Inventaritem. Linksklick öffnet die Kartenwahl.
-  const TELEPORTER_ITEM = Object.freeze({
-    id: "dev-teleporter-map",
-    name: "REISEKARTE",
-    description: "SCHNELLREISE ZU BEKANNTEN KARTEN",
-    icon: "assets/items/REISEKARTE.svg",
-    stackable: false,
-    width: 1,
-    height: 1,
-    type: "teleporter"
-  });
-
-  const TELEPORT_DESTINATIONS = Object.freeze([
-    Object.freeze({ key: "oberkirch", label: "OBERKIRCH", spawn: MAP_EXIT_CONFIG.oberkirchOriginalNorthReturnSpawn }),
-    Object.freeze({ key: "winterbach", label: "WINTERBACH", spawn: MAP_EXIT_CONFIG.winterbachSpawn }),
-    Object.freeze({ key: "lautenbach", label: "LAUTENBACH", spawn: MAP_EXIT_CONFIG.lautenbachSouthLeftSpawn }),
-    Object.freeze({ key: "hubacker", label: "HUBACKER", spawn: MAP_EXIT_CONFIG.hubackerSouthLeftSpawn }),
-    Object.freeze({ key: "renchtalstadion", label: "RENCHTALSTADION", spawn: MAP_EXIT_CONFIG.stadiumFromOberkirchSpawn }),
-    Object.freeze({ key: "oedsbach", label: "ÖDSBACH", spawn: MAP_EXIT_CONFIG.oedsbachFromWinterbachSpawn }),
-    Object.freeze({ key: "ramsbach", label: "RAMSBACH", spawn: MAP_EXIT_CONFIG.ramsbachFromHubackerSpawn }),
-    Object.freeze({ key: "oppenau", label: "OPPENAU", spawn: MAP_EXIT_CONFIG.oppenauFromRamsbachSpawn }),
-    Object.freeze({ key: "kuhbach", label: "KUHBACH", spawn: MAP_EXIT_CONFIG.kuhbachFromOppenauSpawn }),
-    Object.freeze({ key: "lierbach", label: "LIERBACH", spawn: MAP_EXIT_CONFIG.lierbachFromOppenauSpawn })
-  ]);
-
-  let teleporterUI = null;
-
-  function installTeleporterStyles() {
-    if (document.getElementById("teleporterStyles")) return;
-    const style = document.createElement("style");
-    style.id = "teleporterStyles";
-    style.textContent = `
-      #teleporterUI { position: fixed; inset: 0; z-index: 13000; display: none; place-items: center; background: rgba(0,0,0,.20); pointer-events: auto; }
-      #teleporterUI.teleporter-ui--open { display: grid; }
-      .teleporter-panel { position: relative; width: min(620px, 82vw); padding: 34px 38px 38px; border: 2px solid rgba(196,158,91,.78); background: rgba(17,13,9,.86); box-shadow: 0 18px 60px rgba(0,0,0,.62), inset 0 0 32px rgba(118,82,39,.20); color: #ead8ae; font-family: Georgia, "Times New Roman", serif; }
-      .teleporter-title { margin: 0 42px 24px 0; font-size: 28px; letter-spacing: .13em; text-align: center; color: #e7c77f; text-shadow: 0 2px 3px #000; }
-      .teleporter-grid { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 10px; }
-      .teleporter-destination { min-height: 48px; border: 1px solid rgba(184,146,79,.55); background: rgba(37,27,17,.72); color: #e7d3a3; font: 700 16px Georgia, "Times New Roman", serif; letter-spacing: .06em; cursor: pointer; }
-      .teleporter-destination:hover, .teleporter-destination:focus-visible { background: rgba(91,65,34,.82); border-color: rgba(236,201,132,.95); outline: none; box-shadow: inset 0 0 14px rgba(255,224,157,.12); }
-      .teleporter-close { position: absolute; right: 14px; top: 10px; border: 0; background: transparent; color: #e7d3a3; font: 32px Georgia, serif; cursor: pointer; }
-      @media (max-width: 620px) { .teleporter-grid { grid-template-columns: 1fr; } .teleporter-panel { max-height: 78vh; overflow: auto; } }
-    `;
-    document.head.appendChild(style);
-  }
-
-  function closeTeleporter() {
-    if (!teleporterUI) return;
-    teleporterUI.classList.remove("teleporter-ui--open");
-    teleporterUI.setAttribute("aria-hidden", "true");
-  }
-
-  function openTeleporter() {
-    installTeleporterStyles();
-    if (!teleporterUI) {
-      const root = document.createElement("div");
-      root.id = "teleporterUI";
-      root.setAttribute("aria-hidden", "true");
-      const panel = document.createElement("div");
-      panel.className = "teleporter-panel";
-      const title = document.createElement("h2");
-      title.className = "teleporter-title";
-      title.textContent = "REISEKARTE";
-      const close = document.createElement("button");
-      close.type = "button"; close.className = "teleporter-close"; close.textContent = "×"; close.setAttribute("aria-label", "Reisekarte schließen");
-      close.addEventListener("click", closeTeleporter);
-      const grid = document.createElement("div"); grid.className = "teleporter-grid";
-      for (const destination of TELEPORT_DESTINATIONS) {
-        const button = document.createElement("button");
-        button.type = "button"; button.className = "teleporter-destination"; button.textContent = destination.label;
-        button.addEventListener("click", async () => {
-          if (mapTransitioning) return;
-          closeTeleporter();
-          closeInventory();
-          const targetMap = MAPS[destination.key];
-          if (!targetMap) return;
-          await switchMap(targetMap, destination.spawn, true);
-        });
-        grid.appendChild(button);
-      }
-      panel.append(title, close, grid); root.appendChild(panel); document.body.appendChild(root); teleporterUI = root;
-      root.addEventListener("click", (event) => { if (event.target === root) closeTeleporter(); });
-    }
-    keys.clear(); attackHeld = false; cancelAttackImmediately();
-    teleporterUI.classList.add("teleporter-ui--open");
-    teleporterUI.setAttribute("aria-hidden", "false");
-  }
-
   // ------------------------------------------------------------------
   // R151 HEILGEGENSTÄNDE — 1x1, stackbar, quickbarfähig.
   // Starterbestand: jeweils 10 Stück direkt unter der Kalifenlampe.
@@ -12476,11 +11788,6 @@
       x >= MAP_EXIT_CONFIG.ramsbachOppenauNorth.x1 &&
       x <= MAP_EXIT_CONFIG.ramsbachOppenauNorth.x2;
 
-    const inOppenauLierbachNorthExit =
-      MAP.id === "oppenau" &&
-      x >= MAP_EXIT_CONFIG.oppenauLierbachNorth.x1 &&
-      x <= MAP_EXIT_CONFIG.oppenauLierbachNorth.x2;
-
     // R53 FINAL STADIUM EXIT FIX:
     // These two lanes were already known by clampPlayer() and checkMapExit(),
     // but canMoveFootTo() still rejected every step past MAP.height - 10.
@@ -12515,8 +11822,7 @@
         (inWinterbachNorthExit && y >= winterbachNorthLeaveFloor) ||
         (inLautenbachNorthExit && y >= lautenbachNorthLeaveFloor) ||
         (inHubackerRamsbachNorthExit && y >= MAP_EXIT_CONFIG.hubackerRamsbachNorth.leaveY - 80) ||
-        (inRamsbachOppenauNorthExit && y >= MAP_EXIT_CONFIG.ramsbachOppenauNorth.leaveY - 80) ||
-        (inOppenauLierbachNorthExit && y >= MAP_EXIT_CONFIG.oppenauLierbachNorth.leaveY - 80);
+        (inRamsbachOppenauNorthExit && y >= MAP_EXIT_CONFIG.ramsbachOppenauNorth.leaveY - 80);
 
       if (!allowedNorth) return false;
     }
@@ -12525,11 +11831,6 @@
       MAP.id === "oedsbach" &&
       x >= MAP_EXIT_CONFIG.oedsbachWinterbachSouth.x1 &&
       x <= MAP_EXIT_CONFIG.oedsbachWinterbachSouth.x2;
-
-    const inOppenauRamsbachSouthExit =
-      MAP.id === "oppenau" &&
-      x >= MAP_EXIT_CONFIG.oppenauRamsbachSouth.x1 &&
-      x <= MAP_EXIT_CONFIG.oppenauRamsbachSouth.x2;
 
     if (y > maxY) {
       const winterbachSouthAllowed =
@@ -12563,10 +11864,6 @@
         inOedsbachWinterbachSouthExit &&
         y <= MAP.height + MAP_EXIT_CONFIG.oedsbachWinterbachSouth.leavePadding + 80;
 
-      const oppenauRamsbachSouthAllowed =
-        inOppenauRamsbachSouthExit &&
-        y <= MAP.height + MAP_EXIT_CONFIG.oppenauRamsbachSouth.leavePadding + 80;
-
       if (
         !winterbachSouthAllowed &&
         !lautenbachSouthAllowed &&
@@ -12574,8 +11871,7 @@
         !ramsbachHubackerSouthAllowed &&
         !oberkirchStadiumSouthAllowed &&
         !stadiumOberkirchSouthAllowed &&
-        !oedsbachWinterbachSouthAllowed &&
-        !oppenauRamsbachSouthAllowed
+        !oedsbachWinterbachSouthAllowed
       ) {
         return false;
       }
@@ -12604,12 +11900,6 @@
 
     // R165 MAP 6: REDNECK FREDNECK hut — alpha collision only on the middle body.
     if (isOedsbachRedneckHutBlockedFootPoint(x, y)) return false;
-
-    // R169 KUHBACH: fixed foot hitbox for Florianus' hut building only.
-    if (isKuhbachFlorianusHutBlockedFootPoint(x, y)) return false;
-
-    // R174 KUHBACH painted reference: red filled terrain + red fence line.
-    if (isKuhbachReferenceBlockedFootPoint(x, y)) return false;
 
     // R122 SAFE RAMSBACH COLLISION ISOLATION:
     // Ramsbach terrain/locked-footprint code must NEVER participate on another map.
@@ -13051,13 +12341,6 @@
       moveAlongActiveBridge(horizontalDirection, deltaSeconds);
       clampPlayer();
       return;
-    }
-
-    // R174 KUHBACH green hillside:
-    // horizontal travel naturally follows the painted slope.
-    // A alone => up-left, D alone => down-right.
-    if (playerInsideKuhbachHillSlope() && dx !== 0) {
-      dy += dx * KUHBACH_TERRAIN.hillSlopeBias;
     }
 
     const length = Math.hypot(dx, dy) || 1;
@@ -14276,8 +13559,6 @@
 
   // HARD DEPTH SWITCH FOR THE TWO WALK-BEHIND TOWERS.
   function updateChurchPlayerDepth() {
-    // R175: hide/show creek before any map-specific early return.
-    updateKuhbachCreekEffectVisibility();
     if (!playerEl) return;
 
     // R135: a dead player is ground scenery. All animal actor layers begin above
@@ -14352,12 +13633,6 @@
       // WHITE reference strip: player is behind the hut. Everywhere else,
       // including the PURPLE lower strip, the player stays in foreground.
       playerEl.style.zIndex = playerBehindOedsbachRedneckHut() ? "5" : "100";
-      return;
-    }
-
-    if (MAP.id === "kuhbach") {
-      updateKuhbachFlorianusSceneVisibility();
-      playerEl.style.zIndex = "100";
       return;
     }
 
@@ -20992,8 +20267,7 @@
         "inventory-item" +
         (stack.type === "weapon" ? " inventory-item--weapon" : "") +
         (stack.type === "quickslot" ? " inventory-item--quickslot" : "") +
-        (stack.type === "equipment-kit" ? " inventory-item--equipment-kit" : "") +
-        (stack.type === "teleporter" ? " inventory-item--teleporter" : "");
+        (stack.type === "equipment-kit" ? " inventory-item--equipment-kit" : "");
       item.dataset.itemId = stack.id;
       item.dataset.slotIndex = String(slotIndex);
       item.dataset.pageIndex = String(inventoryState.currentPage);
@@ -21028,14 +20302,7 @@
         item.appendChild(quantity);
       }
 
-      if (stack.type === "teleporter") {
-        item.title = "REISEKARTE · Linksklick: Schnellreise";
-        item.addEventListener("click", (event) => {
-          event.preventDefault();
-          event.stopPropagation();
-          openTeleporter();
-        });
-      } else if (stack.type === "equipment-kit") {
+      if (stack.type === "equipment-kit") {
         item.appendChild(createWhiteStagKitTooltip());
         item.addEventListener("contextmenu", (event) => {
           event.preventDefault();
@@ -21266,7 +20533,7 @@
       CARROT_ITEM.icon, RABBIT_FOOT_ITEM.icon,
       WOLF_PELT_ITEM.icon, WOLF_CLAW_ITEM.icon, WANDERER_BAG_ITEM.icon,
       RADISH_ITEM.icon, CABBAGE_ITEM.icon, LETTUCE_ITEM.icon, BOAR_TUSK_ITEM.icon,
-      PINK_PIG_CLUB_ITEM.icon, CALIPH_LAMP_ITEM.icon, TELEPORTER_ITEM.icon,
+      PINK_PIG_CLUB_ITEM.icon, CALIPH_LAMP_ITEM.icon,
       HEALTH_CONSUMABLES.bandage.icon,
       HEALTH_CONSUMABLES.herbalWrap.icon,
       HEALTH_CONSUMABLES.herbalPunchSpinach.icon,
@@ -21642,16 +20909,6 @@
     updateIceVisual();
     resizeWorldForCurrentMap();
 
-    // R181: do not reveal KUHBACH for even one frame at the unstable ZOOM 0 scale.
-    if (MAP.id === "kuhbach") {
-      const lockedScale = fitScale * ZOOM_MULTIPLIERS[KUHBACH_LOCKED_ZOOM_LEVEL];
-      zoomLevel = KUHBACH_LOCKED_ZOOM_LEVEL;
-      displayScale = lockedScale;
-      targetScale = lockedScale;
-      zoomStartScale = lockedScale;
-      zoomAnimating = false;
-    }
-
     mapImage.src = encodeURI(MAP.image);
     try {
       await waitForImage(mapImage);
@@ -21707,10 +20964,6 @@
     // R168: REDNECK FREDNECK + hut are strictly ÖDSBACH-only.
     // Sync on every map switch so they can never leak onto later maps.
     updateOedsbachRedneckSceneVisibility();
-    // R169: Florianus + hut are strictly KUHBACH-only.
-    updateKuhbachFlorianusSceneVisibility();
-    // R175: creek is strictly KUHBACH-only and is synchronized on EVERY map switch.
-    updateKuhbachCreekEffectVisibility();
     setOedsbachFogVisibility(MAP.id === "oedsbach");
     setOedsbachShadowVisibility(MAP.id === "oedsbach");
     setRamsbachWorldVisibility(MAP.id === "ramsbach");
@@ -21731,7 +20984,6 @@
     if (debugTitle) debugTitle.textContent = MAP.name;
 
     calculateFitScale();
-    if (MAP.id === "kuhbach") zoomLevel = 0;
     displayScale = scaleForLevel(zoomLevel);
     targetScale = displayScale;
     zoomAnimating = false;
@@ -21888,22 +21140,6 @@
     );
   }
 
-  function playerInOppenauRamsbachSouthExitLane() {
-    return (
-      MAP.id === "oppenau" &&
-      playerX >= MAP_EXIT_CONFIG.oppenauRamsbachSouth.x1 &&
-      playerX <= MAP_EXIT_CONFIG.oppenauRamsbachSouth.x2
-    );
-  }
-
-  function playerInOppenauLierbachNorthExitLane() {
-    return (
-      MAP.id === "oppenau" &&
-      playerX >= MAP_EXIT_CONFIG.oppenauLierbachNorth.x1 &&
-      playerX <= MAP_EXIT_CONFIG.oppenauLierbachNorth.x2
-    );
-  }
-
   function playerInOppenauKuhbachEastExitLane() {
     return (
       MAP.id === "oppenau" &&
@@ -21959,26 +21195,6 @@
     const movingDown = keys.has("KeyS") || keys.has("ArrowDown");
     const movingLeft = keys.has("KeyA") || keys.has("ArrowLeft");
     const movingRight = keys.has("KeyD") || keys.has("ArrowRight");
-
-    // R183 OPPENAU lower main gate -> RAMSBACH north road.
-    if (
-      playerInOppenauRamsbachSouthExitLane() &&
-      movingDown &&
-      playerY >= MAP.height + MAP_EXIT_CONFIG.oppenauRamsbachSouth.leavePadding
-    ) {
-      switchMap(MAPS.ramsbach, MAP_EXIT_CONFIG.ramsbachFromOppenauSpawn, true);
-      return true;
-    }
-
-    // R182 OPPENAU red-arrow upper road -> LIERBACH.
-    if (
-      playerInOppenauLierbachNorthExitLane() &&
-      movingUp &&
-      playerY <= MAP_EXIT_CONFIG.oppenauLierbachNorth.leaveY
-    ) {
-      switchMap(MAPS.lierbach, MAP_EXIT_CONFIG.lierbachFromOppenauSpawn, true);
-      return true;
-    }
 
     // R167 OPPENAU lower-right road -> KUHBACH lower-left road.
     if (
@@ -22633,10 +21849,6 @@
   }
 
   function scaleForLevel(level) {
-    // R181: KUHBACH is deliberately pinned to the empirically stable ZOOM 2.
-    if (MAP.id === "kuhbach") {
-      return fitScale * ZOOM_MULTIPLIERS[KUHBACH_LOCKED_ZOOM_LEVEL];
-    }
     return fitScale * ZOOM_MULTIPLIERS[level];
   }
 
@@ -22685,8 +21897,7 @@
         playerInLautenbachNorthLeftExitLane() ||
         playerInLautenbachNorthRightExitLane() ||
         playerInHubackerRamsbachNorthExitLane() ||
-        playerInRamsbachOppenauNorthExitLane() ||
-        playerInOppenauLierbachNorthExitLane()
+        playerInRamsbachOppenauNorthExitLane()
       ) &&
       (keys.has("KeyW") || keys.has("ArrowUp"));
 
@@ -22700,8 +21911,7 @@
         playerInOberkirchStadiumSouthExitLane() ||
         playerInStadiumOberkirchSouthExitLane() ||
         playerInOedsbachWinterbachSouthExitLane() ||
-        playerInRamsbachHubackerSouthExitLane() ||
-        playerInOppenauRamsbachSouthExitLane()
+        playerInRamsbachHubackerSouthExitLane()
       ) &&
       (keys.has("KeyS") || keys.has("ArrowDown"));
 
@@ -22727,8 +21937,6 @@
         leaveFloor = MAP_EXIT_CONFIG.hubackerRamsbachNorth.leaveY - 80;
       } else if (MAP.id === "ramsbach") {
         leaveFloor = MAP_EXIT_CONFIG.ramsbachOppenauNorth.leaveY - 80;
-      } else if (MAP.id === "oppenau") {
-        leaveFloor = MAP_EXIT_CONFIG.oppenauLierbachNorth.leaveY - 80;
       }
 
       playerY = Math.max(
@@ -22756,8 +21964,6 @@
         leavePadding = MAP_EXIT_CONFIG.oedsbachWinterbachSouth.leavePadding;
       } else if (MAP.id === "ramsbach") {
         leavePadding = MAP_EXIT_CONFIG.ramsbachHubackerSouth.leavePadding;
-      } else if (MAP.id === "oppenau") {
-        leavePadding = MAP_EXIT_CONFIG.oppenauRamsbachSouth.leavePadding;
       }
 
       playerY = Math.max(
@@ -23259,12 +22465,6 @@
       ty = (viewportHeight - mapScreenHeight) / 2;
     }
 
-    // R178 hard map-local guard: KUHBACH-only DOM can never leak to OBERKIRCH/other maps.
-    const kuhbachVisibleNow = MAP.id === "kuhbach";
-    if (kuhbachFlorianusHutEl) kuhbachFlorianusHutEl.style.display = kuhbachVisibleNow ? "" : "none";
-    if (kuhbachFlorianusEl) kuhbachFlorianusEl.style.display = kuhbachVisibleNow ? "" : "none";
-    if (kuhbachCreekEffectEl) kuhbachCreekEffectEl.style.display = kuhbachVisibleNow ? "" : "none";
-
     world.style.transform =
       `translate3d(${tx}px, ${ty}px, 0) scale(${displayScale})`;
 
@@ -23283,16 +22483,6 @@
   }
 
   function setZoomLevel(nextLevel) {
-    // R181: KUHBACH has exactly one permitted camera scale: ZOOM 2.
-    if (MAP.id === "kuhbach") {
-      zoomLevel = KUHBACH_LOCKED_ZOOM_LEVEL;
-      displayScale = fitScale * ZOOM_MULTIPLIERS[KUHBACH_LOCKED_ZOOM_LEVEL];
-      targetScale = displayScale;
-      zoomStartScale = displayScale;
-      zoomAnimating = false;
-      renderWorld();
-      return;
-    }
     nextLevel = Math.max(0, Math.min(ZOOM_MULTIPLIERS.length - 1, nextLevel));
     if (nextLevel === zoomLevel) return;
 
@@ -23343,15 +22533,6 @@
         : 0;
       lastFrame = now;
 
-      // R181 final failsafe: KUHBACH stays on the empirically stable ZOOM 2.
-      if (MAP.id === "kuhbach") {
-        const lockedScale = fitScale * ZOOM_MULTIPLIERS[KUHBACH_LOCKED_ZOOM_LEVEL];
-        zoomLevel = KUHBACH_LOCKED_ZOOM_LEVEL;
-        displayScale = lockedScale;
-        targetScale = lockedScale;
-        zoomStartScale = lockedScale;
-        zoomAnimating = false;
-      }
       updateZoom(now);
 
       if (gameplayUnlocked() && !mapTransitioning) {
@@ -23487,17 +22668,8 @@
       event.preventDefault();
     }
 
-    if (event.code === "Escape" && teleporterUI && teleporterUI.classList.contains("teleporter-ui--open")) {
-      event.preventDefault();
-      closeTeleporter();
-      return;
-    }
-
     if (event.code === "KeyI") {
-      if (!event.repeat) {
-        if (teleporterUI && teleporterUI.classList.contains("teleporter-ui--open")) closeTeleporter();
-        else toggleInventory();
-      }
+      if (!event.repeat) toggleInventory();
       return;
     }
 
@@ -23540,13 +22712,11 @@
     }
 
     if (event.code === "Equal" || event.code === "NumpadAdd") {
-      if (MAP.id === "kuhbach") return;
       setZoomLevel(zoomLevel + 1);
       return;
     }
 
     if (event.code === "Minus" || event.code === "NumpadSubtract") {
-      if (MAP.id === "kuhbach") return;
       setZoomLevel(zoomLevel - 1);
       return;
     }
@@ -23736,8 +22906,6 @@
     event.preventDefault();
 
     if (!gameplayUnlocked()) return;
-    // R180: mouse wheel has no zoom action at all on KUHBACH.
-    if (MAP.id === "kuhbach") return;
 
     if (event.deltaY < 0) {
       setZoomLevel(zoomLevel + 1);
@@ -23788,9 +22956,6 @@
     // R144: first armor kit is seeded deterministically into the marked 2x3 area.
     addStarterWhiteStagKit();
 
-    // R170 DEV: one 1x1 travel-map item in the next genuinely free inventory cell.
-    addItemToInventory(TELEPORTER_ITEM);
-
     // Install immediately as a black curtain so OBERKIRCH never flashes before
     // the new-game sequence. It is screen UI only; no map state is changed.
     createStartFlowUI();
@@ -23812,8 +22977,6 @@
     installOedegardStyles();
   createOedegard();
   createOedsbachRedneckScene();
-  createKuhbachFlorianusScene();
-  createKuhbachCreekEffect();
   createOedsbachFog();
   createRamsbachFog();
   createHubackerFog();
