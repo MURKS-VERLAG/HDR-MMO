@@ -3,7 +3,7 @@
 
   // R121 DEPLOYMENT VERIFICATION — harmless build marker.
   // If this line appears in DevTools, the browser is definitely running R121.
-  console.info("HDR BUILD R197 - ALLERHEILIGEN BRIDGES + CAVE + FISHER");
+  console.info("HDR BUILD R198 - ALLERHEILIGEN LANDMARK PRECISION + HUBACKER FOG");
 
   const MAPS = Object.freeze({
     oberkirch: Object.freeze({
@@ -2726,15 +2726,17 @@
   // NO hitboxes / NO collision hooks.
   // ------------------------------------------------------------------
   const ALLERHEILIGEN_LANDMARKS = Object.freeze([
+    // R198: re-measured against the supplied zoom-0 target screenshot.
+    // Visual-only: still NO hitbox and NO collision.
     Object.freeze({
       id: "allerheiligen-cave",
       src: "assets/buildings/ALLERHEILIGEN HOEHLENEINGANG.png",
-      left: 4329, top: 3049, width: 1648, height: 1123, zIndex: 17
+      left: 4385, top: 3125, width: 1260, height: 860, zIndex: 17
     }),
     Object.freeze({
       id: "allerheiligen-fisher",
       src: "assets/buildings/ALLERHEILIGEN FISCHER.png",
-      left: 3817, top: 5480, width: 1331, height: 972, zIndex: 17
+      left: 3805, top: 5485, width: 1340, height: 978, zIndex: 17
     })
   ]);
 
@@ -3753,6 +3755,36 @@
   function setHubackerFogVisibility(visible) {
     if (!hubackerFogRoot) return;
     hubackerFogRoot.style.display = visible ? "block" : "none";
+  }
+
+  // ------------------------------------------------------------------
+  // R198 ALLERHEILIGEN — EXACT same moving fog recipe as HUBACKER.
+  // Same shared veil CSS, same 4 veils, same opacity (0.34).
+  // ------------------------------------------------------------------
+  let allerheiligenFogRoot = null;
+
+  function createAllerheiligenFog() {
+    if (allerheiligenFogRoot) return;
+    installOedsbachAtmosphereStyles();
+
+    const root = document.createElement("div");
+    root.className = "oedsbach-screen-fog hubacker-screen-fog allerheiligen-screen-fog";
+    root.style.display = MAP.id === "allerheiligen" ? "block" : "none";
+    root.style.opacity = "0.34";
+
+    for (let i = 0; i < 4; i += 1) {
+      const veil = document.createElement("div");
+      veil.className = "oedsbach-screen-fog__veil";
+      root.appendChild(veil);
+    }
+
+    game.appendChild(root);
+    allerheiligenFogRoot = root;
+  }
+
+  function setAllerheiligenFogVisibility(visible) {
+    if (!allerheiligenFogRoot) return;
+    allerheiligenFogRoot.style.display = visible ? "block" : "none";
   }
 
   // ------------------------------------------------------------------
@@ -23102,6 +23134,7 @@
     setOppenauDecorVisibility(MAP.id === "oppenau");
     setRamsbachFogVisibility(MAP.id === "ramsbach");
     setHubackerFogVisibility(MAP.id === "hubacker");
+    setAllerheiligenFogVisibility(MAP.id === "allerheiligen");
     setLierbachFogVisibility(MAP.id === "lierbach");
     updateLierbachWirtschaftVisibility();
     updateAllerheiligenKlosterVisibility();
@@ -25242,6 +25275,7 @@
   createOedsbachFog();
   createRamsbachFog();
   createHubackerFog();
+  createAllerheiligenFog();
   createLierbachFog();
   createWinterbachSnow();
   createOedsbachShadowSystem();
