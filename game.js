@@ -3,7 +3,7 @@
 
   // R121 DEPLOYMENT VERIFICATION — harmless build marker.
   // If this line appears in DevTools, the browser is definitely running R121.
-  console.info("HDR BUILD R181 - KUHBACH ZOOM 2 LOCK + ORIGINAL RGB RESTORE");
+  console.info("HDR BUILD R182 - LIERBACHTAL MAP 10");
 
   const MAPS = Object.freeze({
     oberkirch: Object.freeze({
@@ -68,6 +68,13 @@
       image: "assets/maps/MAP 9 KUHBACH.webp",
       width: 10000,
       height: 5998
+    }),
+    lierbach: Object.freeze({
+      id: "lierbach",
+      name: "LIERBACH",
+      image: "assets/maps/MAP 10 LIERBACH.jpg",
+      width: 10240,
+      height: 6827
     })
   });
 
@@ -312,6 +319,18 @@
     oppenauFromKuhbachSpawn: Object.freeze({
       x: 9980,
       y: 4475
+    }),
+
+    // R182 MAP 8 OPPENAU -> MAP 10 LIERBACH: red-arrow upper road.
+    oppenauLierbachNorth: Object.freeze({
+      x1: 2050,
+      x2: 2850,
+      leaveY: -18
+    }),
+    // MAP 10 arrival: lower-right end of the riverside footpath.
+    lierbachFromOppenauSpawn: Object.freeze({
+      x: 9050,
+      y: 6480
     })
   });
 
@@ -828,7 +847,9 @@
     // R155 dedicated OPPENAU track supplied by the user.
     "oppenau": "assets/audio/maps/OPPENAU - DIE GROSSE REISE.mp3",
     // R167 KUHBACH currently continues the OPPENAU journey theme.
-    "kuhbach": "assets/audio/maps/KUHBACH - HALTERUS.mp3"
+    "kuhbach": "assets/audio/maps/KUHBACH - HALTERUS.mp3",
+    // R182: LIERBACH temporarily continues OPPENAU's journey theme; no new audio asset required.
+    "lierbach": "assets/audio/maps/OPPENAU - DIE GROSSE REISE.mp3"
   });
 
   const MAP_MUSIC_VOLUME = 1.0;
@@ -1324,6 +1345,11 @@
       id: "oedsbach-winterbach", mapId: "oedsbach", text: "WINTERBACH",
       x: 1820, y: 6170, direction: "down", glow: "#ffffff",
       trigger: { x1: 1050, y1: 5350, x2: 2700, y2: 6655 }
+    },
+    {
+      id: "oppenau-lierbach", mapId: "oppenau", text: "LIERBACH",
+      x: 2450, y: 360, direction: "up", glow: "#ffffff",
+      trigger: { x1: 1900, y1: 0, x2: 3050, y2: 1050 }
     }
   ]);
 
@@ -12437,6 +12463,11 @@
       x >= MAP_EXIT_CONFIG.ramsbachOppenauNorth.x1 &&
       x <= MAP_EXIT_CONFIG.ramsbachOppenauNorth.x2;
 
+    const inOppenauLierbachNorthExit =
+      MAP.id === "oppenau" &&
+      x >= MAP_EXIT_CONFIG.oppenauLierbachNorth.x1 &&
+      x <= MAP_EXIT_CONFIG.oppenauLierbachNorth.x2;
+
     // R53 FINAL STADIUM EXIT FIX:
     // These two lanes were already known by clampPlayer() and checkMapExit(),
     // but canMoveFootTo() still rejected every step past MAP.height - 10.
@@ -12471,7 +12502,8 @@
         (inWinterbachNorthExit && y >= winterbachNorthLeaveFloor) ||
         (inLautenbachNorthExit && y >= lautenbachNorthLeaveFloor) ||
         (inHubackerRamsbachNorthExit && y >= MAP_EXIT_CONFIG.hubackerRamsbachNorth.leaveY - 80) ||
-        (inRamsbachOppenauNorthExit && y >= MAP_EXIT_CONFIG.ramsbachOppenauNorth.leaveY - 80);
+        (inRamsbachOppenauNorthExit && y >= MAP_EXIT_CONFIG.ramsbachOppenauNorth.leaveY - 80) ||
+        (inOppenauLierbachNorthExit && y >= MAP_EXIT_CONFIG.oppenauLierbachNorth.leaveY - 80);
 
       if (!allowedNorth) return false;
     }
@@ -21833,6 +21865,14 @@
     );
   }
 
+  function playerInOppenauLierbachNorthExitLane() {
+    return (
+      MAP.id === "oppenau" &&
+      playerX >= MAP_EXIT_CONFIG.oppenauLierbachNorth.x1 &&
+      playerX <= MAP_EXIT_CONFIG.oppenauLierbachNorth.x2
+    );
+  }
+
   function playerInOppenauKuhbachEastExitLane() {
     return (
       MAP.id === "oppenau" &&
@@ -21888,6 +21928,16 @@
     const movingDown = keys.has("KeyS") || keys.has("ArrowDown");
     const movingLeft = keys.has("KeyA") || keys.has("ArrowLeft");
     const movingRight = keys.has("KeyD") || keys.has("ArrowRight");
+
+    // R182 OPPENAU red-arrow upper road -> LIERBACH.
+    if (
+      playerInOppenauLierbachNorthExitLane() &&
+      movingUp &&
+      playerY <= MAP_EXIT_CONFIG.oppenauLierbachNorth.leaveY
+    ) {
+      switchMap(MAPS.lierbach, MAP_EXIT_CONFIG.lierbachFromOppenauSpawn, true);
+      return true;
+    }
 
     // R167 OPPENAU lower-right road -> KUHBACH lower-left road.
     if (
@@ -22594,7 +22644,8 @@
         playerInLautenbachNorthLeftExitLane() ||
         playerInLautenbachNorthRightExitLane() ||
         playerInHubackerRamsbachNorthExitLane() ||
-        playerInRamsbachOppenauNorthExitLane()
+        playerInRamsbachOppenauNorthExitLane() ||
+        playerInOppenauLierbachNorthExitLane()
       ) &&
       (keys.has("KeyW") || keys.has("ArrowUp"));
 
@@ -22634,6 +22685,8 @@
         leaveFloor = MAP_EXIT_CONFIG.hubackerRamsbachNorth.leaveY - 80;
       } else if (MAP.id === "ramsbach") {
         leaveFloor = MAP_EXIT_CONFIG.ramsbachOppenauNorth.leaveY - 80;
+      } else if (MAP.id === "oppenau") {
+        leaveFloor = MAP_EXIT_CONFIG.oppenauLierbachNorth.leaveY - 80;
       }
 
       playerY = Math.max(
