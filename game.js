@@ -3,7 +3,7 @@
 
   // R121 DEPLOYMENT VERIFICATION — harmless build marker.
   // If this line appears in DevTools, the browser is definitely running R121.
-  console.info("HDR BUILD R185 - TELEPORTER GUARANTEED VISIBLE");
+  console.info("HDR BUILD R186 - TELEPORTER PINNED INVENTORY GUARANTEE");
 
   const MAPS = Object.freeze({
     oberkirch: Object.freeze({
@@ -20460,6 +20460,16 @@
 
       /* R185 REISEKARTE: self-contained fallback/primary icon.
          This deliberately does not depend on assets/items/REISEKARTE.svg. */
+      .inventory-item--teleporter {
+        cursor: pointer;
+        z-index: 8;
+      }
+
+      .inventory-item--teleporter:hover .inventory-teleporter-icon {
+        transform:translate(-50%,-50%) rotate(-2deg) scale(1.08);
+        filter:drop-shadow(0 0 5px rgba(255,238,176,.95));
+      }
+
       .inventory-teleporter-icon {
         position:absolute;
         z-index:3;
@@ -21381,6 +21391,51 @@
     renderWhiteStagKitEquipment();
   }
 
+  // R186 LAST-RESORT GUARANTEE:
+  // The REISEKARTE remains a normal logical inventory stack, but if any future
+  // inventory-state/render regression prevents that stack from producing DOM,
+  // page I still gets one clickable item in the reserved slot 4.
+  // This is deliberately asset-independent and does NOT modify any other item.
+  function renderPinnedTeleporterFallback() {
+    if (
+      inventoryState.currentPage !== 0 ||
+      !inventoryState.slotsLayer ||
+      inventoryState.slotsLayer.querySelector('[data-item-id="dev-teleporter-map"]')
+    ) {
+      return;
+    }
+
+    const slotIndex = 4;
+    const rect = inventoryItemRect(slotIndex, 1, 1);
+    const item = document.createElement("div");
+    item.className = "inventory-item inventory-item--teleporter";
+    item.dataset.itemId = TELEPORTER_ITEM.id;
+    item.dataset.slotIndex = String(slotIndex);
+    item.dataset.pageIndex = "0";
+    item.style.left = `${inventoryPercentX(rect.x)}%`;
+    item.style.top = `${inventoryPercentY(rect.y)}%`;
+    item.style.width = `${inventoryPercentX(rect.width)}%`;
+    item.style.height = `${inventoryPercentY(rect.height)}%`;
+    item.style.zIndex = "12";
+    item.title = "REISEKARTE · Linksklick: Schnellreise";
+
+    const icon = document.createElement("div");
+    icon.className = "inventory-teleporter-icon";
+    icon.setAttribute("aria-hidden", "true");
+    icon.innerHTML =
+      `<span class="inventory-teleporter-icon__route"></span>` +
+      `<span class="inventory-teleporter-icon__label">KARTE</span>`;
+    item.appendChild(icon);
+
+    item.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      openTeleporter();
+    });
+
+    inventoryState.slotsLayer.appendChild(item);
+  }
+
   function renderInventory() {
     if (!inventoryState.root || !inventoryState.image || !inventoryState.slotsLayer) return;
 
@@ -21517,6 +21572,9 @@
       inventoryState.slotsLayer.appendChild(item);
     }
 
+    // R186: if the logical stack somehow failed to render, page I still shows
+    // the clickable REISEKARTE in its reserved inventory cell.
+    renderPinnedTeleporterFallback();
     renderEquippedWeapon();
   }
 
@@ -21534,7 +21592,12 @@
     keys.clear();
     attackHeld = false;
     cancelAttackImmediately();
+
+    // R186: re-assert on EVERY open. Function declarations are hoisted, so this
+    // safely calls the canonical logical inventory placement routine below.
+    addStarterTeleporter();
     renderInventory();
+
     inventoryState.root.classList.add("inventory-ui--open");
     inventoryState.root.setAttribute("aria-hidden", "false");
   }
