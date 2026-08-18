@@ -3,7 +3,7 @@
 
   // R121 DEPLOYMENT VERIFICATION — harmless build marker.
   // If this line appears in DevTools, the browser is definitely running R121.
-  console.info("HDR BUILD R189 - ALLERHEILIGEN + LIERBACH ASCENT");
+  console.info("HDR BUILD R190 - LIERBACH PATCH ACTIVATION + MOLE LOCK");
 
   const MAPS = Object.freeze({
     oberkirch: Object.freeze({
@@ -9091,7 +9091,9 @@
       MAP.id === "oedsbach" ||
       MAP.id === "hubacker" ||
       MAP.id === "ramsbach" ||
-      MAP.id === "renchtalstadion"
+      MAP.id === "renchtalstadion" ||
+      MAP.id === "lierbach" ||
+      MAP.id === "allerheiligen"
     ) {
       if (moleEvent) {
         moleEvent.element.style.display = "none";
