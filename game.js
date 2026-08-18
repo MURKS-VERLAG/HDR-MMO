@@ -3,7 +3,7 @@
 
   // R121 DEPLOYMENT VERIFICATION — harmless build marker.
   // If this line appears in DevTools, the browser is definitely running R121.
-  console.info("HDR BUILD R180 - KUHBACH HARD ZOOM LOCK + HALTERUS RGB");
+  console.info("HDR BUILD R181 - KUHBACH ZOOM 2 LOCK + ORIGINAL RGB RESTORE");
 
   const MAPS = Object.freeze({
     oberkirch: Object.freeze({
@@ -662,6 +662,7 @@
 
   const ZOOM_MULTIPLIERS = [1, 1.75, 3, 4.5];
   const ZOOM_DURATION = 300;
+  const KUHBACH_LOCKED_ZOOM_LEVEL = 2;
 
   const attackAudio = new Audio("assets/audio/PLAYER ATTACK.mp3");
   attackAudio.preload = "auto";
@@ -1770,20 +1771,8 @@
     );
 
     for (let i = 0; i < layers.length; i += 1) {
-      const active = i === nextIndex;
-      layers[i].style.visibility = active ? "visible" : "hidden";
-      // R180: RGB is applied DIRECTLY to the currently visible Halterus frame.
-      // This cannot disappear behind the sprite like an overlay can.
-      if (active) {
-        const rgbFilters = [
-          "drop-shadow(0 0 18px rgba(255,35,35,.98)) drop-shadow(0 0 34px rgba(255,35,35,.72))",
-          "drop-shadow(0 0 18px rgba(35,255,90,.98)) drop-shadow(0 0 34px rgba(35,255,90,.72))",
-          "drop-shadow(0 0 18px rgba(35,110,255,.98)) drop-shadow(0 0 34px rgba(35,110,255,.72))"
-        ];
-        layers[i].style.filter = rgbFilters[Math.floor(Math.random() * rgbFilters.length)];
-      } else {
-        layers[i].style.filter = "none";
-      }
+      layers[i].style.visibility = i === nextIndex ? "visible" : "hidden";
+      layers[i].style.filter = "none";
     }
 
     kuhbachFlorianusDanceIndex = nextIndex;
@@ -1808,41 +1797,41 @@
 
   function scheduleKuhbachFlorianusDiscoLight() {
     clearTimeout(kuhbachFlorianusLightTimer);
-    if (MAP.id !== "kuhbach" || !kuhbachFlorianusEl) {
+    if (MAP.id !== "kuhbach") {
       kuhbachFlorianusLightTimer = 0;
       return;
     }
 
-    const light = kuhbachFlorianusEl.querySelector(".kuhbach-florianus-disco-light");
-    if (!light) {
-      kuhbachFlorianusLightTimer = 0;
-      return;
-    }
+    const light =
+      kuhbachFlorianusEl &&
+      kuhbachFlorianusEl.querySelector(".kuhbach-florianus-disco-light");
+    if (!light) return;
 
-    const colors = [
-      "rgba(255,35,35,.82)",
-      "rgba(35,255,90,.78)",
-      "rgba(35,110,255,.84)"
+    const palette = [
+      [255, 30, 45],
+      [30, 110, 255],
+      [35, 255, 105],
+      [255, 35, 220],
+      [40, 235, 255],
+      [255, 190, 35]
     ];
-    const shuffled = colors.slice().sort(() => Math.random() - 0.5);
-    const x1 = 18 + Math.random() * 64;
-    const y1 = 12 + Math.random() * 70;
-    const x2 = 18 + Math.random() * 64;
-    const y2 = 12 + Math.random() * 70;
-    const x3 = 18 + Math.random() * 64;
-    const y3 = 12 + Math.random() * 70;
+    const rgb = palette[Math.floor(Math.random() * palette.length)];
+    const fast = Math.random() < 0.62;
+    const hold = fast ? 120 + Math.random() * 280 : 650 + Math.random() * 950;
+    const x = 28 + Math.random() * 44;
+    const y = 22 + Math.random() * 46;
+    const opacity = 0.28 + Math.random() * 0.34;
 
-    light.style.display = "block";
-    light.style.opacity = "1";
+    light.style.transitionDuration = `${fast ? 90 : 260}ms`;
+    light.style.opacity = String(opacity);
     light.style.background =
-      `radial-gradient(circle at ${x1}% ${y1}%, ${shuffled[0]} 0 12%, transparent 42%), ` +
-      `radial-gradient(circle at ${x2}% ${y2}%, ${shuffled[1]} 0 12%, transparent 42%), ` +
-      `radial-gradient(circle at ${x3}% ${y3}%, ${shuffled[2]} 0 12%, transparent 42%)`;
+      `radial-gradient(ellipse at ${x}% ${y}%, ` +
+      `rgba(${rgb[0]},${rgb[1]},${rgb[2]},.88) 0%, ` +
+      `rgba(${rgb[0]},${rgb[1]},${rgb[2]},.42) 34%, ` +
+      `rgba(${rgb[0]},${rgb[1]},${rgb[2]},0) 72%)`;
 
-    kuhbachFlorianusLightTimer = window.setTimeout(
-      scheduleKuhbachFlorianusDiscoLight,
-      180 + Math.random() * 170
-    );
+    kuhbachFlorianusLightTimer =
+      window.setTimeout(scheduleKuhbachFlorianusDiscoLight, hold);
   }
 
   function createKuhbachFlorianusScene() {
@@ -1919,15 +1908,13 @@
       const light = document.createElement("div");
       light.className = "kuhbach-florianus-disco-light";
       light.style.position = "absolute";
-      light.style.left = "-70%";
-      light.style.top = "-65%";
-      light.style.width = "240%";
-      light.style.height = "230%";
+      light.style.inset = "-18% -24% -10% -24%";
       light.style.pointerEvents = "none";
-      light.style.zIndex = "20";
-      light.style.opacity = "0";
       light.style.mixBlendMode = "screen";
-      light.style.filter = "blur(12px) saturate(1.35)";
+      light.style.opacity = "0";
+      light.style.transitionProperty = "opacity, background";
+      light.style.transitionTimingFunction = "ease-in-out";
+      light.style.borderRadius = "45%";
       root.appendChild(light);
 
       world.appendChild(root);
@@ -21600,6 +21587,16 @@
     updateIceVisual();
     resizeWorldForCurrentMap();
 
+    // R181: do not reveal KUHBACH for even one frame at the unstable ZOOM 0 scale.
+    if (MAP.id === "kuhbach") {
+      const lockedScale = fitScale * ZOOM_MULTIPLIERS[KUHBACH_LOCKED_ZOOM_LEVEL];
+      zoomLevel = KUHBACH_LOCKED_ZOOM_LEVEL;
+      displayScale = lockedScale;
+      targetScale = lockedScale;
+      zoomStartScale = lockedScale;
+      zoomAnimating = false;
+    }
+
     mapImage.src = encodeURI(MAP.image);
     try {
       await waitForImage(mapImage);
@@ -22545,9 +22542,10 @@
   }
 
   function scaleForLevel(level) {
-    // R180 HARD LOCK: KUHBACH physically has only the furthest-out scale.
-    // Even a stray caller passing level 1/2/3 cannot zoom this map.
-    if (MAP.id === "kuhbach") return fitScale * ZOOM_MULTIPLIERS[0];
+    // R181: KUHBACH is deliberately pinned to the empirically stable ZOOM 2.
+    if (MAP.id === "kuhbach") {
+      return fitScale * ZOOM_MULTIPLIERS[KUHBACH_LOCKED_ZOOM_LEVEL];
+    }
     return fitScale * ZOOM_MULTIPLIERS[level];
   }
 
@@ -23188,11 +23186,12 @@
   }
 
   function setZoomLevel(nextLevel) {
-    // R180 HARD LOCK: ignore every zoom request on KUHBACH.
+    // R181: KUHBACH has exactly one permitted camera scale: ZOOM 2.
     if (MAP.id === "kuhbach") {
-      zoomLevel = 0;
-      displayScale = fitScale * ZOOM_MULTIPLIERS[0];
+      zoomLevel = KUHBACH_LOCKED_ZOOM_LEVEL;
+      displayScale = fitScale * ZOOM_MULTIPLIERS[KUHBACH_LOCKED_ZOOM_LEVEL];
       targetScale = displayScale;
+      zoomStartScale = displayScale;
       zoomAnimating = false;
       renderWorld();
       return;
@@ -23247,11 +23246,13 @@
         : 0;
       lastFrame = now;
 
-      // R180 final failsafe: KUHBACH can NEVER retain/inherit a zoomed state.
+      // R181 final failsafe: KUHBACH stays on the empirically stable ZOOM 2.
       if (MAP.id === "kuhbach") {
-        zoomLevel = 0;
-        displayScale = fitScale * ZOOM_MULTIPLIERS[0];
-        targetScale = displayScale;
+        const lockedScale = fitScale * ZOOM_MULTIPLIERS[KUHBACH_LOCKED_ZOOM_LEVEL];
+        zoomLevel = KUHBACH_LOCKED_ZOOM_LEVEL;
+        displayScale = lockedScale;
+        targetScale = lockedScale;
+        zoomStartScale = lockedScale;
         zoomAnimating = false;
       }
       updateZoom(now);
