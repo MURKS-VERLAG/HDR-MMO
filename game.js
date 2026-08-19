@@ -3,7 +3,7 @@
 
   // R121 DEPLOYMENT VERIFICATION — harmless build marker.
   // If this line appears in DevTools, the browser is definitely running R121.
-  console.info("HDR BUILD R201 - HILSEN SCENE + ROUTE SIGNS");
+  console.info("HDR BUILD R202 - HILSEN WEISSE FRAU + WILDLIFE");
 
   const MAPS = Object.freeze({
     oberkirch: Object.freeze({
@@ -103,19 +103,19 @@
     upperCharacter: Object.freeze({
       id: "hilsen-upper-character",
       src: "assets/hilsen/HILSEN OBERER CHARAKTER.png",
-      left: 2760,
-      top: 2500,
-      width: 706,
-      height: 753,
+      left: 2901.2,
+      top: 2801.2,
+      width: 423.6,
+      height: 451.8,
       zIndex: 20
     }),
     lowerCharacter: Object.freeze({
       id: "hilsen-lower-character",
       src: "assets/hilsen/HILSEN UNTERER CHARAKTER.png",
-      left: 3640,
-      top: 6220,
-      width: 634,
-      height: 955,
+      left: 3766.8,
+      top: 6602,
+      width: 380.4,
+      height: 573,
       zIndex: 20
     }),
     hut: Object.freeze({
@@ -236,6 +236,258 @@
     );
 
     return mask.alpha[py * mask.width + px] >= 28;
+  }
+
+  // ------------------------------------------------------------------
+  // R202 HILSEN — WEISSE FRAU
+  // Exactly one apparition. Random spawn/despawn, white puff on both,
+  // local mist only around her, movement restricted to the BLUE reference
+  // circle. A1/A2 are right-flight frames and are mirrored for left flight;
+  // A3 is forward/down flight; A4 is upward flight.
+  // ------------------------------------------------------------------
+  const HILSEN_WHITE_WOMAN = Object.freeze({
+    mapId: "hilsen",
+    frames: Object.freeze({
+      rightA: "assets/hilsen/weisse-frau/WEISSE FRAU FLUG 1.png",
+      rightB: "assets/hilsen/weisse-frau/WEISSE FRAU FLUG 2.png",
+      down: "assets/hilsen/weisse-frau/WEISSE FRAU VORNE.png",
+      up: "assets/hilsen/weisse-frau/WEISSE FRAU OBEN.png"
+    }),
+    cx: 3000,
+    cy: 2150,
+    rx: 3150,
+    ry: 2450,
+    width: 360,
+    height: 540,
+    speedMin: 145,
+    speedMax: 230,
+    visibleMin: 9000,
+    visibleMax: 22000,
+    hiddenMin: 4500,
+    hiddenMax: 15000
+  });
+
+  let hilsenWhiteWoman = null;
+
+  function installHilsenWhiteWomanStyles() {
+    if (document.getElementById("hilsenWhiteWomanStyles")) return;
+    const style = document.createElement("style");
+    style.id = "hilsenWhiteWomanStyles";
+    style.textContent = `
+      .hilsen-white-woman {
+        position:absolute;
+        width:${HILSEN_WHITE_WOMAN.width}px;
+        height:${HILSEN_WHITE_WOMAN.height}px;
+        transform:translate(-50%,-72%);
+        pointer-events:none;
+        z-index:24;
+        opacity:0;
+        transition:opacity 520ms ease;
+      }
+      .hilsen-white-woman--visible { opacity:.92; }
+      .hilsen-white-woman__mist {
+        position:absolute;
+        left:50%; top:55%;
+        width:720px; height:430px;
+        transform:translate(-50%,-50%);
+        border-radius:50%;
+        background:
+          radial-gradient(ellipse at 50% 50%, rgba(255,255,255,.25) 0%, rgba(235,240,245,.15) 28%, rgba(225,232,240,.06) 58%, rgba(255,255,255,0) 76%);
+        filter:blur(28px);
+        animation:hilsenGhostMist 3.4s ease-in-out infinite alternate;
+      }
+      .hilsen-white-woman__sprite {
+        position:absolute; inset:0;
+        width:100%; height:100%;
+        object-fit:contain;
+        filter:drop-shadow(0 0 18px rgba(255,255,255,.65));
+      }
+      .hilsen-white-woman__puff {
+        position:absolute;
+        width:420px; height:280px;
+        transform:translate(-50%,-50%);
+        pointer-events:none;
+        z-index:25;
+        border-radius:50%;
+        background:radial-gradient(ellipse, rgba(255,255,255,.9) 0%, rgba(245,248,255,.58) 28%, rgba(235,240,248,.22) 52%, rgba(255,255,255,0) 76%);
+        filter:blur(18px);
+        animation:hilsenGhostPuff 820ms ease-out forwards;
+      }
+      @keyframes hilsenGhostPuff {
+        0% { opacity:0; transform:translate(-50%,-50%) scale(.25); }
+        28% { opacity:1; }
+        100% { opacity:0; transform:translate(-50%,-50%) scale(1.45); }
+      }
+      @keyframes hilsenGhostMist {
+        from { opacity:.48; transform:translate(-52%,-50%) scale(.92); }
+        to { opacity:.78; transform:translate(-48%,-52%) scale(1.08); }
+      }
+    `;
+    document.head.appendChild(style);
+  }
+
+  function hilsenWhiteWomanRandomPoint() {
+    const c = HILSEN_WHITE_WOMAN;
+    const angle = Math.random() * Math.PI * 2;
+    const radius = Math.sqrt(Math.random()) * .9;
+    return {
+      x: Math.max(-120, Math.min(10080, c.cx + Math.cos(angle) * c.rx * radius)),
+      y: Math.max(-120, Math.min(8120, c.cy + Math.sin(angle) * c.ry * radius))
+    };
+  }
+
+  function hilsenWhiteWomanPuff(x, y) {
+    if (MAP.id !== "hilsen") return;
+    const puff = document.createElement("div");
+    puff.className = "hilsen-white-woman__puff";
+    puff.style.left = `${x}px`;
+    puff.style.top = `${y}px`;
+    world.appendChild(puff);
+    setTimeout(() => puff.remove(), 900);
+  }
+
+  function hilsenWhiteWomanChooseTarget(now) {
+    const g = hilsenWhiteWoman;
+    if (!g) return;
+    const p = hilsenWhiteWomanRandomPoint();
+    g.targetX = p.x;
+    g.targetY = p.y;
+    g.speed = HILSEN_WHITE_WOMAN.speedMin +
+      Math.random() * (HILSEN_WHITE_WOMAN.speedMax - HILSEN_WHITE_WOMAN.speedMin);
+    g.nextFrameAt = now;
+  }
+
+  function hilsenWhiteWomanSetDirectionalFrame(dx, dy, now) {
+    const g = hilsenWhiteWoman;
+    if (!g) return;
+    const absX = Math.abs(dx);
+    const absY = Math.abs(dy);
+    let src;
+    let mirror = 1;
+
+    if (absY > absX * .9) {
+      src = dy < 0 ? HILSEN_WHITE_WOMAN.frames.up : HILSEN_WHITE_WOMAN.frames.down;
+    } else {
+      if (now >= g.nextFrameAt) {
+        g.horizontalFrame = g.horizontalFrame ? 0 : 1;
+        g.nextFrameAt = now + 520;
+      }
+      src = g.horizontalFrame
+        ? HILSEN_WHITE_WOMAN.frames.rightB
+        : HILSEN_WHITE_WOMAN.frames.rightA;
+      mirror = dx < 0 ? -1 : 1;
+    }
+
+    if (g.image.dataset.src !== src) {
+      g.image.src = encodeURI(src);
+      g.image.dataset.src = src;
+    }
+    g.image.style.transform = `scaleX(${mirror})`;
+  }
+
+  function hilsenWhiteWomanSpawn(now) {
+    const g = hilsenWhiteWoman;
+    if (!g || MAP.id !== "hilsen" || g.visible) return;
+    const p = hilsenWhiteWomanRandomPoint();
+    g.x = p.x; g.y = p.y;
+    g.element.style.left = `${g.x}px`;
+    g.element.style.top = `${g.y}px`;
+    hilsenWhiteWomanChooseTarget(now);
+    g.visible = true;
+    g.element.style.display = "";
+    hilsenWhiteWomanPuff(g.x, g.y);
+    requestAnimationFrame(() => g.element.classList.add("hilsen-white-woman--visible"));
+    g.phaseUntil = now + HILSEN_WHITE_WOMAN.visibleMin +
+      Math.random() * (HILSEN_WHITE_WOMAN.visibleMax - HILSEN_WHITE_WOMAN.visibleMin);
+  }
+
+  function hilsenWhiteWomanDespawn(now, withPuff = true) {
+    const g = hilsenWhiteWoman;
+    if (!g || !g.visible) return;
+    if (withPuff && MAP.id === "hilsen") hilsenWhiteWomanPuff(g.x, g.y);
+    g.visible = false;
+    g.element.classList.remove("hilsen-white-woman--visible");
+    setTimeout(() => {
+      if (hilsenWhiteWoman && !hilsenWhiteWoman.visible) hilsenWhiteWoman.element.style.display = "none";
+    }, 540);
+    g.phaseUntil = now + HILSEN_WHITE_WOMAN.hiddenMin +
+      Math.random() * (HILSEN_WHITE_WOMAN.hiddenMax - HILSEN_WHITE_WOMAN.hiddenMin);
+  }
+
+  function createHilsenWhiteWoman() {
+    installHilsenWhiteWomanStyles();
+    if (hilsenWhiteWoman) return;
+    const element = document.createElement("div");
+    element.className = "hilsen-white-woman";
+    element.style.display = "none";
+
+    const mist = document.createElement("div");
+    mist.className = "hilsen-white-woman__mist";
+
+    const image = document.createElement("img");
+    image.className = "hilsen-white-woman__sprite";
+    image.alt = "";
+    image.draggable = false;
+    image.src = encodeURI(HILSEN_WHITE_WOMAN.frames.rightA);
+    image.dataset.src = HILSEN_WHITE_WOMAN.frames.rightA;
+
+    element.append(mist, image);
+    world.appendChild(element);
+
+    const now = performance.now();
+    hilsenWhiteWoman = {
+      element, image, mist,
+      x: HILSEN_WHITE_WOMAN.cx,
+      y: HILSEN_WHITE_WOMAN.cy,
+      targetX: HILSEN_WHITE_WOMAN.cx,
+      targetY: HILSEN_WHITE_WOMAN.cy,
+      speed: 180,
+      visible: false,
+      phaseUntil: now + 2500 + Math.random() * 6500,
+      horizontalFrame: 0,
+      nextFrameAt: now
+    };
+  }
+
+  function updateHilsenWhiteWoman(deltaSeconds, now) {
+    const g = hilsenWhiteWoman;
+    if (!g) return;
+
+    if (MAP.id !== "hilsen") {
+      g.element.style.display = "none";
+      g.element.classList.remove("hilsen-white-woman--visible");
+      g.visible = false;
+      g.phaseUntil = now + 1800 + Math.random() * 5000;
+      return;
+    }
+
+    if (!g.visible) {
+      if (now >= g.phaseUntil) hilsenWhiteWomanSpawn(now);
+      return;
+    }
+
+    const dx = g.targetX - g.x;
+    const dy = g.targetY - g.y;
+    const distance = Math.hypot(dx, dy);
+
+    if (distance < 70) {
+      // Sometimes vanish naturally at/near the map edge instead of turning back.
+      const nearEdge = g.x < 140 || g.x > 9860 || g.y < 140 || g.y > 7860;
+      if (nearEdge && Math.random() < .48) {
+        hilsenWhiteWomanDespawn(now, true);
+        return;
+      }
+      hilsenWhiteWomanChooseTarget(now);
+    } else {
+      const step = Math.min(distance, g.speed * deltaSeconds);
+      g.x += dx / distance * step;
+      g.y += dy / distance * step;
+      g.element.style.left = `${g.x}px`;
+      g.element.style.top = `${g.y}px`;
+      hilsenWhiteWomanSetDirectionalFrame(dx, dy, now);
+    }
+
+    if (now >= g.phaseUntil) hilsenWhiteWomanDespawn(now, true);
   }
 
   let MAP = MAPS.oberkirch;
@@ -5012,6 +5264,19 @@
     })
   ]);
 
+  // R202 HILSEN — BLACK reference circle: exactly two normal wolves.
+  // Habitat reaches the LEFT map edge; both wolves may leave/re-enter there.
+  const HILSEN_WOLF_HABITAT = Object.freeze({
+    mapId: "hilsen",
+    count: 2,
+    canExitTop: false,
+    canExitLeft: true,
+    cx: 520,
+    cy: 5850,
+    rx: 1650,
+    ry: 1650
+  });
+
   // R158 OPPENAU — BLACK marked circle: exactly one normal wolf.
   const OPPENAU_WOLF_HABITAT = Object.freeze({
     mapId: "oppenau",
@@ -5510,6 +5775,17 @@
           OPPENAU_WOLF_HABITAT.mapId,
           OPPENAU_WOLF_HABITAT,
           OPPENAU_WOLF_HABITAT.canExitTop
+        )
+      );
+    }
+
+    for (let i = 0; i < HILSEN_WOLF_HABITAT.count; i += 1) {
+      wolfActors.push(
+        createWolfActor(
+          i,
+          HILSEN_WOLF_HABITAT.mapId,
+          HILSEN_WOLF_HABITAT,
+          HILSEN_WOLF_HABITAT.canExitTop
         )
       );
     }
@@ -6120,6 +6396,23 @@
           [1750, 5104],
           [1840, 4725],
           [2140, 4445]
+        ]
+      },
+      {
+        // R202 HILSEN — RED reference circle: exactly one normal wild boar.
+        id: "hilsen-boar-red",
+        mapId: "hilsen",
+        count: 1,
+        exits: [],
+        polygon: [
+          [1900, 4750],
+          [2200, 4100],
+          [2950, 3700],
+          [3700, 4100],
+          [4050, 4800],
+          [3700, 5450],
+          [2950, 5750],
+          [2200, 5450]
         ]
       },
       {
@@ -6903,6 +7196,26 @@
       ],
       exits: [],
       count: 3
+    },
+    {
+      // R202 HILSEN — GREEN reference circle: exactly seven rabbits.
+      // The circle reaches the right map edge, so rabbits may disappear/re-enter there.
+      id: "hilsen-rabbits-green",
+      mapId: "hilsen",
+      polygon: [
+        [6280, 5480],
+        [6840, 4720],
+        [7900, 4380],
+        [9100, 4450],
+        [10000, 5000],
+        [10000, 7580],
+        [9000, 8003],
+        [7500, 7900],
+        [6500, 7200],
+        [6200, 6300]
+      ],
+      exits: ["right"],
+      count: 7
     }
   ]);
 
@@ -25044,6 +25357,7 @@
         }
         updateAreaSigns();
         updateTrunkenbold(deltaSeconds, now);
+        updateHilsenWhiteWoman(deltaSeconds, now);
         updateRabbits(deltaSeconds, now);
         updateRabbitLootVisibility();
         updateWolves(deltaSeconds, now);
@@ -25499,6 +25813,7 @@
   createAllerheiligenKloster();
   createAllerheiligenLandmarks();
   createHilsenScene();
+  createHilsenWhiteWoman();
   createOedsbachFog();
   createRamsbachFog();
   createHubackerFog();
