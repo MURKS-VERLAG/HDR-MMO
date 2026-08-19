@@ -3,7 +3,7 @@
 
   // R121 DEPLOYMENT VERIFICATION — harmless build marker.
   // If this line appears in DevTools, the browser is definitely running R121.
-  console.info("HDR BUILD R202 - HILSEN WEISSE FRAU + WILDLIFE");
+  console.info("HDR BUILD R203 - OBERKIRCH STADTWACHE");
 
   const MAPS = Object.freeze({
     oberkirch: Object.freeze({
@@ -488,6 +488,145 @@
     }
 
     if (now >= g.phaseUntil) hilsenWhiteWomanDespawn(now, true);
+  }
+
+
+  // ------------------------------------------------------------------
+  // R203 OBERKIRCH — STADTWACHE IN DER DORFMITTE
+  // Ruhe = sitzend. Im direkten Spielerradius: 1s Aufstehbild -> stehend.
+  // Beim Verlassen: 1s Aufstehbild als Rueckbewegung -> sitzend.
+  // Alle drei gelieferten Bilder bleiben unveraendert; nur die Anzeige wechselt.
+  // ------------------------------------------------------------------
+  const OBERKIRCH_GUARD = Object.freeze({
+    mapId: "oberkirch-zentrum",
+    x: 5450,
+    y: 3375,
+    width: 420,
+    height: 630,
+    radius: 650,
+    transitionMs: 1000,
+    crossfadeMs: 180,
+    idle: "assets/oberkirch/stadtwache/STADTWACHE RUHE.png",
+    transition: "assets/oberkirch/stadtwache/STADTWACHE AUFSTEHEN.png",
+    stand: "assets/oberkirch/stadtwache/STADTWACHE STEHEND.png"
+  });
+
+  let oberkirchGuard = null;
+
+  function createOberkirchGuard() {
+    if (oberkirchGuard) return;
+    const c = OBERKIRCH_GUARD;
+    const root = document.createElement("div");
+    root.id = "oberkirch-stadtwache";
+    root.style.position = "absolute";
+    root.style.left = `${c.x - c.width / 2}px`;
+    root.style.top = `${c.y - c.height}px`;
+    root.style.width = `${c.width}px`;
+    root.style.height = `${c.height}px`;
+    root.style.pointerEvents = "none";
+    root.style.userSelect = "none";
+    root.style.zIndex = "20";
+    root.style.display = MAP.id === c.mapId ? "" : "none";
+
+    const base = document.createElement("img");
+    const fade = document.createElement("img");
+    for (const image of [base, fade]) {
+      image.alt = "";
+      image.draggable = false;
+      image.style.position = "absolute";
+      image.style.inset = "0";
+      image.style.width = "100%";
+      image.style.height = "100%";
+      image.style.objectFit = "contain";
+      image.style.objectPosition = "50% 100%";
+      image.style.pointerEvents = "none";
+    }
+    base.src = encodeURI(c.idle);
+    fade.src = encodeURI(c.idle);
+    fade.style.opacity = "0";
+    fade.style.transition = `opacity ${c.crossfadeMs}ms ease`;
+    root.append(base, fade);
+    world.appendChild(root);
+
+    oberkirchGuard = {
+      root, base, fade,
+      state: "idle",
+      transitionUntil: 0,
+      settleTimer: 0,
+      fadeTimer: 0
+    };
+  }
+
+  function setOberkirchGuardVisibility() {
+    if (!oberkirchGuard) return;
+    const visible = MAP.id === OBERKIRCH_GUARD.mapId;
+    oberkirchGuard.root.style.display = visible ? "" : "none";
+    if (!visible) {
+      clearTimeout(oberkirchGuard.settleTimer);
+      clearTimeout(oberkirchGuard.fadeTimer);
+      oberkirchGuard.base.src = encodeURI(OBERKIRCH_GUARD.idle);
+      oberkirchGuard.fade.src = encodeURI(OBERKIRCH_GUARD.idle);
+      oberkirchGuard.fade.style.transition = "none";
+      oberkirchGuard.fade.style.opacity = "0";
+      oberkirchGuard.state = "idle";
+      oberkirchGuard.transitionUntil = 0;
+    }
+  }
+
+  function oberkirchGuardCrossfadeTo(src, finalState) {
+    const g = oberkirchGuard;
+    if (!g) return;
+    clearTimeout(g.fadeTimer);
+    g.fade.style.transition = "none";
+    g.fade.style.opacity = "0";
+    g.fade.src = encodeURI(src);
+    void g.fade.offsetWidth;
+    g.fade.style.transition = `opacity ${OBERKIRCH_GUARD.crossfadeMs}ms ease`;
+    g.fade.style.opacity = "1";
+    g.fadeTimer = window.setTimeout(() => {
+      g.base.src = encodeURI(src);
+      g.fade.style.transition = "none";
+      g.fade.style.opacity = "0";
+      g.state = finalState;
+    }, OBERKIRCH_GUARD.crossfadeMs + 20);
+  }
+
+  function startOberkirchGuardTransition(now) {
+    const g = oberkirchGuard;
+    if (!g) return;
+    clearTimeout(g.settleTimer);
+    clearTimeout(g.fadeTimer);
+    g.base.src = encodeURI(OBERKIRCH_GUARD.transition);
+    g.fade.style.transition = "none";
+    g.fade.style.opacity = "0";
+    g.state = "transition";
+    g.transitionUntil = now + OBERKIRCH_GUARD.transitionMs;
+  }
+
+  function updateOberkirchGuard(now) {
+    const g = oberkirchGuard;
+    if (!g) return;
+    if (MAP.id !== OBERKIRCH_GUARD.mapId) return;
+
+    const near = Math.hypot(playerX - OBERKIRCH_GUARD.x, playerY - OBERKIRCH_GUARD.y) <= OBERKIRCH_GUARD.radius;
+
+    if (g.state === "idle" && near) {
+      startOberkirchGuardTransition(now);
+      return;
+    }
+    if (g.state === "standing" && !near) {
+      startOberkirchGuardTransition(now);
+      return;
+    }
+    if (g.state === "transition" && now >= g.transitionUntil) {
+      // Settle according to the player's CURRENT radius, so rapid edge crossing
+      // can never leave the guard stuck in the wrong pose.
+      oberkirchGuardCrossfadeTo(
+        near ? OBERKIRCH_GUARD.stand : OBERKIRCH_GUARD.idle,
+        near ? "standing" : "idle"
+      );
+      g.state = "settling";
+    }
   }
 
   let MAP = MAPS.oberkirch;
@@ -23654,6 +23793,7 @@
     updateAllerheiligenKlosterVisibility();
     updateAllerheiligenLandmarksVisibility();
     updateHilsenSceneVisibility();
+    setOberkirchGuardVisibility();
     setWinterbachSnowVisibility(MAP.id === "winterbach-ranglehen");
     setRamsbachBearVisibility(MAP.id === RAMSBACH_BEAR_CONFIG.mapId);
     updatePlayerHudVisibility();
@@ -25358,6 +25498,7 @@
         updateAreaSigns();
         updateTrunkenbold(deltaSeconds, now);
         updateHilsenWhiteWoman(deltaSeconds, now);
+        updateOberkirchGuard(now);
         updateRabbits(deltaSeconds, now);
         updateRabbitLootVisibility();
         updateWolves(deltaSeconds, now);
@@ -25814,6 +25955,7 @@
   createAllerheiligenLandmarks();
   createHilsenScene();
   createHilsenWhiteWoman();
+  createOberkirchGuard();
   createOedsbachFog();
   createRamsbachFog();
   createHubackerFog();
