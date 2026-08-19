@@ -499,8 +499,8 @@
   // ------------------------------------------------------------------
   const OBERKIRCH_GUARD = Object.freeze({
     mapId: "oberkirch-zentrum",
-    x: 5450,
-    y: 3375,
+    x: 4820,
+    y: 3690,
     width: 420,
     height: 630,
     radius: 650,
@@ -574,6 +574,7 @@
       oberkirchGuard.fade.style.opacity = "0";
       oberkirchGuard.state = "idle";
       oberkirchGuard.transitionUntil = 0;
+      oberkirchGuard.wasNear = false;
     }
   }
 
@@ -609,27 +610,30 @@
 
   function updateOberkirchGuard(now) {
     const g = oberkirchGuard;
-    if (!g) return;
-    if (MAP.id !== OBERKIRCH_GUARD.mapId) return;
+    if (!g || MAP.id !== OBERKIRCH_GUARD.mapId) return;
 
-    const near = Math.hypot(playerX - OBERKIRCH_GUARD.x, playerY - OBERKIRCH_GUARD.y) <= OBERKIRCH_GUARD.radius;
+    // R205: reliable direct-radius test against the guard's visible footprint.
+    const dx = Math.max(0, Math.abs(playerX - OBERKIRCH_GUARD.x) - OBERKIRCH_GUARD.width * 0.5);
+    const dy = Math.max(0, Math.abs(playerY - OBERKIRCH_GUARD.y) - OBERKIRCH_GUARD.height * 0.35);
+    const near = Math.hypot(dx, dy) <= OBERKIRCH_GUARD.radius;
+    if (g.wasNear === undefined) g.wasNear = false;
 
-    if (g.state === "idle" && near) {
-      startOberkirchGuardTransition(now);
-      return;
-    }
-    if (g.state === "standing" && !near) {
-      startOberkirchGuardTransition(now);
-      return;
-    }
-    if (g.state === "transition" && now >= g.transitionUntil) {
-      // Settle according to the player's CURRENT radius, so rapid edge crossing
-      // can never leave the guard stuck in the wrong pose.
-      oberkirchGuardCrossfadeTo(
-        near ? OBERKIRCH_GUARD.stand : OBERKIRCH_GUARD.idle,
-        near ? "standing" : "idle"
-      );
-      g.state = "settling";
+    if (near !== g.wasNear) {
+      g.wasNear = near;
+      clearTimeout(g.settleTimer);
+      clearTimeout(g.fadeTimer);
+      g.base.src = encodeURI(OBERKIRCH_GUARD.transition);
+      g.fade.style.transition = "none";
+      g.fade.style.opacity = "0";
+      g.state = "transition";
+
+      g.settleTimer = window.setTimeout(() => {
+        if (!oberkirchGuard || MAP.id !== OBERKIRCH_GUARD.mapId) return;
+        oberkirchGuardCrossfadeTo(
+          g.wasNear ? OBERKIRCH_GUARD.stand : OBERKIRCH_GUARD.idle,
+          g.wasNear ? "standing" : "idle"
+        );
+      }, OBERKIRCH_GUARD.transitionMs);
     }
   }
 
