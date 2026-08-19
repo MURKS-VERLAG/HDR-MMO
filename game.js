@@ -3,7 +3,7 @@
 
   // R121 DEPLOYMENT VERIFICATION — harmless build marker.
   // If this line appears in DevTools, the browser is definitely running R121.
-  console.info("HDR BUILD R200 - HILSEN WEST EXIT FIX");
+  console.info("HDR BUILD R201 - HILSEN SCENE + ROUTE SIGNS");
 
   const MAPS = Object.freeze({
     oberkirch: Object.freeze({
@@ -91,6 +91,152 @@
       height: 8003
     })
   });
+
+  // ------------------------------------------------------------------
+  // R201 HILSEN — SCENE FROM CURRENT REFERENCE
+  // Character 1 = upper forest road.
+  // Character 2 = lower meadow.
+  // Noach's Geräteschuppen = right-hand road.
+  // ONLY the hut has collision; both characters remain fully passable.
+  // ------------------------------------------------------------------
+  const HILSEN_SCENE = Object.freeze({
+    upperCharacter: Object.freeze({
+      id: "hilsen-upper-character",
+      src: "assets/hilsen/HILSEN OBERER CHARAKTER.png",
+      left: 2760,
+      top: 2500,
+      width: 706,
+      height: 753,
+      zIndex: 20
+    }),
+    lowerCharacter: Object.freeze({
+      id: "hilsen-lower-character",
+      src: "assets/hilsen/HILSEN UNTERER CHARAKTER.png",
+      left: 3640,
+      top: 6220,
+      width: 634,
+      height: 955,
+      zIndex: 20
+    }),
+    hut: Object.freeze({
+      id: "hilsen-noach-hut",
+      src: "assets/hilsen/NOACHS GERAETESCHUPPEN.png",
+      left: 7130,
+      top: 3870,
+      width: 1391,
+      height: 928,
+      zIndex: 20
+    })
+  });
+
+  const hilsenSceneElements = new Map();
+  let hilsenHutAlphaMask = null;
+
+  function prepareHilsenHutAlphaMask(image) {
+    if (!image || !image.complete || !image.naturalWidth || !image.naturalHeight) return;
+
+    try {
+      const canvas = document.createElement("canvas");
+      canvas.width = image.naturalWidth;
+      canvas.height = image.naturalHeight;
+      const ctx = canvas.getContext("2d", { willReadFrequently: true });
+      if (!ctx) return;
+
+      ctx.drawImage(image, 0, 0);
+      const pixels = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+      const alpha = new Uint8Array(canvas.width * canvas.height);
+
+      for (let src = 3, dst = 0; src < pixels.length; src += 4, dst += 1) {
+        alpha[dst] = pixels[src];
+      }
+
+      hilsenHutAlphaMask = {
+        width: canvas.width,
+        height: canvas.height,
+        alpha
+      };
+    } catch (error) {
+      console.warn("HILSEN hut alpha mask unavailable:", error);
+    }
+  }
+
+  function createHilsenScene() {
+    if (hilsenSceneElements.size) return;
+
+    for (const config of Object.values(HILSEN_SCENE)) {
+      const image = document.createElement("img");
+      image.id = config.id;
+      image.src = encodeURI(config.src);
+      image.alt = "";
+      image.draggable = false;
+      image.style.position = "absolute";
+      image.style.left = `${config.left}px`;
+      image.style.top = `${config.top}px`;
+      image.style.width = `${config.width}px`;
+      image.style.height = `${config.height}px`;
+      image.style.objectFit = "contain";
+      image.style.pointerEvents = "none";
+      image.style.userSelect = "none";
+      image.style.zIndex = String(config.zIndex);
+      image.style.display = MAP.id === "hilsen" ? "" : "none";
+
+      if (config.id === HILSEN_SCENE.hut.id) {
+        image.addEventListener("load", () => prepareHilsenHutAlphaMask(image), { once: true });
+      }
+
+      world.appendChild(image);
+      hilsenSceneElements.set(config.id, image);
+
+      if (
+        config.id === HILSEN_SCENE.hut.id &&
+        image.complete &&
+        image.naturalWidth > 0
+      ) {
+        prepareHilsenHutAlphaMask(image);
+      }
+    }
+  }
+
+  function updateHilsenSceneVisibility() {
+    const visible = MAP.id === "hilsen" ? "" : "none";
+    for (const image of hilsenSceneElements.values()) {
+      image.style.display = visible;
+    }
+  }
+
+  function isHilsenNoachHutBlockedFootPoint(x, y) {
+    if (MAP.id !== "hilsen") return false;
+
+    const c = HILSEN_SCENE.hut;
+
+    if (
+      x < c.left ||
+      x > c.left + c.width ||
+      y < c.top ||
+      y > c.top + c.height
+    ) {
+      return false;
+    }
+
+    // Only visible hut pixels block movement.
+    // Transparent space around the supplied PNG remains walkable.
+    const mask = hilsenHutAlphaMask;
+    if (!mask) return false;
+
+    const localX = (x - c.left) / c.width;
+    const localY = (y - c.top) / c.height;
+
+    const px = Math.max(
+      0,
+      Math.min(mask.width - 1, Math.round(localX * (mask.width - 1)))
+    );
+    const py = Math.max(
+      0,
+      Math.min(mask.height - 1, Math.round(localY * (mask.height - 1)))
+    );
+
+    return mask.alpha[py * mask.width + px] >= 28;
+  }
 
   let MAP = MAPS.oberkirch;
   let mapTransitioning = false;
@@ -1427,6 +1573,28 @@
       id: "allerheiligen-studentenfelsen", mapId: "allerheiligen", text: "STUDENTENFELSEN",
       x: 7040, y: 6220, direction: "down", glow: "#ffffff",
       trigger: { x1: 6350, y1: 5600, x2: 7850, y2: 6825 }
+    },
+
+    // R201 MAP 12 HILSEN — four route labels from the supplied colored arrows.
+    {
+      id: "hilsen-paradies", mapId: "hilsen", text: "PARADIES",
+      x: 8520, y: 520, direction: "up", glow: "#ffffff",
+      trigger: { x1: 7700, y1: 0, x2: 9500, y2: 1500 }
+    },
+    {
+      id: "hilsen-oberkirch", mapId: "hilsen", text: "OBERKIRCH",
+      x: 9480, y: 4860, direction: "right", glow: "#ffffff",
+      trigger: { x1: 8700, y1: 4050, x2: 10000, y2: 5850 }
+    },
+    {
+      id: "hilsen-gaisbach", mapId: "hilsen", text: "GAISBACH",
+      x: 3300, y: 7440, direction: "down", glow: "#ffffff",
+      trigger: { x1: 2400, y1: 6650, x2: 4300, y2: 8003 }
+    },
+    {
+      id: "hilsen-schauenburg", mapId: "hilsen", text: "SCHAUENBURG",
+      x: 760, y: 720, direction: "up", glow: "#ffffff",
+      trigger: { x1: 0, y1: 0, x2: 1850, y2: 1650 }
     }
   ]);
 
@@ -13776,6 +13944,10 @@
     }
 
 
+    // R201 HILSEN: the map itself stays completely open.
+    // ONLY Noach's supplied hut artwork blocks the player's foot anchor.
+    if (isHilsenNoachHutBlockedFootPoint(x, y)) return false;
+
     // R158 OPPENAU: every RED painted area is hard player-foot collision.
     if (isOppenauTerrainBlockedFootPoint(x, y)) return false;
 
@@ -23168,6 +23340,7 @@
     updateLierbachWirtschaftVisibility();
     updateAllerheiligenKlosterVisibility();
     updateAllerheiligenLandmarksVisibility();
+    updateHilsenSceneVisibility();
     setWinterbachSnowVisibility(MAP.id === "winterbach-ranglehen");
     setRamsbachBearVisibility(MAP.id === RAMSBACH_BEAR_CONFIG.mapId);
     updatePlayerHudVisibility();
@@ -25325,6 +25498,7 @@
   createLierbachWirtschaft();
   createAllerheiligenKloster();
   createAllerheiligenLandmarks();
+  createHilsenScene();
   createOedsbachFog();
   createRamsbachFog();
   createHubackerFog();
