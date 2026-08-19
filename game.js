@@ -525,8 +525,10 @@
     root.style.height = `${c.height}px`;
     root.style.pointerEvents = "none";
     root.style.userSelect = "none";
-    root.style.zIndex = "20";
-    root.style.display = MAP.id === c.mapId ? "" : "none";
+    root.style.zIndex = "21";
+    root.style.visibility = "visible";
+    root.style.opacity = "1";
+    root.style.display = MAP.id === c.mapId ? "block" : "none";
 
     const base = document.createElement("img");
     const fade = document.createElement("img");
@@ -560,7 +562,9 @@
   function setOberkirchGuardVisibility() {
     if (!oberkirchGuard) return;
     const visible = MAP.id === OBERKIRCH_GUARD.mapId;
-    oberkirchGuard.root.style.display = visible ? "" : "none";
+    oberkirchGuard.root.style.display = visible ? "block" : "none";
+    oberkirchGuard.root.style.visibility = visible ? "visible" : "hidden";
+    oberkirchGuard.root.style.opacity = visible ? "1" : "0";
     if (!visible) {
       clearTimeout(oberkirchGuard.settleTimer);
       clearTimeout(oberkirchGuard.fadeTimer);
@@ -25406,6 +25410,14 @@
     playerLabel.textContent =
       `SPIELER X: ${Math.round(playerX)} · Y: ${Math.round(playerY)}`;
 
+    // R204: hard visibility failsafe for the Oberkirch Stadtwache.
+    if (oberkirchGuard) {
+      const guardVisible = MAP.id === OBERKIRCH_GUARD.mapId;
+      oberkirchGuard.root.style.display = guardVisible ? "block" : "none";
+      oberkirchGuard.root.style.visibility = guardVisible ? "visible" : "hidden";
+      oberkirchGuard.root.style.opacity = guardVisible ? "1" : "0";
+    }
+
     // R157: OPPENAU castle is a map-local world layer. Reassert visibility
     // during render so a missed/late image load can never leave it hidden.
     if (MAP.id === "oppenau") {
@@ -25981,6 +25993,9 @@
     createMoleSystem();
     createOberkirchBuildings();
     createR11Buildings();
+    // R204: create Stadtwache after all Oberkirch building layers.
+    createOberkirchGuard();
+    setOberkirchGuardVisibility();
     createWinterbachObsthof();
     createLautenbachBuildings();
     createHubackerBuildings();
